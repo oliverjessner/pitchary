@@ -1,0 +1,11 @@
+{
+    "ignore": [],
+    "failOn": "low",
+    "checks": {
+        "ci.no-build-step": false,
+        "ci.no-ci-config": false,
+        "package.scripts-missing": false,
+        "database.no-migrations": false,
+        "web.dangerous-inner-html": true
+    }
+}

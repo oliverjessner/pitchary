@@ -1,0 +1,27 @@
+{
+    "name": "template",
+    "version": "1.0.0",
+    "description": "personal template repo",
+    "license": "MIT",
+    "bin": {
+        "template": "bin/cli.js",
+        "template-mcp": "bin/mcp.js"
+    },
+    "homepage": "https://github.com/oliverjessner/fetchary#readme",
+    "bugs": {
+        "url": "https://github.com/oliverjessner/fetchary/issues"
+    },
+    "author": {
+        "name": "oliverjessner",
+        "url": "https://oliverjessner.at"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/oliverjessner/fetchary.git"
+    },
+    "type": "commonjs",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    }
+}
