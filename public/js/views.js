@@ -1,5 +1,10 @@
 import { api } from "./api.js";
 import {
+  customerIdentity,
+  customerLogo,
+  customerWebsite,
+} from "./customer-branding.js";
+import {
   el,
   icon,
   link,
@@ -133,21 +138,97 @@ function timeline(row) {
     }),
   );
 }
-function statusActions(row, actions) {
-  return (transitions[row.status] ?? []).map((to) =>
-    button(
-      row.status === "rejected"
+function statusActions(row, actions, { card = false } = {}) {
+  return (transitions[row.status] ?? []).map((to, index) => {
+    const action = button(
+      to === "pitched" && ["rejected", "ghosted"].includes(row.status)
         ? "Wieder aufnehmen"
         : to === "pitched"
           ? "Pitch erfassen"
           : to === "accepted"
             ? "Zusage erfassen"
-            : to === "done"
-              ? "Als erledigt markieren"
-              : "Ablehnen",
+            : to === "ghosted"
+              ? "Als Ghosted markieren"
+              : to === "done"
+                ? "Als erledigt markieren"
+                : "Ablehnen",
       () => actions.status(row, to),
-      { primary: to !== "rejected", compact: true },
+      {
+        primary: card ? index === 0 : !["rejected", "ghosted"].includes(to),
+        compact: !card || index > 0,
+      },
+    );
+    if (card && index === 0) action.classList.add("offer-card-next");
+    return action;
+  });
+}
+function pipelineCard(row, actions) {
+  const won = ["accepted", "done"].includes(row.status);
+  const controls = row.archived_at
+    ? [
+        button(
+          "Wiederherstellen",
+          () => actions.archive("customer-services", row, true),
+          { iconName: "rotate-left" },
+        ),
+      ]
+    : statusActions(row, actions, { card: true });
+  if (row.archived_at) controls[0].classList.add("offer-card-next");
+  return el(
+    "article",
+    { class: "oj-panel offer-card" },
+    el(
+      "header",
+      { class: "offer-card-heading" },
+      el(
+        "p",
+        { class: "oj-small oj-muted offer-card-customer" },
+        row.customer_name,
+      ),
+      el(
+        "h3",
+        { class: "offer-card-title" },
+        link(row.service_name, "#/relationships/" + row.id),
+      ),
     ),
+    el(
+      "div",
+      { class: "offer-card-pricing" },
+      el(
+        "p",
+        { class: "oj-mono offer-card-price" },
+        money(
+          won ? row.accepted_price_minor : row.current_offered_price_minor,
+          row.currency,
+        ),
+      ),
+      el(
+        "p",
+        { class: "oj-small oj-muted" },
+        labels.billing[row.billing_type] +
+          " · " +
+          (won ? "Vereinbart" : "Angebotspreis"),
+      ),
+    ),
+    el(
+      "div",
+      { class: "offer-card-details oj-small oj-muted" },
+      el(
+        "p",
+        {},
+        icon("user"),
+        el("span", {}, row.employee_name ?? "Kein Ansprechpartner"),
+      ),
+      el(
+        "p",
+        {},
+        icon("clock"),
+        el("span", {}, age(row.status_since) + " im Status"),
+      ),
+    ),
+    controls.length
+      ? el("footer", { class: "offer-card-actions" }, controls)
+      : null,
   );
 }
 function activityList(items) {
@@ -265,7 +346,9 @@ export async function entityList(type, actions) {
   let archiveMode = false;
   const search = field("Suchen", "search", {
       type: "search",
-      placeholder: isCustomer ? "Name oder Notiz" : "Dienstleistung oder Notiz",
+      placeholder: isCustomer
+        ? "Name, Website oder Notiz"
+        : "Dienstleistung oder Notiz",
     }),
     archived = field("Ansicht", "archived", {
       value: "false",
@@ -281,7 +364,9 @@ export async function entityList(type, actions) {
   function render() {
     const term = search.querySelector("input").value.toLocaleLowerCase();
     const filtered = rows.filter((r) =>
-      (r.name + " " + r.note).toLocaleLowerCase().includes(term),
+      (r.name + " " + r.note + " " + (r.website ?? ""))
+        .toLocaleLowerCase()
+        .includes(term),
     );
     count.textContent = `${filtered.length} ${title}`;
     content.replaceChildren(
@@ -289,7 +374,9 @@ export async function entityList(type, actions) {
         title,
         ["Name", "Notiz", "Angelegt", "Aktionen"],
         filtered.map((r) => [
-          link(r.name, "#/" + type + "/" + r.id),
+          isCustomer
+            ? customerIdentity(r)
+            : link(r.name, "#/" + type + "/" + r.id),
           el("span", { class: "note-text oj-small" }, r.note || "–"),
           datetime(r.created_at),
           archiveMode
@@ -352,6 +439,14 @@ export async function customerDetail(id, actions) {
       row.archived_at ? "Archivierter Kunde" : "Kundendetails",
       entityState(row, "customers", actions),
     ),
+    row.website || row.has_logo
+      ? el(
+          "div",
+          { class: "customer-profile oj-cluster" },
+          customerLogo(row, { large: true }),
+          customerWebsite(row),
+        )
+      : null,
     row.note ? panel("Notiz", el("p", { class: "note-text" }, row.note)) : null,
     panel(
       "Mitarbeiter",
@@ -518,95 +613,108 @@ export async function pipeline(actions, params) {
       ],
     }),
     board = el("div", {
+      id: "pipeline-board",
       class: "pipeline-board",
       tabindex: 0,
       role: "region",
       "aria-label": "Pipeline nach Status",
     });
+  const count = el("p", { class: "oj-small oj-muted" });
+  const scrollPhase = (direction) => {
+    const column = board.querySelector(".pipeline-column");
+    if (!column) return;
+    const distance =
+      column.getBoundingClientRect().width +
+      parseFloat(getComputedStyle(board).columnGap);
+    board.scrollBy({
+      left: direction * distance,
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+    });
+  };
+  const scrollButton = (name, iconName, direction) =>
+    el(
+      "button",
+      {
+        class: "oj-icon-button",
+        type: "button",
+        "aria-label": name,
+        "aria-controls": "pipeline-board",
+        title: name,
+        onclick: () => scrollPhase(direction),
+      },
+      icon(iconName),
+    );
+  const previous = scrollButton("Vorherige Phasen anzeigen", "arrow-left", -1);
+  const next = scrollButton("Nächste Phasen anzeigen", "arrow-right", 1);
+  const scrollControls = el(
+    "div",
+    {
+      class: "pipeline-scroll-controls",
+      role: "group",
+      "aria-label": "Pipeline scrollen",
+    },
+    previous,
+    next,
+  );
+  const toolbar = el(
+    "div",
+    { class: "pipeline-toolbar" },
+    count,
+    scrollControls,
+  );
+  const updateScrollControls = () => {
+    previous.disabled = board.scrollLeft <= 1;
+    next.disabled =
+      board.scrollLeft >= board.scrollWidth - board.clientWidth - 1;
+  };
+  const observer = new ResizeObserver(updateScrollControls);
+  observer.observe(board);
+  board.addEventListener("scroll", updateScrollControls, { passive: true });
+  let frame;
+  const updateAfterRender = () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(updateScrollControls);
+  };
   let generation = 0;
   function render() {
     const term = search.querySelector("input").value.toLowerCase(),
       selected = status.querySelector("select").value;
-    board.replaceChildren(
-      ...Object.entries(labels.status)
-        .filter(([s]) => !selected || s === selected)
-        .map(([s, label]) => {
-          const list = rows.filter(
-            (r) =>
-              r.status === s &&
-              (r.customer_name + " " + r.service_name)
-                .toLowerCase()
-                .includes(term),
-          );
-          return el(
-            "section",
-            { class: "pipeline-column" },
-            el(
-              "h2",
-              { class: "oj-heading-4" },
-              label,
-              el("span", { class: "oj-badge" }, list.length),
-            ),
-            list.length
-              ? list.map((r) =>
-                  el(
-                    "article",
-                    { class: "oj-panel oj-panel-compact offer-card" },
-                    el("p", { class: "oj-small oj-muted" }, r.customer_name),
-                    el(
-                      "a",
-                      {
-                        class: "oj-link offer-card-title",
-                        href: "#/relationships/" + r.id,
-                      },
-                      r.service_name,
-                    ),
-                    el(
-                      "div",
-                      { class: "offer-card-meta" },
-                      el(
-                        "span",
-                        { class: "oj-mono" },
-                        money(
-                          ["accepted", "done"].includes(s)
-                            ? r.accepted_price_minor
-                            : r.current_offered_price_minor,
-                          r.currency,
-                        ),
-                      ),
-                      el(
-                        "span",
-                        { class: "oj-small oj-muted" },
-                        labels.billing[r.billing_type],
-                      ),
-                    ),
-                    el(
-                      "p",
-                      { class: "oj-small" },
-                      r.employee_name ?? "Kein Ansprechpartner",
-                    ),
-                    el(
-                      "p",
-                      { class: "oj-small oj-muted" },
-                      age(r.status_since) + " im Status",
-                    ),
-                    !r.archived_at
-                      ? el(
-                          "div",
-                          { class: "section-actions" },
-                          statusActions(r, actions),
-                        )
-                      : button(
-                          "Wiederherstellen",
-                          () => actions.archive("customer-services", r, true),
-                          { compact: true },
-                        ),
-                  ),
-                )
-              : el("p", { class: "oj-small oj-muted" }, "Keine Angebote."),
-          );
-        }),
+    const phases = Object.entries(labels.status).filter(
+      ([s]) => !selected || s === selected,
     );
+    board.classList.toggle("is-filtered", Boolean(selected));
+    const matches = rows.filter(
+      (r) =>
+        (!selected || r.status === selected) &&
+        (r.customer_name + " " + r.service_name).toLowerCase().includes(term),
+    );
+    count.textContent = `${matches.length} ${matches.length === 1 ? "Angebot" : "Angebote"} · ${phases.length} ${phases.length === 1 ? "Phase" : "Phasen"}`;
+    board.replaceChildren(
+      ...phases.map(([s, label]) => {
+        const list = matches.filter((r) => r.status === s);
+        return el(
+          "section",
+          { class: "pipeline-column" },
+          el(
+            "h2",
+            { class: "oj-heading-4" },
+            label,
+            el("span", { class: "oj-badge" }, list.length),
+          ),
+          list.length
+            ? el(
+                "div",
+                { class: "pipeline-cards" },
+                list.map((r) => pipelineCard(r, actions)),
+              )
+            : el("p", { class: "oj-small oj-muted" }, "Keine Angebote."),
+        );
+      }),
+    );
+    if (selected) board.scrollLeft = 0;
+    updateAfterRender();
   }
   search.querySelector("input").addEventListener("input", render);
   status.querySelector("select").addEventListener("change", render);
@@ -622,10 +730,11 @@ export async function pipeline(actions, params) {
       }
     } catch (error) {
       board.replaceChildren(el("p", { role: "alert" }, error.message));
+      updateAfterRender();
     }
   });
   render();
-  return [
+  const content = [
     heading(
       "Pipeline",
       "Jeder Auftrag ist ein eigener Vorgang. Follow-ups gehören zum bestehenden Angebot.",
@@ -637,8 +746,14 @@ export async function pipeline(actions, params) {
       ],
     ),
     el("div", { class: "filters" }, search, status, archive),
+    toolbar,
     board,
   ];
+  content.dispose = () => {
+    observer.disconnect();
+    cancelAnimationFrame(frame);
+  };
+  return content;
 }
 export async function relationshipDetail(id, actions) {
   const r = await api("/customer-services/" + id);
@@ -661,18 +776,24 @@ export async function relationshipDetail(id, actions) {
         (r.archived_at
           ? "Archiviertes Angebot"
           : "Angebot " + r.id.slice(0, 8)),
-      r.archived_at
-        ? [
-            button("Wiederherstellen", () =>
-              actions.archive("customer-services", r, true),
-            ),
-          ]
-        : [
-            button("Bearbeiten", () => actions.relationship(r)),
-            button("Archivieren", () =>
-              actions.archive("customer-services", r),
-            ),
-          ],
+      [
+        ...(r.archived_at
+          ? [
+              button("Wiederherstellen", () =>
+                actions.archive("customer-services", r, true),
+              ),
+            ]
+          : [
+              button("Bearbeiten", () => actions.relationship(r)),
+              button("Archivieren", () =>
+                actions.archive("customer-services", r),
+              ),
+            ]),
+        button("Löschen", () => actions.deleteRelationship(r), {
+          danger: true,
+          iconName: "trash",
+        }),
+      ],
     ),
     el(
       "div",
@@ -916,7 +1037,7 @@ export async function activities(actions) {
   ];
 }
 function performance(title, rows, channel = false) {
-  return panel(
+  const content = panel(
     title,
     table(
       title,
@@ -924,6 +1045,7 @@ function performance(title, rows, channel = false) {
         channel ? "Kanal" : "Name",
         "Angelegt",
         "Gepitcht",
+        "Ghosted",
         "Gewonnen",
         "Abgelehnt",
         "Abschlussquote",
@@ -933,6 +1055,7 @@ function performance(title, rows, channel = false) {
         channel ? labels.channel[r.name] : r.name,
         r.created,
         r.pitched,
+        r.ghosted,
         r.won,
         r.rejected,
         percent(r.win_rate),
@@ -944,6 +1067,8 @@ function performance(title, rows, channel = false) {
       ]),
     ),
   );
+  content.classList.add("performance-panel");
+  return content;
 }
 function analyticsContent(a) {
   const s = a.summary;
@@ -953,6 +1078,7 @@ function analyticsContent(a) {
       { class: "metrics-grid" },
       metric("Angelegt", s.created),
       metric("Gepitcht", s.pitched),
+      metric("Ghosted", s.ghosted, "Keine Rückmeldung"),
       metric("Gewonnen", s.won, "Angenommen + erledigt"),
       metric("Abgelehnt", s.rejected),
       metric("Abschlussquote", percent(s.win_rate)),

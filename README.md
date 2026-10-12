@@ -1,6 +1,6 @@
 # Pitchary
 
-Schlankes, lokales Single-User-CRM für Kunden, Ansprechpartner, Dienstleistungen und eigenständige Vertriebsangebote. Dashboard, Kunden, Dienstleistungen, Pipeline, Aktivitäten und Analytics sind vollständig mit der SQLite-Datenbank verbunden.
+Schlankes, lokales Single-User-CRM für Kunden, Ansprechpartner, Dienstleistungen und eigenständige Vertriebsangebote. Dashboard, Kunden, Dienstleistungen, Pipeline und Analytics sind vollständig mit der SQLite-Datenbank verbunden. Aktivitäten werden direkt am jeweiligen Angebot erfasst.
 
 ## Start
 
@@ -17,13 +17,17 @@ Beim ersten Start entsteht eine **leere** Datenbank in `data/pitchary.sqlite`. M
 
 ## Erste Schritte
 
-1. Unter **Kunden** einen Kunden und dessen Mitarbeiter anlegen.
+1. Unter **Kunden** einen Kunden mit optionaler Website und Logo sowie dessen Mitarbeiter anlegen.
 2. Unter **Dienstleistungen** einen wiederverwendbaren Leistungstyp anlegen.
 3. Ein **neues Angebot** erstellen: Kunde, Dienstleistung, Ansprechpartner, Preis, Währung, Abrechnung und ursprünglichen Pitch-Kanal auswählen.
 4. In der Pipeline oder Angebotsdetailansicht **Pitch erfassen**, Kontakte protokollieren, den Preis verhandeln und **Zusage erfassen** oder **Ablehnen** wählen.
 5. Gewonnene Aufträge als erledigt markieren. Ein neues Projekt bekommt ein neues Angebot; ein Follow-up bleibt im bestehenden Vorgang.
 
+Beim Anlegen eines Angebots auf einer Dienstleistungsdetailseite ist die Dienstleistung bereits festgelegt. Die Mehrfachanlage zeigt Kunden mit Logo und Website; größere Listen sind durchsuchbar und unterstützen Sammelauswahl. Bereits ausgewählte Kunden bleiben beim Filtern ausgewählt. Vor dem Speichern zeigt der Dialog die genaue Anzahl der eigenständigen Angebote und den Preis pro Kunde mit Abrechnungsmodell. Zusammenfassung und Aktionen bleiben auch in schmalen oder niedrigen Fenstern sichtbar.
+
 Alle Änderungen werden serverseitig geprüft. Fehler erscheinen im Formular, ohne dessen Eingaben zu verwerfen. Ein Kunden- oder Dienstleistungsarchiv entfernt keine Beziehungen. Mitarbeiter und Angebote können ebenfalls archiviert und wiederhergestellt werden. Historische Ansprechpartner bleiben lesbar; archivierte Mitarbeiter sind für neue Zuweisungen nicht auswählbar.
+
+Websites werden als HTTP-/HTTPS-Adressen gespeichert und öffnen über einen Link in einem neuen Tab. Kundenlogos lassen sich als PNG, JPEG oder WebP (maximal 1 MiB) hochladen, in der Vorschau ansehen, ersetzen und entfernen. Der Upload prüft im Browser die Bildlesbarkeit und maximal 4096 × 4096 Pixel. Kundenliste und Kundendetail zeigen das gespeicherte Logo. Logos liegen als BLOB in derselben SQLite-Datenbank; Backup und Restore enthalten die Bilddaten automatisch. Änderungen an Website und Logo werden gemeinsam mit dem Kunden gespeichert; Abbrechen lässt die gespeicherten Daten unverändert.
 
 ## Demo-Daten (optional)
 
@@ -54,16 +58,22 @@ Die Oberfläche nutzt das per npm installierte [oj-designsystem](https://github.
 
 Pitchary verwendet Kobaltblau (`#4D8DFF`) als Produktakzent über `--oj-accent` in `public/app.css`; das Favicon verwendet dieselbe Farbe.
 
+Die linke Navigation bleibt auf Desktop an ihrer Position und ist auf die Fensterhöhe begrenzt. In niedrigen Fenstern scrollt das Menü intern; auf Mobil wird es oberhalb des Inhalts angezeigt. Der obere Header bleibt beim Scrollen sichtbar. Das Menü enthält Dashboard, Kunden, Dienstleistungen, Pipeline und Analytics. Die Kundentabelle zeigt Name und Logo; die Website bleibt in den Kundendetails und der Bearbeitung verfügbar und kann weiterhin gesucht werden.
+
+Die Pipeline nutzt die gesamte verfügbare Containerbreite. Statusspalten sind mindestens 336 px breit und verteilen zusätzlichen Platz gleichmäßig, sobald alle sechs Phasen in das Fenster passen. Auf kleinen Mobilfenstern passen sie in die verfügbare Breite; bei Filterung bleibt eine einzelne Spalte 336 px breit. Karten trennen Kunde/Dienstleistung, Preis/Abrechnung und Kontakt/Verweildauer. Pro Karte wird eine nächste Aktion hervorgehoben. Weitere Phasen sind per horizontalem Scrollen oder über die Pfeilbuttons erreichbar; die Angebotsanzahl folgt Suche und Statusfilter.
+
 `npm install` synchronisiert über `postinstall` die unveränderten gebauten CSS-/ESM-/Font-/Icon-Assets und Lizenzen nach `public/vendor/oj-designsystem/`. Der reproduzierbare Sync kann mit `npm run sync:designsystem` erneut ausgeführt werden; `package-lock.json` fixiert die Paketversion. Bei Installation mit `--ignore-scripts` ist dieser Befehl vor dem Start erforderlich. Das Designsystem wird nicht verändert. Jede dynamische View und jeder Dialog besitzt einen `initOJ()`-Cleanup, der vor dem Entfernen der Oberfläche aufgerufen wird.
 
 ## Datenmodell und fachliche Regeln
 
-Die sechs fachlichen Tabellen sind `customers`, `employees`, `services`, `customer_services`, `customer_service_status_history` und `activities`. Schema-Versionen werden in `PRAGMA user_version` geführt; es gibt keine zusätzliche fachliche Tabelle. Migration 001 erstellt die Tabellen, Indizes und Integritätstrigger; 002 ergänzt die Angebotsarchivierung.
+Die sechs fachlichen Tabellen sind `customers`, `employees`, `services`, `customer_services`, `customer_service_status_history` und `activities`. Schema-Versionen werden in `PRAGMA user_version` geführt; es gibt keine zusätzliche fachliche Tabelle. Migration 001 erstellt die Tabellen, Indizes und Integritätstrigger; 002 ergänzt die Angebotsarchivierung; 003 ergänzt `website`, `logo_mime` und `logo_data` bei Kunden. Bestehende Kunden erhalten eine leere Website und kein Logo. Migration 004 erweitert die Status-Constraints um `ghosted` und erhält alle Daten einschließlich Historie, Aktivitäten und Zeilenreihenfolge. Der Tabellenumbau erfolgt in einer Transaktion mit Foreign-Key-Prüfung vor dem Commit; danach wird die Foreign-Key-Erzwingung wieder aktiviert.
+
+Migration 005 erlaubt das endgültige Löschen eines vollständigen Angebots samt Historie und Aktivitäten. Ein SQLite-Trigger entfernt dessen Ereignisse innerhalb derselben Transaktion. Einzelne Historien- und Aktivitätseinträge bleiben gegen Änderungen und Löschungen geschützt; die Migration erhält alle bestehenden Daten.
 
 - IDs sind UUIDs. Kunden besitzen beliebig viele Mitarbeiter. Dienstleistungen können ohne Kunden existieren.
 - Ein Angebot ist genau eine Kunden-Dienstleistungs-Beziehung. **Kein UNIQUE-Constraint** auf Kunde/Dienstleistung: wiederholte Aufträge sind unabhängig.
 - Kontaktzuordnungen werden fachlich und über zusammengesetzte Foreign Keys bzw. einen Aktivitätstrigger abgesichert. Ein Mitarbeiter kann ausschließlich zum Kunden des Angebots gehören.
-- Status: `open → pitched → accepted → done` oder `pitched → rejected`. `rejected → pitched` ist mit einer Wiederaufnahmebegründung erlaubt. `done` ist abgeschlossen. Andere Übergänge werden verweigert; ein neuer Auftrag erhält eine neue Beziehung.
+- Status: `open → pitched → accepted → done` oder `pitched → rejected`. Bei ausbleibender Rückmeldung ist `pitched → ghosted` möglich. `ghosted → accepted` oder `ghosted → rejected` erfasst eine spätere Entscheidung. `ghosted → pitched` und `rejected → pitched` erfordern eine Wiederaufnahmebegründung. `done` ist abgeschlossen. Andere Übergänge werden verweigert; ein neuer Auftrag erhält eine neue Beziehung.
 - Bereits beim Anlegen wird `open` historisiert. Status und Historieneintrag werden gemeinsam in `BEGIN IMMEDIATE`/`COMMIT` gespeichert; Fehler rollen beide zurück. `status_since` markiert den Beginn der aktuellen Phase. Optional rückdatierte Statusereignisse dürfen nicht vor der aktuellen Phase oder in der Zukunft liegen.
 - Der erste tatsächliche Pitch hält den zu diesem Zeitpunkt angebotenen Preis in `first_pitched_price_minor` fest. Vor dem Pitch ist dieses Feld NULL. Verhandlungen ändern nur den aktuellen Angebotspreis und erzeugen strukturierte `price_change`-Aktivitäten mit Preisfeld, altem und neuem Betrag.
 - Die Zusage speichert separat `accepted_price_minor`; auch dessen Erfassung und spätere Änderungen werden protokolliert. Nach Zusage wird eine Preisänderung am vereinbarten Preis durchgeführt.
@@ -72,6 +82,7 @@ Die sechs fachlichen Tabellen sind `customers`, `employees`, `services`, `custom
 - Absagegründe werden als JSON mit `code` und optionaler `note` gespeichert: `budget`, `timing`, `competitor`, `no_need`, `no_response`, `other`. Die jeweilige Absage bleibt in der Historie erhalten, auch nach Wiederaufnahme.
 - Kontaktaktivitäten: `pitch`, `follow_up`, `call`, `meeting`, `note`. Sie ändern keinen Status. Ein initialer Pitch ist zuerst über die Statusaktion zu erfassen. Zeitpunkte sind ISO-8601 mit Zeitzone, Speicherung in UTC, Anzeige in der Browser-Zeitzone.
 - Historie und Aktivitäten sind append-only und zusätzlich durch SQLite-Trigger gegen reguläres UPDATE/DELETE geschützt. Archivierung erhält alle Geschäftsdaten. Foreign Keys, WAL und Busy Timeout (5 Sekunden) sind aktiv.
+- In den Angebotsdetails löscht **Löschen** nach Bestätigung das gesamte Angebot inklusive Statushistorie, Kontakt- und Preisaktivitäten, auch bei archivierten Angeboten. Kunden, Dienstleistungen, Mitarbeiter und andere Angebote bleiben erhalten. Gelöschte Angebote werden nicht mehr in Analytics ausgewertet. Nach erfolgreichem Löschen öffnet sich die Pipeline; bei einem Fehler bleibt die Detailansicht erhalten.
 
 ## Analytics-Definitionen
 
@@ -81,9 +92,10 @@ Filter beziehen sich auf eine **Angebotskohorte nach Anlagedatum in UTC**, einsc
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Angelegt                     | Anzahl eigenständiger Angebote der Kohorte                                                                                    |
 | Gepitcht                     | Mindestens ein `pitched`-Historieneintrag; ein Vorgang zählt einmal                                                           |
+| Ghosted                      | Aktueller Status `ghosted`: keine Rückmeldung nach dem Pitch, ohne bestätigte Absage                                          |
 | Gewonnen                     | Aktueller Status `accepted` oder `done`                                                                                       |
 | Abgelehnt                    | Aktueller Status `rejected`                                                                                                   |
-| Unentschieden                | Aktueller Status `open` oder `pitched`                                                                                        |
+| Unentschieden                | Aktueller Status `open`, `pitched` oder `ghosted`                                                                             |
 | Abschlussquote               | Gewonnen / (gewonnen + abgelehnt); ohne Entscheidungen NULL/„–“                                                               |
 | Pitch → Zusage               | Durchschnitt vom ersten Pitch bis zur ersten Zusage, in Kalendertagen; nur Vorgänge mit beiden Ereignissen                    |
 | Pitch → Entscheidung         | Durchschnitt vom ersten Pitch bis zur ersten Zusage oder Absage; nach Wiederaufnahme bleibt die erste Entscheidung maßgeblich |

@@ -47,6 +47,7 @@ export function createAnalytics(repo) {
       return {
         created: group.length,
         pitched: group.filter((r) => r.pitched).length,
+        ghosted: group.filter((r) => r.status === "ghosted").length,
         won,
         rejected: lost,
         undecided: group.length - won - lost,
@@ -115,6 +116,10 @@ export function createAnalytics(repo) {
         pitched: "Mindestens ein pitched-Ereignis; pro Vorgang einmal.",
         won: "Aktueller Status accepted oder done.",
         rejected: "Aktueller Status rejected.",
+        ghosted:
+          "Aktueller Status ghosted: keine Rückmeldung nach dem Pitch, ohne bestätigte Absage.",
+        undecided:
+          "Aktueller Status open, pitched oder ghosted; keine bestätigte Entscheidung.",
         win_rate:
           "Gewonnen / (gewonnen + abgelehnt); ohne Entscheidungen kein Wert.",
         timing:

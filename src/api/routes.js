@@ -10,16 +10,34 @@ export async function registerAPI(app, crm) {
   const schema = { params: idSchema };
   const bodySchema = { params: idSchema, body: object };
   app.get("/api/health", () => ({ status: "ok", application: "pitchary" }));
+  app.get("/api/customers/:id/logo", { schema }, (request, reply) => {
+    const image = crm.customerLogo(request.params.id);
+    return reply
+      .type(image.mime)
+      .header("Content-Disposition", "inline")
+      .send(image.data);
+  });
   for (const name of ["customers", "employees", "services"]) {
     app.get(`/api/${name}`, (request) => crm.listEntities(name, request.query));
     app.get(`/api/${name}/:id`, { schema }, (request) =>
       crm.entity(name, request.params.id),
     );
-    app.post(`/api/${name}`, { schema: { body: object } }, (request, reply) =>
-      reply.code(201).send(crm.createEntity(name, request.body)),
+    app.post(
+      `/api/${name}`,
+      {
+        schema: { body: object },
+        ...(name === "customers" ? { bodyLimit: 1500000 } : {}),
+      },
+      (request, reply) =>
+        reply.code(201).send(crm.createEntity(name, request.body)),
     );
-    app.patch(`/api/${name}/:id`, { schema: bodySchema }, (request) =>
-      crm.updateEntity(name, request.params.id, request.body),
+    app.patch(
+      `/api/${name}/:id`,
+      {
+        schema: bodySchema,
+        ...(name === "customers" ? { bodyLimit: 1500000 } : {}),
+      },
+      (request) => crm.updateEntity(name, request.params.id, request.body),
     );
     app.delete(`/api/${name}/:id`, { schema }, (request) =>
       crm.archive(name, request.params.id),
@@ -51,6 +69,9 @@ export async function registerAPI(app, crm) {
   );
   app.delete("/api/customer-services/:id", { schema }, (request) =>
     crm.archive("customer_services", request.params.id),
+  );
+  app.delete("/api/customer-services/:id/permanent", { schema }, (request) =>
+    crm.deleteRelationship(request.params.id),
   );
   app.post("/api/customer-services/:id/restore", { schema }, (request) =>
     crm.archive("customer_services", request.params.id, false),

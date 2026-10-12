@@ -7,6 +7,8 @@ import {
 } from "../vendor/oj-designsystem/index.js";
 import { api } from "./api.js";
 import { el, button, field, options, labels, minor, decimal } from "./dom.js";
+import { logoEditor } from "./customer-branding.js";
+import { createOfferForm } from "./offer-form.js";
 let modalNumber = 0;
 export function showForm(
   title,
@@ -18,6 +20,10 @@ export function showForm(
     onMount,
     description,
     successMessage = "Gespeichert.",
+    fieldsClass = "form-grid",
+    dialogClass = "",
+    footerContent,
+    pinnedFooter = false,
   } = {},
 ) {
   const trigger = document.activeElement;
@@ -33,32 +39,47 @@ export function showForm(
     { class: "oj-button oj-button-primary", type: "submit" },
     submitLabel,
   );
-  const form = el(
-    "form",
-    { class: "oj-stack" },
-    description ? el("p", { class: "oj-muted" }, description) : null,
-    el("div", { class: "form-grid" }, fields),
-    error,
+  const actions = el(
+    "div",
+    { class: "form-actions" },
     el(
-      "div",
-      { class: "form-actions" },
-      el(
-        "button",
-        {
-          type: "button",
-          class: "oj-button oj-button-secondary",
-          "data-oj-dialog-close": "",
-        },
-        "Abbrechen",
-      ),
-      save,
+      "button",
+      {
+        type: "button",
+        class: "oj-button oj-button-secondary",
+        "data-oj-dialog-close": "",
+      },
+      "Abbrechen",
     ),
+    save,
   );
+  const contents = [
+    description ? el("p", { class: "oj-muted" }, description) : null,
+    el("div", { class: fieldsClass }, fields),
+    error,
+  ];
+  const form = pinnedFooter
+    ? el(
+        "form",
+        { class: "offer-dialog-form" },
+        el(
+          "div",
+          { class: "oj-dialog-body offer-dialog-scroll oj-stack" },
+          contents,
+        ),
+        el(
+          "footer",
+          { class: "oj-dialog-footer offer-dialog-footer" },
+          footerContent,
+          actions,
+        ),
+      )
+    : el("form", { class: "oj-stack" }, contents, actions);
   const dialog = el(
     "dialog",
     {
       id,
-      class: "oj-dialog",
+      class: "oj-dialog" + (dialogClass ? " " + dialogClass : ""),
       "data-oj-dialog": "",
       "aria-labelledby": id + "-title",
     },
@@ -67,7 +88,7 @@ export function showForm(
       { class: "oj-dialog-header" },
       el("h2", { class: "oj-dialog-title", id: id + "-title" }, title),
     ),
-    el("div", { class: "oj-dialog-body" }, form),
+    pinnedFooter ? form : el("div", { class: "oj-dialog-body" }, form),
   );
   document.querySelector("#dialogs").append(dialog);
   const cleanup = initOJ(dialog);
@@ -79,6 +100,7 @@ export function showForm(
     },
     { once: true },
   );
+  let refreshForm;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (save.disabled) return;
@@ -111,13 +133,36 @@ export function showForm(
     } finally {
       save.disabled = false;
       save.removeAttribute("aria-busy");
+      refreshForm?.();
     }
   });
-  onMount?.(form);
+  refreshForm = onMount?.(form, { save });
   openDialog(dialog, { trigger });
   return dialog;
 }
 export function createActions(refresh, navigate) {
+  async function deleteRelationship(row) {
+    if (
+      !(await confirmDialog({
+        title: "Angebot endgültig löschen?",
+        message: `Das Angebot „${row.service_name}“ für „${row.customer_name}“ wird mit seiner gesamten Statushistorie und allen Aktivitäten endgültig gelöscht. Das lässt sich nicht rückgängig machen.`,
+        confirmLabel: "Endgültig löschen",
+        cancelLabel: "Abbrechen",
+        variant: "danger",
+      }))
+    )
+      return;
+    try {
+      await api(`/customer-services/${row.id}/permanent`, { method: "DELETE" });
+      toast("Angebot gelöscht.", {
+        type: "success",
+        dismissLabel: "Schließen",
+      });
+      navigate("/pipeline");
+    } catch (err) {
+      toast(err.message, { type: "error", dismissLabel: "Schließen" });
+    }
+  }
   async function archive(type, row, restore = false) {
     if (
       !restore &&
@@ -144,6 +189,8 @@ export function createActions(refresh, navigate) {
   }
   function entity(type, row) {
     const employee = type === "employees";
+    const customer = type === "customers";
+    const branding = customer ? logoEditor(row) : null;
     const fields = [
       field(employee ? "Name" : "Name", "name", {
         value: row?.name ?? "",
@@ -151,6 +198,18 @@ export function createActions(refresh, navigate) {
         maxlength: 200,
         autofocus: true,
       }),
+      ...(customer
+        ? [
+            field("Website", "website", {
+              type: "url",
+              value: row?.website ?? "",
+              maxlength: 2048,
+              placeholder: "https://example.com",
+              helper: "Vollständige Adresse mit http:// oder https://.",
+            }),
+            branding.node,
+          ]
+        : []),
       ...(employee
         ? [
             field("E-Mail", "email", {
@@ -177,7 +236,7 @@ export function createActions(refresh, navigate) {
             }),
           ]),
     ];
-    return showForm(
+    const dialog = showForm(
       row?.id
         ? "Bearbeiten"
         : employee
@@ -186,14 +245,20 @@ export function createActions(refresh, navigate) {
             ? "Kunde anlegen"
             : "Dienstleistung anlegen",
       fields,
-      (data) =>
-        api(`/${type}${row?.id ? "/" + row.id : ""}`, {
+      async (data) => {
+        if (customer) {
+          const value = await branding.value();
+          delete data.logo;
+          if (value !== undefined) data.logo = value;
+        }
+        return api(`/${type}${row?.id ? "/" + row.id : ""}`, {
           method: row?.id ? "PATCH" : "POST",
           body:
             employee && !row?.id
               ? { ...data, customer_id: row.customer_id }
               : data,
-        }),
+        });
+      },
       {
         onSaved: async (result) => {
           if (!row?.id && !employee) navigate(`/${type}/${result.id}`);
@@ -201,6 +266,9 @@ export function createActions(refresh, navigate) {
         },
       },
     );
+    if (branding)
+      dialog.addEventListener("close", branding.cleanup, { once: true });
+    return dialog;
   }
   async function offer({ customer, service, batch = false } = {}) {
     const [customers, services] = await Promise.all([
@@ -214,81 +282,16 @@ export function createActions(refresh, navigate) {
       );
       return;
     }
-    let fields = [];
-    if (batch) {
-      fields.push(
-        el(
-          "fieldset",
-          { class: "wide oj-stack" },
-          el("legend", { class: "oj-label" }, "Kunden auswählen"),
-          el(
-            "div",
-            { class: "form-checks" },
-            customers.map((c) =>
-              el(
-                "label",
-                { class: "oj-check" },
-                el("input", {
-                  class: "oj-checkbox",
-                  type: "checkbox",
-                  name: "customer_ids",
-                  value: c.id,
-                }),
-                c.name,
-              ),
-            ),
-          ),
-        ),
-      );
-    } else
-      fields.push(
-        field("Kunde", "customer_id", {
-          value: customer?.id ?? customers[0].id,
-          options: customers.map((c) => [c.id, c.name]),
-          required: true,
-        }),
-      );
-    fields.push(
-      field("Dienstleistung", "service_id", {
-        value: service?.id ?? services[0].id,
-        options: services.map((s) => [s.id, s.name]),
-        required: true,
-      }),
-    );
-    if (!batch)
-      fields.push(
-        field("Ansprechpartner", "primary_employee_id", {
-          options: [["", "Kein Ansprechpartner"]],
-        }),
-      );
-    fields.push(
-      field("Angebotspreis", "price", {
-        required: true,
-        value: "",
-        inputmode: "decimal",
-        helper:
-          "Ohne Tausendertrennzeichen, z. B. 1200,50. Maximal zwei Nachkommastellen.",
-      }),
-      field("Währung", "currency", {
-        value: "EUR",
-        options: [
-          ["EUR", "EUR"],
-          ["USD", "USD"],
-          ["GBP", "GBP"],
-        ],
-      }),
-      field("Abrechnung", "billing_type", {
-        value: "one_time",
-        options: options(labels.billing),
-      }),
-      field("Ursprünglicher Pitch-Kanal", "pitch_channel", {
-        value: "email",
-        options: options(labels.channel),
-      }),
-    );
+    const ui = createOfferForm({
+      customers,
+      services,
+      customer,
+      service,
+      batch,
+    });
     showForm(
-      batch ? "Dienstleistung mehreren Kunden anbieten" : "Neues Angebot",
-      fields,
+      batch ? "Angebote anlegen" : "Neues Angebot",
+      ui.fields,
       (data, form) => {
         const body = {
           service_id: data.service_id,
@@ -310,19 +313,29 @@ export function createActions(refresh, navigate) {
       },
       {
         submitLabel: "Angebot anlegen",
-        description:
-          "Ein neuer Auftrag bekommt einen eigenen Vorgang. Follow-ups zu einem laufenden Angebot werden im bestehenden Vorgang erfasst.",
+        fieldsClass: "offer-fields",
+        dialogClass: "offer-dialog",
+        pinnedFooter: true,
+        footerContent: ui.summary,
         onSaved: async (r) => {
           if (batch) await refresh();
           else navigate("/relationships/" + r.id);
         },
-        onMount: (form) => {
-          if (batch) return;
+        onMount: (form, controls) => {
+          const update = ui.setup(form, controls);
+          if (batch) return update;
           const select = form.elements.namedItem("primary_employee_id");
           let generation = 0;
           const load = async () => {
             const token = ++generation;
             select.disabled = true;
+            const customerId = form.elements.namedItem("customer_id").value;
+            if (!customerId) {
+              select.replaceChildren(
+                el("option", { value: "" }, "Zuerst Kunde auswählen"),
+              );
+              return;
+            }
             try {
               const items = await api("/employees", {
                 query: {
@@ -344,13 +357,15 @@ export function createActions(refresh, navigate) {
             .namedItem("customer_id")
             .addEventListener("change", load);
           load();
+          return update;
         },
       },
     );
   }
   function status(row, to) {
     const rejected = to === "rejected",
-      resuming = row.status === "rejected";
+      resuming =
+        to === "pitched" && ["rejected", "ghosted"].includes(row.status);
     const fields = [
       field("Zeitpunkt", "occurred_at", {
         type: "datetime-local",
@@ -572,7 +587,16 @@ export function createActions(refresh, navigate) {
       },
     );
   }
-  return { archive, entity, offer, status, prices, activity, relationship };
+  return {
+    archive,
+    entity,
+    offer,
+    status,
+    prices,
+    activity,
+    relationship,
+    deleteRelationship,
+  };
 }
 function localTime(date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000)

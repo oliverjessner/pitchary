@@ -45,7 +45,10 @@ export const button = (
     {
       type: "button",
       class: `oj-button oj-button-${primary ? "primary" : danger ? "danger" : "secondary"}${compact ? " oj-button-compact" : ""}`,
-      onclick: action,
+      onclick: (event) => {
+        event.currentTarget.focus({ preventScroll: true });
+        action(event);
+      },
       disabled,
     },
     iconName ? icon(iconName) : null,
@@ -55,6 +58,7 @@ export const labels = {
   status: {
     open: "Offen",
     pitched: "Gepitcht",
+    ghosted: "Ghosted",
     accepted: "Angenommen",
     done: "Erledigt",
     rejected: "Abgelehnt",
@@ -92,7 +96,8 @@ export const labels = {
 };
 export const transitions = {
   open: ["pitched"],
-  pitched: ["accepted", "rejected"],
+  pitched: ["accepted", "ghosted", "rejected"],
+  ghosted: ["pitched", "accepted", "rejected"],
   accepted: ["done"],
   done: [],
   rejected: ["pitched"],
@@ -149,6 +154,7 @@ export const statusBadge = (value) =>
         {
           open: "neutral",
           pitched: "info",
+          ghosted: "warning",
           accepted: "success",
           done: "success",
           rejected: "danger",

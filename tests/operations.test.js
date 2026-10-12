@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { openDatabase, projectRoot } from "../src/database/database.js";
 import { createCRM } from "../src/business/crm.js";
+import { demoCustomerLogo } from "../scripts/demo-assets.js";
 test("online backup includes WAL data; restore validates and never overwrites files", (t) => {
   const folder = mkdtempSync(path.join(os.tmpdir(), "pitchary-backup-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
@@ -16,7 +17,11 @@ test("online backup includes WAL data; restore validates and never overwrites fi
   const db = openDatabase(source);
   t.after(() => db.close());
   const crm = createCRM(db),
-    c = crm.createEntity("customers", { name: "WAL customer" }),
+    c = crm.createEntity("customers", {
+      name: "WAL customer",
+      website: "https://example.com",
+      logo: demoCustomerLogo,
+    }),
     s = crm.createEntity("services", { name: "Backup service" });
   const r = crm.createRelationship({
     customer_id: c.id,
@@ -62,6 +67,15 @@ test("online backup includes WAL data; restore validates and never overwrites fi
     assert.equal(
       copy.prepare("SELECT note FROM activities").get().note,
       "Preserve history",
+    );
+    const restoredCustomer = copy
+      .prepare("SELECT website,logo_data,logo_mime FROM customers WHERE id=?")
+      .get(c.id);
+    assert.equal(restoredCustomer.website, "https://example.com/");
+    assert.equal(restoredCustomer.logo_mime, "image/png");
+    assert.deepEqual(
+      Buffer.from(restoredCustomer.logo_data),
+      Buffer.from(demoCustomerLogo.data_base64, "base64"),
     );
   } finally {
     copy.close();

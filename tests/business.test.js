@@ -357,6 +357,7 @@ test("analytics counts each offer once through rejection and resumption", (t) =>
   assert.deepEqual(r.summary, {
     created: 4,
     pitched: 3,
+    ghosted: 0,
     won: 1,
     rejected: 1,
     undecided: 2,
@@ -367,6 +368,82 @@ test("analytics counts each offer once through rejection and resumption", (t) =>
   assert.deepEqual(r.rejection_reasons, [{ code: "budget", count: 1 }]);
   assert.equal(r.values[0].accepted_price_minor, 90000);
   assert.equal(crm.relationship(d.id).history.length, 1);
+});
+test("ghosted stays undecided and resumes without replacing the first pitch price", (t) => {
+  const { crm, create, setTime, analytics } = fixture(t);
+  const row = create();
+  assert.throws(
+    () => crm.changeStatus(row.id, { status: "ghosted" }),
+    /nicht erlaubt/,
+  );
+  crm.changeStatus(row.id, { status: "pitched" });
+  setTime("2026-09-03T09:00:00.000Z");
+  crm.changeStatus(row.id, {
+    status: "ghosted",
+    reason: "Keine Antwort auf den Pitch",
+  });
+  const summary = analytics({}).summary;
+  assert.equal(summary.ghosted, 1);
+  assert.equal(summary.undecided, 1);
+  assert.equal(summary.rejected, 0);
+  assert.equal(summary.win_rate, null);
+  assert.equal(summary.avg_pitch_to_decision_days, null);
+  assert.equal(analytics({}).by_customer[0].ghosted, 1);
+  assert.equal(analytics({ status: "ghosted" }).summary.created, 1);
+  assert.equal(crm.relationships({ status: "ghosted" })[0].id, row.id);
+  assert.throws(
+    () => crm.changeStatus(row.id, { status: "pitched" }),
+    /Wiederaufnahme/,
+  );
+  crm.addActivity(row.id, {
+    type: "follow_up",
+    note: "Noch einmal nachgefragt",
+  });
+  assert.equal(crm.relationship(row.id).status, "ghosted");
+  crm.changePrice(row.id, {
+    field: "current_offered_price_minor",
+    price_minor: 95000,
+  });
+  setTime("2026-09-05T09:00:00.000Z");
+  crm.changeStatus(row.id, {
+    status: "pitched",
+    reason: "Kontakt antwortet wieder",
+  });
+  const result = crm.relationship(row.id);
+  assert.equal(result.first_pitched_price_minor, 100001);
+  assert.equal(result.current_offered_price_minor, 95000);
+  assert.deepEqual(
+    result.history.map((h) => h.to_status),
+    ["open", "pitched", "ghosted", "pitched"],
+  );
+  assert.equal(result.history.at(-1).from_status, "ghosted");
+  assert.equal(analytics({}).summary.pitched, 1);
+  assert.equal(analytics({}).summary.ghosted, 0);
+});
+test("ghosted allows real decisions and never inflates the win rate denominator", (t) => {
+  const { crm, create, setTime, analytics } = fixture(t);
+  const won = create(),
+    lost = create(),
+    waiting = create();
+  for (const row of [won, lost, waiting]) {
+    crm.changeStatus(row.id, { status: "pitched" });
+    crm.changeStatus(row.id, { status: "ghosted" });
+  }
+  setTime("2026-09-04T09:00:00.000Z");
+  crm.changeStatus(won.id, { status: "accepted", accepted_price_minor: 90000 });
+  crm.changeStatus(lost.id, { status: "rejected", reason: { code: "budget" } });
+  const result = analytics({});
+  assert.equal(result.summary.ghosted, 1);
+  assert.equal(result.summary.won, 1);
+  assert.equal(result.summary.rejected, 1);
+  assert.equal(result.summary.undecided, 1);
+  assert.equal(result.summary.win_rate, 0.5);
+  assert.equal(result.summary.avg_pitch_to_decision_days, 3);
+  assert.deepEqual(result.rejection_reasons, [{ code: "budget", count: 1 }]);
+  assert.throws(
+    () => crm.changeStatus(won.id, { status: "ghosted" }),
+    /nicht erlaubt/,
+  );
 });
 test("analytics date, entity and channel filters and separated values are correct", (t) => {
   const { crm, create, setTime, analytics, c, s } = fixture(t);

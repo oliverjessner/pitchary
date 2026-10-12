@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { transaction } from "../database/database.js";
 import { createRepository } from "../database/repository.js";
+import { website, logo, customerRecord } from "./customer-branding.js";
 import {
   AppError,
   invalid,
@@ -19,7 +20,8 @@ import {
 } from "./validation.js";
 export const transitions = {
   open: ["pitched"],
-  pitched: ["accepted", "rejected"],
+  pitched: ["accepted", "ghosted", "rejected"],
+  ghosted: ["pitched", "accepted", "rejected"],
   accepted: ["done"],
   done: [],
   rejected: ["pitched"],
@@ -56,9 +58,10 @@ export function createCRM(
     const keys =
       table === "employees"
         ? ["name", "email", "position", "linkedin"]
-        : ["name", "note"];
+        : ["name", "note", ...(table === "customers" ? ["website"] : [])];
     allowedKeys(data, [
       ...keys,
+      ...(table === "customers" ? ["logo"] : []),
       ...(table === "employees" && creating ? ["customer_id"] : []),
     ]);
     const out = {};
@@ -66,8 +69,19 @@ export function createCRM(
       if (creating || data[key] !== undefined)
         out[key] = text(data[key] ?? "", key, {
           required: key === "name",
-          max: key === "note" ? 10000 : key === "name" ? 200 : 500,
+          max:
+            key === "note"
+              ? 10000
+              : key === "name"
+                ? 200
+                : key === "website"
+                  ? 2048
+                  : 500,
         });
+    if (table === "customers") {
+      if ("website" in out) out.website = website(out.website);
+      if ("logo" in data) Object.assign(out, logo(data.logo));
+    }
     if (table === "employees") {
       if (out.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.email))
         invalid("Ungültige E-Mail-Adresse.", "email");
@@ -120,19 +134,20 @@ export function createCRM(
   const crm = {
     repo,
     listEntities(table, filters = {}) {
-      return repo.list(table, {
+      const rows = repo.list(table, {
         archived: filters.archived === true || filters.archived === "true",
         search: text(filters.search ?? "", "search", { max: 200 }),
         customer_id: filters.customer_id
           ? uuid(filters.customer_id, "customer_id")
           : undefined,
       });
+      return table === "customers" ? rows.map(customerRecord) : rows;
     },
     entity(table, id) {
       const row = requireRecord(table, id);
       if (table === "customers")
         return {
-          ...row,
+          ...customerRecord(row),
           employees: repo.list("employees", { customer_id: id }),
           archived_employees: repo.list("employees", {
             customer_id: id,
@@ -154,32 +169,55 @@ export function createCRM(
     createEntity(table, data) {
       const values = entityData(table, data, true),
         at = now();
-      return repo.insert(table, {
-        id: idFactory(),
+      const id = idFactory();
+      repo.insert(table, {
+        id,
         ...values,
         created_at: at,
         updated_at: at,
         archived_at: null,
       });
+      const result = repo.get(table, id);
+      return table === "customers" ? customerRecord(result) : result;
     },
     updateEntity(table, id, data) {
       requireRecord(table, id, true);
-      return repo.update(table, id, {
+      const result = repo.update(table, id, {
         ...entityData(table, data),
         updated_at: now(),
       });
+      return table === "customers" ? customerRecord(result) : result;
     },
     archive(table, id, archived = true) {
       requireRecord(table, id);
-      return repo.update(table, id, {
+      const result = repo.update(table, id, {
         archived_at: archived ? now() : null,
         updated_at: now(),
       });
+      return table === "customers" ? customerRecord(result) : result;
+    },
+    customerLogo(id) {
+      requireRecord("customers", id);
+      const image = repo.customerLogo(id);
+      if (!image.logo_data)
+        throw new AppError(
+          404,
+          "not_found",
+          "Für diesen Kunden ist kein Logo gespeichert.",
+        );
+      return { data: Buffer.from(image.logo_data), mime: image.logo_mime };
     },
     relationships(filters = {}) {
       return repo.relationships({
         ...filterInput(filters),
         archived: filters.archived === true || filters.archived === "true",
+      });
+    },
+    deleteRelationship(id) {
+      return transaction(db, () => {
+        requireRecord("customer_services", id);
+        repo.deleteRelationship(id);
+        return { id, deleted: true };
       });
     },
     relationship(id) {
@@ -395,7 +433,11 @@ export function createCRM(
           out.rejection_reason = reason;
         } else if (data.reason !== undefined)
           reason = text(data.reason, "reason", { max: 2000 }) || null;
-        if (row.status === "rejected" && !reason)
+        if (
+          to === "pitched" &&
+          ["rejected", "ghosted"].includes(row.status) &&
+          !reason
+        )
           invalid("Bitte den Grund für die Wiederaufnahme angeben.", "reason");
         if (to === "pitched" && row.first_pitched_price_minor === null)
           out.first_pitched_price_minor = row.current_offered_price_minor;

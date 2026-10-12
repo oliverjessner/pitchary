@@ -61,10 +61,17 @@ async function render(focus = true) {
         heading("Seite nicht gefunden"),
         button("Zum Dashboard", () => navigate("/dashboard")),
       ];
-    if (token !== generation) return;
+    if (token !== generation) {
+      content.dispose?.();
+      return;
+    }
     cleanup();
     main.replaceChildren(...content.filter(Boolean));
-    cleanup = initOJ(main);
+    const cleanupOJ = initOJ(main);
+    cleanup = () => {
+      content.dispose?.();
+      cleanupOJ();
+    };
     document
       .querySelectorAll('nav[aria-label="Hauptnavigation"] a')
       .forEach((a) => {
@@ -97,7 +104,10 @@ async function render(focus = true) {
     );
     cleanup = initOJ(main);
   } finally {
-    if (token === generation) main.setAttribute("aria-busy", "false");
+    if (token === generation) {
+      main.classList.toggle("view-pipeline", section === "pipeline");
+      main.setAttribute("aria-busy", "false");
+    }
   }
 }
 window.addEventListener("hashchange", () => render());

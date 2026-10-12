@@ -1,4 +1,11 @@
-export const statuses = ["open", "pitched", "accepted", "done", "rejected"];
+export const statuses = [
+  "open",
+  "pitched",
+  "ghosted",
+  "accepted",
+  "done",
+  "rejected",
+];
 export const channels = ["linkedin", "email", "phone", "meeting", "other"];
 export const billingTypes = [
   "one_time",

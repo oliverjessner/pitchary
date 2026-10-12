@@ -7,6 +7,10 @@ const tables = new Set([
   "activities",
 ]);
 const joins = `SELECT cs.*, c.name AS customer_name, c.archived_at AS customer_archived_at, s.name AS service_name, s.archived_at AS service_archived_at, e.name AS employee_name FROM customer_services cs JOIN customers c ON c.id=cs.customer_id JOIN services s ON s.id=cs.service_id LEFT JOIN employees e ON e.id=cs.primary_employee_id`;
+const projection = (name) =>
+  name === "customers"
+    ? "id,name,note,website,logo_mime,created_at,updated_at,archived_at,logo_data IS NOT NULL AS has_logo"
+    : "*";
 export function createRepository(db) {
   const table = (name) => {
     if (!tables.has(name)) throw new Error("Unknown repository");
@@ -14,18 +18,29 @@ export function createRepository(db) {
   };
   return {
     get: (name, id) =>
-      db.prepare(`SELECT * FROM ${table(name)} WHERE id=?`).get(id),
+      db
+        .prepare(`SELECT ${projection(name)} FROM ${table(name)} WHERE id=?`)
+        .get(id),
+    customerLogo: (id) =>
+      db
+        .prepare("SELECT logo_data,logo_mime FROM customers WHERE id=?")
+        .get(id),
     list(name, { archived = false, search = "", customer_id } = {}) {
       const clauses = ["archived_at IS " + (archived ? "NOT NULL" : "NULL")];
       const params = [];
       if (search) {
+        const fields = [
+          "name",
+          name === "employees" ? "email" : "note",
+          ...(name === "customers" ? ["website"] : []),
+        ];
         clauses.push(
-          "(name LIKE ? ESCAPE '\\' OR " +
-            (name === "employees" ? "email" : "note") +
-            " LIKE ? ESCAPE '\\')",
+          "(" +
+            fields.map((field) => field + " LIKE ? ESCAPE '\\'").join(" OR ") +
+            ")",
         );
         const term = "%" + search.replace(/[\\%_]/g, "\\$&") + "%";
-        params.push(term, term);
+        params.push(...fields.map(() => term));
       }
       if (customer_id) {
         clauses.push("customer_id=?");
@@ -33,7 +48,7 @@ export function createRepository(db) {
       }
       return db
         .prepare(
-          `SELECT * FROM ${table(name)} WHERE ${clauses.join(" AND ")} ORDER BY name COLLATE NOCASE,id`,
+          `SELECT ${projection(name)} FROM ${table(name)} WHERE ${clauses.join(" AND ")} ORDER BY name COLLATE NOCASE,id`,
         )
         .all(...params);
     },
@@ -86,6 +101,8 @@ export function createRepository(db) {
         .all(...params);
     },
     relationship: (id) => db.prepare(joins + " WHERE cs.id=?").get(id),
+    deleteRelationship: (id) =>
+      db.prepare("DELETE FROM customer_services WHERE id=?").run(id),
     history: (id) =>
       db
         .prepare(

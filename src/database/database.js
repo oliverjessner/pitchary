@@ -28,11 +28,23 @@ export function openDatabase(filename = defaultDatabasePath) {
   for (const file of files) {
     const version = Number(file.split("_")[0]);
     if (version <= current) continue;
-    transaction(db, () =>
-      db.exec(
-        `${readFileSync(path.join(folder, file), "utf8")}\nPRAGMA user_version = ${version};`,
-      ),
-    );
+    const sql = readFileSync(path.join(folder, file), "utf8");
+    const rebuild = sql.startsWith("-- foreign_keys=OFF");
+    // SQLite requires this outside the transaction when rebuilding FK tables.
+    if (rebuild) db.exec("PRAGMA foreign_keys = OFF");
+    try {
+      transaction(db, () => {
+        db.exec(sql);
+        if (db.prepare("PRAGMA foreign_key_check").all().length)
+          throw new Error(`Foreign key violation after migration ${file}.`);
+        db.exec(`PRAGMA user_version = ${version}`);
+      });
+    } catch (error) {
+      db.close();
+      throw error;
+    } finally {
+      if (rebuild && db.isOpen) db.exec("PRAGMA foreign_keys = ON");
+    }
     current = version;
   }
   return db;

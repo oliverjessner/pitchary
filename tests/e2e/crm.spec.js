@@ -169,7 +169,7 @@ test("batch assignments, repeated offers, search and accessible dialogs", async 
   await page.getByLabel("Angebotspreis", { exact: true }).fill("999,99");
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Angebot anlegen", exact: true })
+    .getByRole("button", { name: "2 Angebote anlegen", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const after = await (await request.get("/api/customer-services")).json();

@@ -1,0 +1,6 @@
+// Local, deterministic raster fixture for the fictional Studio Nord customer.
+export const demoCustomerLogo = {
+  mime_type: "image/png",
+  data_base64:
+    "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA6klEQVR4nO3S0Q2DMBAEURpMaamZNBCDsc+Mb2+R9g+j8RPH53uelXfQAfQMQAfQMwAdQM8AdAA9A9AB9AxAB9AzAB1AzwB0AD0DzBy+e6IiV37fAKviygCsDkwNEBVpgMwAEaHpAWZjJQBmgmUARqMNoAQwEp4WICo+NUDEBdIDzF5CAqD1XnmAnovIAIxeRgrgjfe3B3jjr9keoHWuPMC/c7IAvWelAXrOywPcfaMEQOs75QGuHjmApwiSAE8QZAF6EbYByDwD0AH0DEAH0DMAHUDPAHQAPQPQAfQMQAfQMwAdQM8AdAC9H2E3ss4BvjtRAAAAAElFTkSuQmCC",
+};

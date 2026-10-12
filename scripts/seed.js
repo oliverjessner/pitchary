@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { openDatabase } from "../src/database/database.js";
 import { createCRM } from "../src/business/crm.js";
+import { demoCustomerLogo } from "./demo-assets.js";
 export function seedDemo(db) {
   let time = "2026-09-01T09:00:00.000Z";
   let sequence = 0;
@@ -26,6 +27,12 @@ export function seedDemo(db) {
     (name, i) =>
       crm.createEntity("customers", {
         name,
+        website: [
+          "https://studio-nord.example",
+          "https://morgenwerk.example",
+          "https://atlas-digital.example",
+        ][i],
+        ...(i === 0 ? { logo: demoCustomerLogo } : {}),
         note: [
           "Designstudio in Wien. Kontakt über das Netzwerk.",
           "B2B-Software für kleine Teams.",
