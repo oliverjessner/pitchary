@@ -128,14 +128,44 @@ test("relationship lifecycle is persisted across reopening the application", asy
     payload: { type: "follow_up", note: "Remember" },
   });
   assert.equal(response.statusCode, 201);
+  response = await app.inject({
+    method: "PATCH",
+    url: `/api/customer-services/${r.id}`,
+    payload: { pitch_channel: "phone" },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().pitch_channel, "phone");
+  response = await app.inject({
+    method: "PATCH",
+    url: `/api/customer-services/${r.id}`,
+    payload: { pitch_channel: "not_registered" },
+  });
+  assert.equal(response.statusCode, 422);
+  response = await app.inject({
+    method: "PATCH",
+    url: `/api/customer-services/${r.id}`,
+    payload: { pitch_channel: "email", currency: "USD" },
+  });
+  assert.equal(response.statusCode, 409);
   await app.close();
   app = await buildApp({ databasePath: filename });
   t.after(() => app.close());
   const saved = (await app.inject(`/api/customer-services/${r.id}`)).json();
   assert.equal(saved.status, "pitched");
+  assert.equal(saved.pitch_channel, "phone");
   assert.equal(saved.history.length, 2);
   assert.equal(saved.activities[0].note, "Remember");
   assert.equal((await app.inject("/api/analytics")).json().summary.pitched, 1);
+  assert.equal(
+    (await app.inject("/api/analytics?pitch_channel=phone")).json().summary
+      .pitched,
+    1,
+  );
+  assert.equal(
+    (await app.inject("/api/analytics?pitch_channel=email")).json().summary
+      .created,
+    0,
+  );
 });
 test("API rejects SQL injection, status mass assignment and arbitrary price fields", async (t) => {
   const app = await setup(t);

@@ -80,7 +80,11 @@ test("website and logo are validated and persisted together, replaced, retained 
   assert.throws(() => crm.customerLogo(row.id), /kein Logo/);
 });
 test("logo bytes remain out of JSON; binary route has correct MIME and size checks", async (t) => {
-  const app = await buildApp({ databasePath: ":memory:" });
+  let time = Date.parse("2026-10-12T09:00:00.000Z");
+  const app = await buildApp({
+    databasePath: ":memory:",
+    clock: () => new Date((time += 1000)).toISOString(),
+  });
   t.after(() => app.close());
   let response = await app.inject({
     method: "POST",
@@ -107,6 +111,57 @@ test("logo bytes remain out of JSON; binary route has correct MIME and size chec
   const list = (await app.inject("/api/customers")).json();
   assert.equal(list[0].logo_data, undefined);
   assert.equal(list[0].has_logo, true);
+  const service = (
+    await app.inject({
+      method: "POST",
+      url: "/api/services",
+      payload: { name: "Logo pipeline service" },
+    })
+  ).json();
+  const offer = (
+    await app.inject({
+      method: "POST",
+      url: "/api/customer-services",
+      payload: {
+        customer_id: row.id,
+        service_id: service.id,
+        current_offered_price_minor: 40000,
+      },
+    })
+  ).json();
+  assert.equal(offer.customer_logo_url, row.logo_url);
+  let relationshipUpdatedAt = offer.updated_at;
+  const checkRelationshipLogo = async (expected) => {
+    const detail = (
+      await app.inject(`/api/customer-services/${offer.id}`)
+    ).json();
+    const offers = (
+      await app.inject("/api/customer-services?archived=true")
+    ).json();
+    const active = (await app.inject("/api/customer-services")).json();
+    const customer = (await app.inject(`/api/customers/${row.id}`)).json();
+    const serviceDetail = (
+      await app.inject(`/api/services/${service.id}`)
+    ).json();
+    for (const record of [
+      detail,
+      ...offers,
+      ...active,
+      ...customer.relationships,
+      ...serviceDetail.relationships,
+    ]) {
+      assert.equal(record.customer_logo_url, expected);
+      assert.equal(record.logo_data, undefined);
+      assert.equal(record.customer_logo_data, undefined);
+      assert.equal(
+        JSON.stringify(record).includes(demoCustomerLogo.data_base64),
+        false,
+      );
+    }
+    assert.equal(detail.updated_at, relationshipUpdatedAt);
+  };
+  await checkRelationshipLogo(row.logo_url);
+  let previousUrl = row.logo_url;
   for (const image of Object.values(logoFormats)) {
     const update = await app.inject({
       method: "PATCH",
@@ -114,6 +169,10 @@ test("logo bytes remain out of JSON; binary route has correct MIME and size chec
       payload: { logo: image },
     });
     assert.equal(update.statusCode, 200);
+    const updatedUrl = update.json().logo_url;
+    assert.notEqual(updatedUrl, previousUrl);
+    await checkRelationshipLogo(updatedUrl);
+    previousUrl = updatedUrl;
     const rendered = await app.inject("/api/customers/" + row.id + "/logo");
     assert.equal(rendered.headers["content-type"], image.mime_type);
     assert.deepEqual(
@@ -148,11 +207,24 @@ test("logo bytes remain out of JSON; binary route has correct MIME and size chec
     },
   });
   assert.equal(response.statusCode, 413);
+  relationshipUpdatedAt = (
+    await app.inject({
+      method: "DELETE",
+      url: `/api/customer-services/${offer.id}`,
+    })
+  ).json().updated_at;
+  const archivedCustomer = (
+    await app.inject({ method: "DELETE", url: `/api/customers/${row.id}` })
+  ).json();
+  await checkRelationshipLogo(archivedCustomer.logo_url);
+  assert.equal((await app.inject(archivedCustomer.logo_url)).statusCode, 200);
+  await app.inject({ method: "POST", url: `/api/customers/${row.id}/restore` });
   await app.inject({
     method: "PATCH",
     url: "/api/customers/" + row.id,
     payload: { logo: null },
   });
+  await checkRelationshipLogo(null);
   assert.equal(
     (await app.inject("/api/customers/" + row.id + "/logo")).statusCode,
     404,

@@ -205,6 +205,79 @@ test("tag REST endpoints persist assignments and report errors without changing 
   );
 });
 
+test("offer projections include current service tags without duplicates, including archived services and offers", async (t) => {
+  const { db, crm } = fixture(t);
+  const app = await buildApp({ db });
+  t.after(() => app.close());
+  const first = crm.createTag({ name: "Web", color: "#4d8dff" });
+  const second = crm.createTag({ name: "Support", note: "Monatlich" });
+  const customer = crm.createEntity("customers", { name: "Tagfilter Kunde" });
+  const service = crm.createEntity("services", {
+    name: "Mehrere Tags",
+    tag_ids: [first.id, second.id],
+  });
+  const untagged = crm.createEntity("services", { name: "Ohne Tags" });
+  const create = (service_id) =>
+    crm.createRelationship({
+      customer_id: customer.id,
+      service_id,
+      current_offered_price_minor: 10000,
+    });
+  const offer = create(service.id);
+  const other = create(untagged.id);
+  const before = crm.relationship(offer.id);
+  const check = async (expectedIds, archived = false) => {
+    const list = (
+      await app.inject(`/api/customer-services?archived=${archived}`)
+    ).json();
+    assert.equal(list.filter((row) => row.id === offer.id).length, 1);
+    const detail = (
+      await app.inject(`/api/customer-services/${offer.id}`)
+    ).json();
+    const customerDetail = (
+      await app.inject(`/api/customers/${customer.id}`)
+    ).json();
+    const serviceDetail = (
+      await app.inject(`/api/services/${service.id}`)
+    ).json();
+    for (const row of [
+      list.find((row) => row.id === offer.id),
+      detail,
+      customerDetail.relationships.find((row) => row.id === offer.id),
+      serviceDetail.relationships[0],
+    ])
+      assert.deepEqual(
+        row.service_tags.map((tag) => tag.id).sort(),
+        [...expectedIds].sort(),
+      );
+    assert.deepEqual(
+      detail.history,
+      before.history.map((row) => ({ ...row })),
+    );
+  };
+  await check([first.id, second.id]);
+  assert.deepEqual(crm.relationship(other.id).service_tags, []);
+  assert.equal(crm.relationships().length, 2);
+  crm.updateTag(first.id, { name: "Website", color: "#123456" });
+  assert.equal(
+    crm
+      .relationships()
+      .find((row) => row.id === offer.id)
+      .service_tags.find((tag) => tag.id === first.id).name,
+    "Website",
+  );
+  assert.equal(crm.relationship(offer.id).updated_at, before.updated_at);
+  crm.updateEntity("services", service.id, { tag_ids: [second.id] });
+  await check([second.id]);
+  crm.archive("services", service.id);
+  await check([second.id]);
+  crm.archive("customer_services", offer.id);
+  await check([second.id], true);
+  crm.deleteTag(second.id);
+  await check([], true);
+  assert.deepEqual(crm.relationship(other.id).service_tags, []);
+});
+
 test("tag metadata and assignments survive database reopening", (t) => {
   const folder = mkdtempSync(path.join(os.tmpdir(), "pitchary-tags-persist-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));

@@ -4,7 +4,7 @@ import {
   customerLogo,
   customerWebsite,
 } from "./customer-branding.js";
-import { tagBadge, tagList } from "./service-tags.js";
+import { tagBadge, tagList, tagFilter } from "./service-tags.js";
 import {
   el,
   icon,
@@ -184,7 +184,11 @@ function pipelineCard(row, actions) {
       el(
         "p",
         { class: "oj-small oj-muted offer-card-customer" },
-        row.customer_name,
+        customerLogo({
+          name: row.customer_name,
+          logo_url: row.customer_logo_url,
+        }),
+        el("span", { class: "offer-card-customer-name" }, row.customer_name),
       ),
       el(
         "h3",
@@ -647,7 +651,20 @@ export async function serviceTagManagement(actions) {
   ];
 }
 export async function pipeline(actions, params) {
-  let rows = await api("/customer-services");
+  const phaseIcons = {
+    open: "inbox",
+    pitched: "paper-plane",
+    ghosted: "ghost",
+    accepted: "handshake",
+    done: "circle-check",
+    rejected: "circle-xmark",
+  };
+  const [initialRows, tags] = await Promise.all([
+    api("/customer-services"),
+    api("/service-tags"),
+  ]);
+  let rows = initialRows;
+  const tagSelection = tagFilter(tags, () => render());
   const search = field("Suchen", "search", {
       type: "search",
       placeholder: "Kunde oder Dienstleistung",
@@ -670,6 +687,12 @@ export async function pipeline(actions, params) {
       role: "region",
       "aria-label": "Pipeline nach Status",
     });
+  for (const control of [status, archive]) {
+    const select = control.querySelector("select");
+    const wrapper = el("div", { class: "pipeline-select-control" });
+    select.replaceWith(wrapper);
+    wrapper.append(select, icon("chevron-down"));
+  }
   const count = el("p", { class: "oj-small oj-muted" });
   const scrollPhase = (direction) => {
     const column = board.querySelector(".pipeline-column");
@@ -731,7 +754,8 @@ export async function pipeline(actions, params) {
   let generation = 0;
   function render() {
     const term = search.querySelector("input").value.toLowerCase(),
-      selected = status.querySelector("select").value;
+      selected = status.querySelector("select").value,
+      selectedTags = new Set(tagSelection.value());
     const phases = Object.entries(labels.status).filter(
       ([s]) => !selected || s === selected,
     );
@@ -739,6 +763,8 @@ export async function pipeline(actions, params) {
     const matches = rows.filter(
       (r) =>
         (!selected || r.status === selected) &&
+        (!selectedTags.size ||
+          r.service_tags.some((tag) => selectedTags.has(tag.id))) &&
         (r.customer_name + " " + r.service_name).toLowerCase().includes(term),
     );
     count.textContent = `${matches.length} ${matches.length === 1 ? "Angebot" : "Angebote"} · ${phases.length} ${phases.length === 1 ? "Phase" : "Phasen"}`;
@@ -751,7 +777,12 @@ export async function pipeline(actions, params) {
           el(
             "h2",
             { class: "oj-heading-4" },
-            label,
+            el(
+              "span",
+              { class: "pipeline-column-label" },
+              icon(phaseIcons[s]),
+              el("span", {}, label),
+            ),
             el("span", { class: "oj-badge" }, list.length),
           ),
           list.length
@@ -796,11 +827,12 @@ export async function pipeline(actions, params) {
         }),
       ],
     ),
-    el("div", { class: "filters" }, search, status, archive),
+    el("div", { class: "filters" }, search, tagSelection.node, status, archive),
     toolbar,
     board,
   ];
   content.dispose = () => {
+    tagSelection.dispose();
     observer.disconnect();
     cancelAnimationFrame(frame);
   };
@@ -808,6 +840,21 @@ export async function pipeline(actions, params) {
 }
 export async function relationshipDetail(id, actions) {
   const r = await api("/customer-services/" + id);
+  const phasesTable = table(
+    "Statusphasen",
+    ["Status", "Kunde", "Beginn", "Dauer"],
+    r.phases.map((p) => [
+      statusBadge(p.status),
+      el(
+        "span",
+        { class: "phase-customer-name", title: r.customer_name },
+        r.customer_name,
+      ),
+      datetime(p.started_at),
+      duration(p.duration_ms),
+    ]),
+  );
+  phasesTable.classList.add("status-phases-table");
   return [
     el(
       "nav",
@@ -900,18 +947,7 @@ export async function relationshipDetail(id, actions) {
               )
             : null,
         ),
-        panel(
-          "Statusphasen",
-          table(
-            "Statusphasen",
-            ["Status", "Beginn", "Dauer"],
-            r.phases.map((p) => [
-              statusBadge(p.status),
-              datetime(p.started_at),
-              duration(p.duration_ms),
-            ]),
-          ),
-        ),
+        panel("Statusphasen", phasesTable),
       ),
       panel(
         "Timeline",
@@ -1191,18 +1227,6 @@ function analyticsContent(a) {
         "Ablehnungsgründe",
         ["Grund", "Angebote"],
         a.rejection_reasons.map((r) => [labels.reason[r.code], r.count]),
-      ),
-    ),
-    el(
-      "details",
-      { class: "oj-accordion" },
-      el("summary", {}, "Kennzahlen und Filter: Definitionen"),
-      el(
-        "div",
-        { class: "oj-accordion-body oj-stack" },
-        Object.values(a.definitions).map((t) =>
-          el("p", { class: "oj-small" }, t),
-        ),
       ),
     ),
   ];

@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { transaction } from "../database/database.js";
 import { createRepository } from "../database/repository.js";
-import { website, logo, customerRecord } from "./customer-branding.js";
+import {
+  website,
+  logo,
+  customerRecord,
+  relationshipRecord,
+} from "./customer-branding.js";
 import { createServiceTags } from "./service-tags.js";
 import {
   AppError,
@@ -134,6 +139,21 @@ export function createCRM(
       new_price_minor: value,
     });
   }
+  function tagsByService() {
+    const tags = new Map();
+    for (const { service_id, ...tag } of repo.serviceTags()) {
+      if (!tags.has(service_id)) tags.set(service_id, []);
+      tags.get(service_id).push(tag);
+    }
+    return tags;
+  }
+  function relationshipRecords(rows) {
+    const tags = tagsByService();
+    return rows.map((row) => ({
+      ...relationshipRecord(row),
+      service_tags: tags.get(row.service_id) ?? [],
+    }));
+  }
   const crm = {
     repo,
     ...serviceTags,
@@ -146,11 +166,7 @@ export function createCRM(
           : undefined,
       });
       if (table === "services") {
-        const tags = new Map();
-        for (const { service_id, ...tag } of repo.serviceTags()) {
-          if (!tags.has(service_id)) tags.set(service_id, []);
-          tags.get(service_id).push(tag);
-        }
+        const tags = tagsByService();
         return rows.map((row) => ({ ...row, tags: tags.get(row.id) ?? [] }));
       }
       return table === "customers" ? rows.map(customerRecord) : rows;
@@ -165,7 +181,9 @@ export function createCRM(
             customer_id: id,
             archived: true,
           }),
-          relationships: repo.relationships({ customer_id: id }).map((row) => ({
+          relationships: relationshipRecords(
+            repo.relationships({ customer_id: id }),
+          ).map((row) => ({
             ...row,
             history: repo.history(row.id),
             activities: repo.activities(row.id),
@@ -175,7 +193,9 @@ export function createCRM(
         return {
           ...row,
           tags: repo.serviceTags(id).map(({ service_id, ...tag }) => tag),
-          relationships: repo.relationships({ service_id: id }),
+          relationships: relationshipRecords(
+            repo.relationships({ service_id: id }),
+          ),
         };
       return row;
     },
@@ -247,10 +267,12 @@ export function createCRM(
       return { data: Buffer.from(image.logo_data), mime: image.logo_mime };
     },
     relationships(filters = {}) {
-      return repo.relationships({
-        ...filterInput(filters, channels),
-        archived: filters.archived === true || filters.archived === "true",
-      });
+      return relationshipRecords(
+        repo.relationships({
+          ...filterInput(filters, channels),
+          archived: filters.archived === true || filters.archived === "true",
+        }),
+      );
     },
     deleteRelationship(id) {
       return transaction(db, () => {
@@ -265,7 +287,10 @@ export function createCRM(
         history = repo.history(id),
         at = now();
       return {
-        ...row,
+        ...relationshipRecord(row),
+        service_tags: repo
+          .serviceTags(row.service_id)
+          .map(({ service_id, ...tag }) => tag),
         history,
         activities: repo.activities(id),
         phases: history.map((h, i) => ({
@@ -404,13 +429,13 @@ export function createCRM(
             ? row.primary_employee_id
             : contact(data.primary_employee_id, row.customer_id);
       if (
-        ["pitch_channel", "billing_type", "currency"].some((k) => k in data) &&
+        ["billing_type", "currency"].some((k) => k in data) &&
         row.first_pitched_price_minor !== null
       )
         throw new AppError(
           409,
           "immutable_pitch",
-          "Kanal, Währung und Abrechnungsmodell bleiben nach dem ersten Pitch unverändert. Für einen neuen Auftrag ein neues Angebot anlegen.",
+          "Währung und Abrechnungsmodell bleiben nach dem ersten Pitch unverändert. Für einen neuen Auftrag ein neues Angebot anlegen.",
         );
       if (data.pitch_channel !== undefined)
         out.pitch_channel = choice(

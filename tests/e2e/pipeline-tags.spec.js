@@ -1,0 +1,208 @@
+import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { mkdirSync } from "node:fs";
+
+test("pipeline tag multiselect combines tags, search, status and archives with keyboard and mobile support", async ({
+  page,
+  request,
+}, testInfo) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("http://127.0.0.1:3218/#/pipeline");
+  const trigger = page.locator(".tag-filter-trigger");
+  const dropdown = page.locator(".tag-filter");
+  await trigger.click();
+  await expect(dropdown).toHaveAttribute("open", "");
+  await expect(page.getByLabel("Tags suchen", { exact: true })).toBeDisabled();
+  await expect(dropdown).toContainText("Noch keine Tags vorhanden.");
+  await page.keyboard.press("Escape");
+  await expect(dropdown).not.toHaveAttribute("open", "");
+  await expect(trigger).toBeFocused();
+
+  const create = async (resource, data) => {
+    const response = await request.post(`/api/${resource}`, { data });
+    expect(response.status()).toBe(201);
+    return response.json();
+  };
+  const suffix = testInfo.project.name;
+  const web = await create("service-tags", {
+    name: "Web Filter " + suffix,
+    color: "#4d8dff",
+  });
+  const support = await create("service-tags", {
+    name: "Support Filter " + suffix,
+    color: "#ff6b35",
+  });
+  const unused = await create("service-tags", {
+    name: "Unbenutzt Filter " + suffix,
+  });
+  for (let i = 0; i < 12; i++)
+    await create("service-tags", {
+      name: `Zusätzlicher sehr langer Tag für Dienstleistungen ${i} ${suffix}`,
+    });
+  const prefix = "Tagfilter " + suffix;
+  const customer = await create("customers", { name: prefix });
+  const services = [];
+  const offers = [];
+  for (const [name, tag_ids] of [
+    ["Alpha", [web.id]],
+    ["Beta", [support.id]],
+    ["Gamma", [web.id, support.id]],
+    ["Ohne", []],
+  ]) {
+    const service = await create("services", {
+      name: prefix + " " + name,
+      tag_ids,
+    });
+    services.push(service);
+    offers.push(
+      await create("customer-services", {
+        customer_id: customer.id,
+        service_id: service.id,
+        current_offered_price_minor: 40000,
+      }),
+    );
+  }
+  expect(
+    (
+      await request.post(`/api/customer-services/${offers[1].id}/status`, {
+        data: { status: "pitched" },
+      })
+    ).ok(),
+  ).toBe(true);
+  const archived = await create("customer-services", {
+    customer_id: customer.id,
+    service_id: services[2].id,
+    current_offered_price_minor: 40000,
+  });
+  expect(
+    (await request.delete(`/api/customer-services/${archived.id}`)).ok(),
+  ).toBe(true);
+  expect((await request.delete(`/api/services/${services[2].id}`)).ok()).toBe(
+    true,
+  );
+  await page.goto("http://127.0.0.1:3217/#/pipeline");
+  const search = page.getByLabel("Suchen", { exact: true });
+  const tagSearch = page.getByLabel("Tags suchen", { exact: true });
+  const webChoice = page.getByRole("checkbox", { name: web.name, exact: true });
+  const supportChoice = page.getByRole("checkbox", {
+    name: support.name,
+    exact: true,
+  });
+  const count = page.locator(".pipeline-toolbar");
+  const cards = page.locator(".offer-card");
+  await search.fill(prefix);
+  await expect(cards).toHaveCount(4);
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(dropdown).toHaveAttribute("open", "");
+  await webChoice.focus();
+  await page.keyboard.press("Space");
+  await expect(webChoice).toBeChecked();
+  await expect(cards).toHaveCount(2);
+  await expect(trigger).toHaveAccessibleName("Tags " + web.name);
+  await tagSearch.fill(support.name);
+  await expect(webChoice).toBeHidden();
+  await supportChoice.check();
+  await expect(cards).toHaveCount(3);
+  await expect(count).toContainText("3 Angebote · 6 Phasen");
+  await expect(trigger).toHaveAccessibleName("Tags 2 Tags ausgewählt");
+  await tagSearch.fill("Kein Tag passt dazu");
+  await expect(
+    page.getByText("Keine Tags gefunden.", { exact: true }),
+  ).toBeVisible();
+  await expect(cards).toHaveCount(3);
+  await tagSearch.fill("");
+  await expect(webChoice).toBeChecked();
+  await expect(supportChoice).toBeChecked();
+  await supportChoice.uncheck();
+  await expect(cards).toHaveCount(2);
+  await supportChoice.check();
+  await expect(cards).toHaveCount(3);
+  await page.keyboard.press("Escape");
+  await expect(dropdown).not.toHaveAttribute("open", "");
+  await expect(trigger).toBeFocused();
+  await search.fill(prefix + " Alpha");
+  await expect(cards).toHaveCount(1);
+  await page.getByLabel("Status", { exact: true }).selectOption("pitched");
+  await expect(cards).toHaveCount(0);
+  await expect(count).toContainText("0 Angebote · 1 Phase");
+  await search.fill(prefix);
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText(services[1].name);
+  await page.getByLabel("Status", { exact: true }).selectOption("");
+  await page.getByLabel("Ansicht", { exact: true }).selectOption("true");
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText(services[2].name);
+  await expect(trigger).toHaveAccessibleName("Tags 2 Tags ausgewählt");
+  await page.getByLabel("Ansicht", { exact: true }).selectOption("false");
+  await expect(cards).toHaveCount(3);
+  mkdirSync("artifacts/screenshots", { recursive: true });
+  for (const width of [1440, 737, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const heights = await page
+      .locator(
+        '.filters input[name="search"], .filters .tag-filter-trigger, .filters select',
+      )
+      .evaluateAll((nodes) =>
+        nodes.map((node) => node.getBoundingClientRect().height),
+      );
+    expect(heights).toHaveLength(4);
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(1);
+    await trigger.click();
+    const panel = page.locator(".tag-filter-panel");
+    const bounds = await panel.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    expect(
+      await dropdown
+        .locator(".service-tag-options")
+        .evaluate((node) => node.scrollHeight > node.clientHeight),
+    ).toBe(true);
+    const axe = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+      .analyze();
+    expect(axe.violations).toEqual([]);
+    await page.screenshot({
+      path: `artifacts/screenshots/${suffix}-${width}-pipeline-tag-filter.png`,
+      fullPage: true,
+    });
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+    await expect(cards).toHaveCount(3);
+  }
+  await trigger.click();
+  await page
+    .getByRole("button", { name: "Auswahl zurücksetzen", exact: true })
+    .click();
+  await expect(cards).toHaveCount(4);
+  await expect(trigger).toHaveAccessibleName("Tags Alle Tags");
+  await page.getByRole("checkbox", { name: unused.name, exact: true }).check();
+  await expect(cards).toHaveCount(0);
+  await expect(count).toContainText("0 Angebote · 6 Phasen");
+  await trigger.click();
+  await expect(dropdown).not.toHaveAttribute("open", "");
+  await trigger.click();
+  await expect(
+    page.getByRole("checkbox", { name: unused.name, exact: true }),
+  ).toBeChecked();
+  await search.click();
+  await expect(dropdown).not.toHaveAttribute("open", "");
+  await trigger.click();
+  await page
+    .getByRole("button", { name: "Auswahl zurücksetzen", exact: true })
+    .click();
+  await expect(cards).toHaveCount(4);
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Kunden", exact: true }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});

@@ -24,6 +24,8 @@ Listen für Kunden/Mitarbeiter/Dienstleistungen unterstützen `search` und `arch
 
 Dienstleistungslisten und -details enthalten `tags: [{id,name,note,color}]`. `search` findet auch zugewiesene Tag-Namen. `POST/PATCH /services` akzeptiert zusätzlich `tag_ids` (bis zu 100 UUIDs; Duplikate werden zusammengefasst). Beim PATCH erhält ein weggelassenes `tag_ids` die Zuordnung; `[]` entfernt alle Zuordnungen. Änderungen sind atomar mit den übrigen Dienstleistungsfeldern.
 
+Angebotslisten und -details enthalten `service_tags: [{id,name,note,color}]` mit den aktuellen Tags der zugehörigen Dienstleistung, auch bei archivierten Dienstleistungen und Angeboten. Die Pipeline filtert mehrere ausgewählte Tags mit ODER und kombiniert diese Auswahl mit Textsuche, Status und Archivansicht. Ohne Tag-Auswahl werden auch Angebote ohne Tags angezeigt.
+
 `GET /pitch-channels` liefert `[{id,label}]`. Die gemeinsame Konfiguration ist `public/config/pitch-channels.json`; neue IDs werden beim Serverstart registriert. `internal_software` hat das Label „Interne Software“ und kann für Angebote, Aktivitäten und Filter verwendet werden. Unregistrierte Kanäle werden fachlich und durch Foreign Keys abgewiesen.
 
 Tag anlegen mit `POST /service-tags` (**201**):
@@ -63,6 +65,8 @@ Für Logos sind `image/png`, `image/jpeg` und `image/webp` bis 1 MiB erlaubt. Ba
 
 Kundenantworten enthalten `website`, `has_logo`, `logo_mime` und `logo_url`; Bildbytes erscheinen nicht in JSON-Listen. `logo_url` verweist auf den lokalen Bildendpunkt. Dieser liefert bei fehlendem Logo **404** und bleibt auch für archivierte Kunden lesbar. Archivierte Kunden können erst nach Wiederherstellung bearbeitet werden.
 
+Angebotslisten und -details enthalten `customer_logo_url` für das aktuelle Kundenlogo, auch in Kunden-/Dienstleistungsdetails und bei archivierten Angeboten. Ohne Logo ist der Wert `null`. Der Versionsparameter folgt Änderungen am Kunden, damit ein ersetztes Logo beim nächsten Laden sofort erscheint; Bildbytes werden ausschließlich über den Bildendpunkt geladen.
+
 Mitarbeiter (Kundenzuordnung ist später nicht veränderbar):
 
 ```json
@@ -89,7 +93,7 @@ Angebot:
 }
 ```
 
-PATCH erlaubt `primary_employee_id`; vor dem ersten Pitch zusätzlich `pitch_channel`, `currency`, `billing_type`. Status, Preise, Kunde, Dienstleistung und Ursprungspreis können nicht durch PATCH überschrieben werden.
+PATCH erlaubt `primary_employee_id` und `pitch_channel` für aktive Angebote in jedem Status. Der ursprüngliche Pitch-Kanal lässt sich auch nach dem ersten Pitch korrigieren und muss ein registrierter Kanal sein; vorhandene Kontaktaktivitäten behalten ihren eigenen Kanal. `currency` und `billing_type` sind nur vor dem ersten Pitch bearbeitbar. Status, Preise, Kunde, Dienstleistung und Ursprungspreis können nicht durch PATCH überschrieben werden.
 
 Status/Zusage:
 

@@ -618,13 +618,14 @@ export function createActions(refresh, navigate) {
           ...employees.map((e) => [e.id, e.name]),
         ],
       }),
+      field("Ursprünglicher Pitch-Kanal", "pitch_channel", {
+        value: row.pitch_channel,
+        options: options(labels.channel),
+        required: true,
+      }),
     ];
     if (row.first_pitched_price_minor === null)
       fields.push(
-        field("Pitch-Kanal", "pitch_channel", {
-          value: row.pitch_channel,
-          options: options(labels.channel),
-        }),
         field("Währung", "currency", {
           value: row.currency,
           options: [
@@ -651,10 +652,6 @@ export function createActions(refresh, navigate) {
         }),
       {
         onSaved: refresh,
-        description:
-          row.first_pitched_price_minor !== null
-            ? "Der ursprüngliche Kanal und die Preiseinheit sind seit dem ersten Pitch festgehalten."
-            : undefined,
       },
     );
   }

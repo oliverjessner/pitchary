@@ -160,11 +160,79 @@
   flex-shrink: 0;
   accent-color: var(--oj-accent);
 }
+.tag-filter {
+  position: relative;
+  min-width: 0;
+}
+.tag-filter-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--oj-space-2);
+  padding-inline-end: var(--oj-space-3);
+  cursor: pointer;
+  list-style: none;
+}
+.tag-filter-trigger::-webkit-details-marker {
+  display: none;
+}
+.tag-filter-trigger > i {
+  flex-shrink: 0;
+  font-size: var(--oj-text-xs);
+}
+.tag-filter-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-filter[open] .tag-filter-trigger {
+  border-color: var(--oj-accent);
+}
+.tag-filter[open] .tag-filter-trigger > i {
+  transform: rotate(180deg);
+}
+.tag-filter-panel {
+  position: absolute;
+  inset-block-start: calc(100% + var(--oj-space-2));
+  inset-inline: 0;
+  z-index: var(--oj-z-dropdown);
+  padding: var(--oj-space-3);
+  border: 1px solid var(--oj-border-control);
+  border-radius: var(--oj-radius-md);
+  background: var(--oj-surface);
+  box-shadow: var(--oj-shadow-lg);
+}
+.tag-filter-panel p {
+  margin: 0;
+}
+.tag-filter-panel .tag-picker {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.tag-filter-panel .service-tag-options {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  max-height: min(15rem, 40dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.tag-filter-panel .service-tag-choice {
+  box-sizing: border-box;
+}
+.tag-filter-panel .service-tag {
+  min-width: 0;
+}
 .detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
   gap: var(--oj-space-4);
   align-items: start;
+}
+.detail-grid > .oj-stack {
+  min-width: 0;
 }
 .pipeline-toolbar,
 .pipeline-scroll-controls {
@@ -206,7 +274,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--oj-space-3);
   margin-block-end: var(--oj-space-4);
+}
+.pipeline-column-label {
+  display: flex;
+  align-items: center;
+  gap: var(--oj-space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pipeline-column-label > i {
+  color: var(--oj-accent);
+  flex-shrink: 0;
+}
+.pipeline-column h2 > .oj-badge {
+  flex-shrink: 0;
 }
 .pipeline-cards {
   display: grid;
@@ -227,7 +310,18 @@
   gap: var(--oj-space-2);
 }
 .offer-card-customer {
+  display: flex;
+  align-items: center;
+  gap: var(--oj-space-2);
+}
+.offer-card-customer-name {
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+.offer-card-customer .customer-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--oj-radius-sm);
 }
 .offer-card-title {
   margin: 0;
@@ -375,14 +469,17 @@
   gap: var(--oj-space-3);
   align-items: start;
 }
-.offer-select-control {
+.offer-select-control,
+.pipeline-select-control {
   position: relative;
 }
-.offer-select-control > select {
+.offer-select-control > select,
+.pipeline-select-control > select {
   appearance: none;
   block-size: var(--oj-control-height);
 }
-.offer-select-control > i {
+.offer-select-control > i,
+.pipeline-select-control > i {
   position: absolute;
   inset-inline-end: var(--oj-space-3);
   inset-block-start: 50%;
@@ -557,6 +654,25 @@ img.customer-logo {
 }
 .phase-duration {
   white-space: nowrap;
+}
+.status-phases-table table {
+  table-layout: fixed;
+  min-inline-size: 26rem;
+}
+.status-phases-table th:first-child {
+  width: 7.5rem;
+}
+.status-phases-table th:nth-child(3) {
+  width: 9rem;
+}
+.status-phases-table th:last-child {
+  width: 4.75rem;
+}
+.phase-customer-name {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .oj-table td {
   max-width: 360px;

@@ -1,4 +1,4 @@
-import { el } from "./dom.js";
+import { el, icon, field, button } from "./dom.js";
 let pickerNumber = 0;
 export function tagBadge(tag) {
   const badge = el(
@@ -54,5 +54,129 @@ export function tagPicker(tags, selected = []) {
     ),
     value: () =>
       inputs.filter((input) => input.checked).map((input) => input.value),
+  };
+}
+export function tagFilter(tags, onChange) {
+  const prefix = "tag-filter-" + ++pickerNumber;
+  const picker = tagPicker(tags);
+  picker.node.querySelector("legend").className = "oj-sr-only";
+  const selection = el(
+    "span",
+    {
+      id: prefix + "-value",
+      class: "tag-filter-value",
+    },
+    "Alle Tags",
+  );
+  const summary = el(
+    "summary",
+    {
+      class: "oj-select tag-filter-trigger",
+      "aria-labelledby": prefix + "-label " + prefix + "-value",
+    },
+    selection,
+    icon("chevron-down"),
+  );
+  const search = field("Tags suchen", prefix + "-search", {
+    type: "search",
+    placeholder: "Tag finden",
+    disabled: !tags.length,
+  });
+  const noMatches = el(
+    "p",
+    {
+      class: "oj-small oj-muted",
+      role: "status",
+      hidden: true,
+    },
+    "Keine Tags gefunden.",
+  );
+  const reset = button(
+    "Auswahl zurücksetzen",
+    () => {
+      for (const input of picker.node.querySelectorAll("input"))
+        input.checked = false;
+      update();
+    },
+    { compact: true, iconName: "xmark" },
+  );
+  reset.disabled = true;
+  const panel = el(
+    "div",
+    { class: "tag-filter-panel oj-stack" },
+    search,
+    el(
+      "p",
+      { class: "oj-small oj-muted" },
+      "Zeigt Angebote mit mindestens einem ausgewählten Tag.",
+    ),
+    picker.node,
+    noMatches,
+    reset,
+  );
+  const details = el("details", { class: "tag-filter" }, summary, panel);
+  const node = el(
+    "div",
+    { class: "oj-field pipeline-tag-filter" },
+    el("span", { id: prefix + "-label", class: "oj-label" }, "Tags"),
+    details,
+  );
+  function update() {
+    const ids = picker.value();
+    const names = tags
+      .filter((tag) => ids.includes(tag.id))
+      .map((tag) => tag.name);
+    selection.textContent =
+      ids.length === 0
+        ? "Alle Tags"
+        : ids.length === 1
+          ? names[0]
+          : `${ids.length} Tags ausgewählt`;
+    summary.title = names.join(", ");
+    reset.disabled = !ids.length;
+    onChange(ids);
+  }
+  picker.node.addEventListener("change", update);
+  search.querySelector("input").addEventListener("input", (event) => {
+    const term = event.target.value.trim().normalize("NFC").toLocaleLowerCase();
+    const choices = [...picker.node.querySelectorAll(".service-tag-choice")];
+    choices.forEach((choice, index) => {
+      choice.hidden = !tags[index].name.toLocaleLowerCase().includes(term);
+    });
+    noMatches.hidden = !tags.length || choices.some((choice) => !choice.hidden);
+  });
+  let focusFrame;
+  const listeners = new AbortController();
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Escape" && details.open) {
+        event.preventDefault();
+        event.stopPropagation();
+        details.open = false;
+        summary.focus({ preventScroll: true });
+      } else if (event.key === "Tab" && details.contains(event.target)) {
+        cancelAnimationFrame(focusFrame);
+        focusFrame = requestAnimationFrame(() => {
+          if (!details.contains(document.activeElement)) details.open = false;
+        });
+      }
+    },
+    { signal: listeners.signal },
+  );
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (!details.contains(event.target)) details.open = false;
+    },
+    { signal: listeners.signal },
+  );
+  return {
+    node,
+    value: picker.value,
+    dispose() {
+      listeners.abort();
+      cancelAnimationFrame(focusFrame);
+    },
   };
 }

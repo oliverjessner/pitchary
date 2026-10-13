@@ -249,7 +249,7 @@ test("history and activities cannot be edited or deleted", (t) => {
     assert.throws(() => db.exec(`DELETE FROM ${name}`), /immutable/);
   }
 });
-test("integer money, immutable pitch metadata and chronology are enforced", (t) => {
+test("integer money, immutable pricing metadata and chronology are enforced", (t) => {
   const { crm, create } = fixture(t),
     a = create();
   for (const value of [1.5, -1, "100", Infinity, Number.MAX_SAFE_INTEGER])
@@ -260,6 +260,10 @@ test("integer money, immutable pitch metadata and chronology are enforced", (t) 
   crm.changeStatus(a.id, { status: "pitched" });
   assert.throws(
     () => crm.updateRelationship(a.id, { currency: "USD" }),
+    /unverändert/,
+  );
+  assert.throws(
+    () => crm.updateRelationship(a.id, { billing_type: "monthly" }),
     /unverändert/,
   );
   assert.throws(
@@ -282,6 +286,64 @@ test("integer money, immutable pitch metadata and chronology are enforced", (t) 
   assert.throws(
     () => crm.updateRelationship(a.id, { status: "done" }),
     /nicht änderbar/,
+  );
+});
+test("original pitch channel can be corrected in every active status without changing historical events or prices", (t) => {
+  const { crm, create, setTime, analytics } = fixture(t);
+  for (const status of [
+    "open",
+    "pitched",
+    "ghosted",
+    "rejected",
+    "accepted",
+    "done",
+  ]) {
+    const row = create();
+    if (status !== "open") crm.changeStatus(row.id, { status: "pitched" });
+    if (status === "ghosted") crm.changeStatus(row.id, { status });
+    if (status === "rejected")
+      crm.changeStatus(row.id, { status, reason: { code: "budget" } });
+    if (["accepted", "done"].includes(status))
+      crm.changeStatus(row.id, { status: "accepted" });
+    if (status === "done") crm.changeStatus(row.id, { status });
+    crm.addActivity(row.id, {
+      type: "note",
+      channel: "email",
+      note: "Original contact channel",
+    });
+    setTime("2026-09-02T09:00:00.000Z");
+    const before = crm.relationship(row.id);
+    const updated = crm.updateRelationship(row.id, {
+      pitch_channel: "internal_software",
+    });
+    assert.deepEqual(updated, {
+      ...before,
+      pitch_channel: "internal_software",
+      updated_at: "2026-09-02T09:00:00.000Z",
+    });
+    for (const pitch_channel of ["", null, "not_registered"]) {
+      assert.throws(
+        () => crm.updateRelationship(row.id, { pitch_channel }),
+        (error) => error.status === 422,
+      );
+      assert.deepEqual(crm.relationship(row.id), updated);
+    }
+  }
+  assert.equal(crm.relationships({ pitch_channel: "email" }).length, 0);
+  assert.equal(
+    crm.relationships({ pitch_channel: "internal_software" }).length,
+    6,
+  );
+  assert.equal(
+    analytics({ pitch_channel: "internal_software" }).summary.created,
+    6,
+  );
+  assert.equal(analytics({ pitch_channel: "email" }).summary.created, 0);
+  const archived = crm.relationships()[0];
+  crm.archive("customer_services", archived.id);
+  assert.throws(
+    () => crm.updateRelationship(archived.id, { pitch_channel: "phone" }),
+    (error) => error.status === 409,
   );
 });
 test("archives retain business history; contacts cannot be reused until restored", (t) => {

@@ -81,12 +81,29 @@ export function logo(input) {
     );
   return { logo_data: bytes, logo_mime: input.mime_type };
 }
+function logoUrl(id, hasLogo, updatedAt) {
+  return hasLogo
+    ? `/api/customers/${id}/logo?v=${encodeURIComponent(updatedAt)}`
+    : null;
+}
 export function customerRecord(row) {
   return {
     ...row,
     has_logo: Boolean(row.has_logo),
-    logo_url: row.has_logo
-      ? `/api/customers/${row.id}/logo?v=${encodeURIComponent(row.updated_at)}`
-      : null,
+    logo_url: logoUrl(row.id, row.has_logo, row.updated_at),
+  };
+}
+export function relationshipRecord({
+  customer_has_logo,
+  customer_updated_at,
+  ...row
+}) {
+  return {
+    ...row,
+    customer_logo_url: logoUrl(
+      row.customer_id,
+      customer_has_logo,
+      customer_updated_at,
+    ),
   };
 }

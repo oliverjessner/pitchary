@@ -60,9 +60,9 @@ export const labels = {
   status: {
     open: "Offen",
     pitched: "Gepitcht",
-    ghosted: "Ghosted",
     accepted: "Angenommen",
     done: "Erledigt",
+    ghosted: "Ghosted",
     rejected: "Abgelehnt",
   },
   channel: Object.fromEntries(

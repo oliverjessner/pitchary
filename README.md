@@ -81,7 +81,7 @@ Migration 006 ersetzt die festen Kanal-Enums durch Foreign Keys auf `pitch_chann
 - Bereits beim Anlegen wird `open` historisiert. Status und Historieneintrag werden gemeinsam in `BEGIN IMMEDIATE`/`COMMIT` gespeichert; Fehler rollen beide zurück. `status_since` markiert den Beginn der aktuellen Phase. Optional rückdatierte Statusereignisse dürfen nicht vor der aktuellen Phase oder in der Zukunft liegen.
 - Der erste tatsächliche Pitch hält den zu diesem Zeitpunkt angebotenen Preis in `first_pitched_price_minor` fest. Vor dem Pitch ist dieses Feld NULL. Verhandlungen ändern nur den aktuellen Angebotspreis und erzeugen strukturierte `price_change`-Aktivitäten mit Preisfeld, altem und neuem Betrag.
 - Die Zusage speichert separat `accepted_price_minor`; auch dessen Erfassung und spätere Änderungen werden protokolliert. Nach Zusage wird eine Preisänderung am vereinbarten Preis durchgeführt.
-- Geld wird ausschließlich als nichtnegative **Integer-Cent** gespeichert. v1 unterstützt EUR, USD und GBP (je zwei Nachkommastellen), bis 1.000.000.000.000 Cent je Preis. Eingaben wie `1200,50` werden anhand der Ziffern verarbeitet. Währung, Abrechnungsmodell und ursprünglicher Pitch-Kanal sind nach dem ersten Pitch festgeschrieben.
+- Geld wird ausschließlich als nichtnegative **Integer-Cent** gespeichert. v1 unterstützt EUR, USD und GBP (je zwei Nachkommastellen), bis 1.000.000.000.000 Cent je Preis. Eingaben wie `1200,50` werden anhand der Ziffern verarbeitet. Währung und Abrechnungsmodell sind nach dem ersten Pitch festgeschrieben. Der ursprüngliche Pitch-Kanal kann über **Bearbeiten** in den Angebotsdetails auch danach korrigiert werden; Analytics und Kanalfilter verwenden den korrigierten Wert. Historische Kontaktaktivitäten behalten ihren eigenen Kanal.
 - Abrechnung: `one_time`, `monthly`, `yearly`, `hourly`, `daily`. Standardkanäle: `linkedin`, `email`, `phone`, `meeting`, `internal_software`, `other`.
 - Absagegründe werden als JSON mit `code` und optionaler `note` gespeichert: `budget`, `timing`, `competitor`, `no_need`, `no_response`, `other`. Die jeweilige Absage bleibt in der Historie erhalten, auch nach Wiederaufnahme.
 - Kontaktaktivitäten: `pitch`, `follow_up`, `call`, `meeting`, `note`. Sie ändern keinen Status. Ein initialer Pitch ist zuerst über die Statusaktion zu erfassen. Zeitpunkte sind ISO-8601 mit Zeitzone, Speicherung in UTC, Anzeige in der Browser-Zeitzone.
@@ -124,7 +124,7 @@ Filter beziehen sich auf eine **Angebotskohorte nach Anlagedatum in UTC**, einsc
 | Vereinbarte Werte            | Summe der vereinbarten Preise aktuell gewonnener Angebote                                                                     |
 | Ablehnungsgründe             | Aktueller Absagegrund aktuell abgelehnter Angebote; einmal pro Vorgang                                                        |
 
-Performance je Kunde, Dienstleistung und Pitch-Kanal verwendet dieselben Zählregeln. Alle Werte werden **je Währung und Abrechnungsmodell getrennt** angezeigt. Monats-/Jahresbeträge sind Periodenwerte; Stunden-/Tagessätze werden nicht als Projektumsatz hochgerechnet. Wiederholte Statuswechsel vervielfachen keine Kennzahl. Definitionen sind auch direkt in Analytics einsehbar.
+Performance je Kunde, Dienstleistung und Pitch-Kanal verwendet dieselben Zählregeln. Alle Werte werden **je Währung und Abrechnungsmodell getrennt** angezeigt. Monats-/Jahresbeträge sind Periodenwerte; Stunden-/Tagessätze werden nicht als Projektumsatz hochgerechnet. Wiederholte Statuswechsel vervielfachen keine Kennzahl.
 
 ## API
 
