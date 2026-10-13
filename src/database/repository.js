@@ -10,7 +10,7 @@ const tables = new Set([
 const joins = `SELECT cs.*, c.name AS customer_name, c.archived_at AS customer_archived_at, c.logo_data IS NOT NULL AS customer_has_logo, c.updated_at AS customer_updated_at, s.name AS service_name, s.archived_at AS service_archived_at, e.name AS employee_name FROM customer_services cs JOIN customers c ON c.id=cs.customer_id JOIN services s ON s.id=cs.service_id LEFT JOIN employees e ON e.id=cs.primary_employee_id`;
 const projection = (name) =>
   name === "customers"
-    ? "id,name,note,website,logo_mime,created_at,updated_at,archived_at,logo_data IS NOT NULL AS has_logo"
+    ? "id,name,note,website,logo_mime,created_at,updated_at,archived_at,customer_type,logo_data IS NOT NULL AS has_logo"
     : name === "service_tags"
       ? "id,name,note,color,created_at,updated_at"
       : "*";

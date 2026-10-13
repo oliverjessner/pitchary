@@ -336,7 +336,7 @@ test("JSON channel additions work without schema changes across offers, activiti
     createAnalytics(crm.repo)({ pitch_channel: "referral" }).summary.pitched,
     1,
   );
-  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 8);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 9);
   assert.throws(
     () =>
       db
@@ -418,7 +418,13 @@ test("migrations 006 and 007 preserve every schema 5 business row and database g
     tables.forEach((table, index) =>
       assert.deepEqual(
         db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),
-        before[index],
+        table === "customers"
+          ? before[index].map((row) =>
+              Object.assign(Object.create(null), row, {
+                customer_type: "lead",
+              }),
+            )
+          : before[index],
       ),
     );
     assert.equal(

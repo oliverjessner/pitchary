@@ -709,10 +709,15 @@ img.customer-logo {
 }
 .status-phases-table table {
   table-layout: fixed;
-  min-inline-size: 26rem;
+  min-inline-size: 30rem;
 }
 .status-phases-table th:first-child {
-  width: 7.5rem;
+  width: 10rem;
+}
+.status-phases-table td:first-child,
+.status-phases-table td:first-child .oj-badge {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 .status-phases-table th:nth-child(3) {
   width: 9rem;

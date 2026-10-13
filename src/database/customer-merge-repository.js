@@ -24,7 +24,7 @@ export function createCustomerMergeRepository(db) {
       "UPDATE finance_invoice_overrides SET override_value=? WHERE field_name='customer_id' AND json_extract(override_value,'$')=?",
     ),
     saveCustomer: db.prepare(
-      "UPDATE customers SET note=?,website=?,logo_mime=?,logo_data=?,updated_at=? WHERE id=?",
+      "UPDATE customers SET note=?,website=?,logo_mime=?,logo_data=?,customer_type=?,updated_at=? WHERE id=?",
     ),
     saveProfile: db.prepare(
       "INSERT INTO finance_customer_profiles(customer_id,billing_address,general_email,enrichment_status,enriched_at,enrichment_invoice_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(customer_id) DO UPDATE SET billing_address=excluded.billing_address,general_email=excluded.general_email,enrichment_status=excluded.enrichment_status,enriched_at=excluded.enriched_at,enrichment_invoice_id=excluded.enrichment_invoice_id,created_at=excluded.created_at,updated_at=excluded.updated_at",

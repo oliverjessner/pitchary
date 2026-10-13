@@ -3,9 +3,6 @@
   padding-block-start: var(--oj-space-6);
   border-block-start: 1px solid var(--oj-border);
 }
-.dashboard-finance > .oj-section-header h2 {
-  margin: 0;
-}
 .finance-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
@@ -25,7 +22,7 @@
 }
 .finance-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--oj-space-4);
 }
 .finance-kpis .oj-metric-value,
@@ -34,16 +31,40 @@
   font-size: clamp(1.2rem, 2vw, 1.8rem);
   overflow-wrap: anywhere;
 }
+.finance-kpis .oj-metric-value {
+  font-size: clamp(1.15rem, 1.4vw, 1.65rem);
+}
 .finance-overdue,
 .finance-two-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--oj-space-4);
 }
+.finance-chart-overdue {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--oj-space-4);
+}
+.finance-chart-overdue > *,
+.finance-two-columns > * {
+  min-inline-size: 0;
+}
+.finance-chart-overdue .finance-overdue {
+  grid-template-columns: minmax(0, 1fr);
+}
+.finance-ranking-year {
+  max-inline-size: 14rem;
+}
+.finance-overall-revenue {
+  max-inline-size: 30rem;
+}
 .finance-invoice-table {
   max-inline-size: 100%;
 }
 .finance-invoice-table th {
+  white-space: nowrap;
+}
+.finance-invoice-table td:nth-child(2) {
   white-space: nowrap;
 }
 .finance-invoice-table td:first-child {
@@ -321,24 +342,26 @@
 .finance-settings-form {
   max-inline-size: 60rem;
 }
-.finance-settings-tools {
-  align-items: start;
+@media (max-width: 1200px) {
+  .finance-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 @media (max-width: 900px) {
-  .finance-kpis {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .finance-two-columns {
+  .finance-two-columns,
+  .finance-chart-overdue {
     grid-template-columns: 1fr;
   }
 }
 @media (max-width: 600px) {
-  .finance-kpis,
   .finance-overdue,
   .finance-customer-metrics,
   .finance-form-grid,
   .finance-invoice-dialog .form-grid {
     grid-template-columns: 1fr;
+  }
+  .finance-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .finance-invoice-facts > div {
     grid-template-columns: 1fr;
@@ -356,5 +379,10 @@
   }
   .finance-chart-label {
     font-size: 14px;
+  }
+}
+@media (max-width: 400px) {
+  .finance-kpis {
+    grid-template-columns: 1fr;
   }
 }

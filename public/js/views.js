@@ -368,7 +368,13 @@ export async function entityList(type, actions) {
     content.replaceChildren(
       table(
         title,
-        ["Name", "Notiz", "Angelegt", "Aktionen"],
+        [
+          "Name",
+          ...(isCustomer ? ["Status"] : []),
+          "Notiz",
+          "Angelegt",
+          "Aktionen",
+        ],
         filtered.map((r) => [
           isCustomer
             ? customerIdentity(r)
@@ -378,6 +384,23 @@ export async function entityList(type, actions) {
                 link(r.name, "#/" + type + "/" + r.id),
                 tagList(r.tags),
               ),
+          ...(isCustomer
+            ? [
+                el(
+                  "span",
+                  {
+                    class:
+                      "oj-badge customer-type oj-badge-" +
+                      (r.customer_type === "customer" ? "success" : "neutral"),
+                    title:
+                      r.customer_type === "customer"
+                        ? "Bereits eine Einnahmenrechnung gestellt"
+                        : "Noch keine Einnahmenrechnung gestellt",
+                  },
+                  r.customer_type === "customer" ? "Kunde" : "Lead",
+                ),
+              ]
+            : []),
           el("span", { class: "note-text oj-small" }, r.note || "–"),
           datetime(r.created_at),
           archiveMode
@@ -1240,15 +1263,6 @@ function analyticsContent(a) {
             : s.avg_pitch_to_accept_days * 86400000,
         ),
         "Mittelwert · erste Zusage",
-      ),
-      metric(
-        "Pitch → Entscheidung",
-        duration(
-          s.avg_pitch_to_decision_days === null
-            ? null
-            : s.avg_pitch_to_decision_days * 86400000,
-        ),
-        "Mittelwert · erste Entscheidung",
       ),
     ),
     panel(

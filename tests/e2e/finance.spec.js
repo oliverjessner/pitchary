@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
 function pdf(label) {
   const content = `BT /F1 12 Tf 40 750 Td (${label.replace(/[()\\]/g, " ")} Rechnung Testdokument fuer Import und manuelle Bearbeitung) Tj ET`;
@@ -243,9 +243,26 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     await expect(page.locator(".finance-currency-group")).toHaveCount(1);
     await expect(page.locator(".finance-kpis .oj-metric")).toHaveCount(6);
     const overview = page.getByRole("region", {
-      name: "Finanzen",
+      name: "Finanzübersicht",
       exact: true,
     });
+    await expect(overview.locator("header")).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Finanzen", exact: true }),
+    ).toHaveCount(0);
+    await expect(overview).not.toContainText(
+      "Einnahmen, Ausgaben und Kundenumsatz aus deinen Rechnungen.",
+    );
+    await expect(
+      overview.getByRole("button", { name: "PDF importieren", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      overview.getByRole("button", { name: "Aktualisieren", exact: true }),
+    ).toHaveCount(0);
+    await expect(overview.locator(".finance-ranking")).toHaveCount(0);
+    await expect(
+      overview.getByRole("heading", { name: /^Beste Kunden|^Höchste Kosten/ }),
+    ).toHaveCount(0);
     await expect(overview.getByText("USD", { exact: true })).toHaveCount(0);
     await expect(
       overview.getByRole("link", { name: dollar.invoice_number, exact: true }),
@@ -256,6 +273,74 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     await expect(page.locator(".finance-tabs")).toHaveCount(0);
     await expect(page.getByLabel("Jahr", { exact: true })).toHaveValue("2026");
     await expect(page.getByLabel("Monat", { exact: true })).toHaveValue("10");
+    await expect(page.getByLabel("Jahr", { exact: true })).toHaveJSProperty(
+      "tagName",
+      "SELECT",
+    );
+    await expect(page.getByLabel("Monat", { exact: true })).toHaveJSProperty(
+      "tagName",
+      "SELECT",
+    );
+    const boxes = await overview.evaluate((node) => {
+      const rect = (element) => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      return {
+        filters: rect(node.querySelector(".finance-filters")),
+        kpis: [...node.querySelectorAll(".finance-kpis > .oj-metric")].map(
+          rect,
+        ),
+        chart: rect(node.querySelector(".finance-chart-overdue > section")),
+        overdue: [
+          ...node.querySelectorAll(".finance-overdue > .oj-metric"),
+        ].map(rect),
+        open: [
+          ...node.querySelectorAll(".finance-open-invoices > section"),
+        ].map(rect),
+      };
+    });
+    expect(boxes.kpis[0].y).toBeGreaterThan(
+      boxes.filters.y + boxes.filters.height,
+    );
+    expect(boxes.chart.y).toBeGreaterThan(
+      boxes.kpis.at(-1).y + boxes.kpis.at(-1).height,
+    );
+    expect(
+      Math.abs(boxes.overdue[0].x - boxes.overdue[1].x),
+    ).toBeLessThanOrEqual(1);
+    expect(boxes.overdue[1].y).toBeGreaterThan(
+      boxes.overdue[0].y + boxes.overdue[0].height,
+    );
+    if (width >= 1440) {
+      expect(
+        Math.max(...boxes.kpis.map((box) => box.y)) -
+          Math.min(...boxes.kpis.map((box) => box.y)),
+      ).toBeLessThanOrEqual(1);
+      for (let index = 1; index < boxes.kpis.length; index++)
+        expect(boxes.kpis[index].x).toBeGreaterThan(boxes.kpis[index - 1].x);
+      expect(boxes.overdue[0].x).toBeGreaterThan(
+        boxes.chart.x + boxes.chart.width,
+      );
+      expect(Math.abs(boxes.overdue[0].y - boxes.chart.y)).toBeLessThanOrEqual(
+        1,
+      );
+      expect(boxes.chart.width).toBeGreaterThan(boxes.overdue[0].width);
+      expect(Math.abs(boxes.open[0].y - boxes.open[1].y)).toBeLessThanOrEqual(
+        1,
+      );
+      expect(boxes.open[1].x).toBeGreaterThan(
+        boxes.open[0].x + boxes.open[0].width,
+      );
+    } else {
+      expect(boxes.kpis[1].y).toBeGreaterThan(boxes.kpis[0].y);
+      expect(boxes.overdue[0].y).toBeGreaterThan(
+        boxes.chart.y + boxes.chart.height,
+      );
+      expect(boxes.open[1].y).toBeGreaterThan(
+        boxes.open[0].y + boxes.open[0].height,
+      );
+    }
     const layout = await page.locator("#main").evaluate((main) => ({
       main: main.getBoundingClientRect().width,
       container: main.parentElement.getBoundingClientRect().width,
@@ -264,6 +349,7 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     await expect(
       page.getByRole("img", { name: /Einnahmen, Ausgaben und Gewinn/ }),
     ).toBeVisible();
+    await screenshot(page, testInfo, "overview", width);
     await page.getByText("Monatswerte anzeigen", { exact: true }).click();
     await expect(
       page
@@ -271,7 +357,6 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
         .locator("tbody tr"),
     ).toHaveCount(12);
     await check(page);
-    await screenshot(page, testInfo, "overview", width);
     const storedDollar = await (
       await request.get("/api/finance/invoices/" + dollar.id)
     ).json();
@@ -280,6 +365,9 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     await page.goto(
       "/#/invoices?category=revenue&sort=total_amount_minor&order=desc",
     );
+    await expect(
+      page.getByRole("button", { name: "PDF importieren", exact: true }),
+    ).toBeVisible();
     await page
       .getByLabel("Suchen", { exact: true })
       .fill("Revenue-" + testInfo.project.name);
@@ -361,6 +449,9 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     page.getByRole("cell", { name: "Rechnungskontakt", exact: true }),
   ).toBeVisible();
   await page.goto("/#/finance-customers");
+  await expect(
+    page.getByRole("heading", { name: "Umsatz", level: 1, exact: true }),
+  ).toBeVisible();
   await page.getByLabel("Kunden suchen", { exact: true }).fill(customer.name);
   await expect(
     page.getByRole("link", { name: customer.name, exact: true }),
@@ -371,11 +462,168 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     await request.delete("/api/finance/invoices/" + row.id);
 });
 
-test("finance settings preserve company data, mask keys and inspect legacy import before confirmation", async ({
+test("Umsatz combines nominal yearly rankings and overall revenue while preserving original currencies", async ({
+  page,
+  request,
+}, testInfo) => {
+  const baseline = await (await request.get("/api/finance/revenue-overview?year=2024")).json();
+  const totalBefore = baseline.overall_revenue.total_amount_minor;
+  const customer = await (
+    await request.post("/api/customers", {
+      data: { name: "Jahresumsatz Kunde " + testInfo.project.name },
+    })
+  ).json();
+  const rows = [];
+  try {
+    rows.push(
+      await invoice(request, "Revenue-2024-" + testInfo.project.name, {
+        customer_id: customer.id,
+        counterparty_name: customer.name,
+        invoice_date: "2024-04-01",
+        total_amount_minor: 10000,
+      }),
+    );
+    rows.push(
+      await invoice(request, "Revenue-2025-" + testInfo.project.name, {
+        customer_id: customer.id,
+        counterparty_name: customer.name,
+        invoice_date: "2025-04-01",
+        total_amount_minor: 90000,
+      }),
+    );
+    rows.push(
+      await invoice(request, "Cost-2024-" + testInfo.project.name, {
+        category: "payable",
+        invoice_date: "2024-05-01",
+        total_amount_minor: 1500,
+      }),
+    );
+    rows.push(
+      await invoice(request, "Cost-2025-" + testInfo.project.name, {
+        category: "payable",
+        invoice_date: "2025-05-01",
+        total_amount_minor: 2500,
+      }),
+    );
+    rows.push(
+      await invoice(request, "USD-2024-" + testInfo.project.name, {
+        customer_id: customer.id,
+        counterparty_name: customer.name,
+        invoice_date: "2024-06-01",
+        currency: "USD",
+        total_amount_minor: 5000,
+      }),
+    );
+    for (const width of [1440, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto("/#/finance-customers?year=2024");
+      await expect(
+        page.getByRole("heading", { name: "Umsatz", level: 1, exact: true }),
+      ).toBeVisible();
+      await expect(
+        page
+          .getByRole("navigation", { name: "Hauptnavigation" })
+          .getByRole("link", { name: "Umsatz", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+      const rankings = page.getByRole("region", {
+        name: "Jahresranglisten",
+        exact: true,
+      });
+      const best = rankings.locator("section").filter({
+        has: page.getByRole("heading", {
+          name: "Beste Kunden · 2024",
+          exact: true,
+        }),
+      });
+      const costs = rankings.locator("section").filter({
+        has: page.getByRole("heading", {
+          name: "Höchste Kosten · 2024",
+          exact: true,
+        }),
+      });
+      await expect(best).toContainText(customer.name);
+      await expect(best).toContainText("150,00");
+      await expect(best.locator(".finance-ranking")).toHaveCount(1);
+      await expect(best.locator(".finance-ranking li").filter({ hasText: customer.name })).toHaveCount(1);
+      expect(await best.locator(".finance-ranking li").count()).toBeLessThanOrEqual(4);
+      expect(await costs.locator(".finance-ranking li").count()).toBeLessThanOrEqual(4);
+      await expect(best.getByRole("heading", { name: /^(EUR|USD)$/, exact: true })).toHaveCount(0);
+      await expect(best).not.toContainText("900,00");
+      const overall = page.locator(".finance-overall-revenue");
+      const expectedOverall = new Intl.NumberFormat("de-AT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((totalBefore + 105000) / 100);
+      await expect(overall.locator(".oj-metric-value")).toHaveText(expectedOverall);
+      await expect(overall).toContainText("ohne Währungsumrechnung");
+      await expect(costs).toContainText(rows[2].counterparty_name);
+      await expect(costs).toContainText("15,00");
+      await expect(costs).not.toContainText(rows[3].counterparty_name);
+      const cards = await rankings
+        .locator(".finance-two-columns > section")
+        .evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const { x, y, width, height } = node.getBoundingClientRect();
+            return { x, y, width, height };
+          }),
+        );
+      if (width === 1440) {
+        expect(Math.abs(cards[0].y - cards[1].y)).toBeLessThanOrEqual(1);
+        expect(cards[1].x).toBeGreaterThan(cards[0].x + cards[0].width);
+      } else expect(cards[1].y).toBeGreaterThan(cards[0].y + cards[0].height);
+      await check(page);
+      await screenshot(page, testInfo, "rankings", width);
+      await page.getByLabel("Jahr", { exact: true }).selectOption("2025");
+      await expect(page).toHaveURL(/#\/finance-customers\?year=2025$/);
+      await expect(
+        rankings.getByRole("heading", {
+          name: "Beste Kunden · 2025",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(rankings).toContainText("900,00");
+      await expect(rankings).toContainText(rows[3].counterparty_name);
+      await expect(rankings).not.toContainText(rows[2].counterparty_name);
+      await expect(overall.locator(".oj-metric-value")).toHaveText(expectedOverall);
+      const lifetime = page
+        .getByRole("table", { name: "Umsatz", exact: true })
+        .getByRole("row")
+        .filter({
+          has: page.getByRole("link", { name: customer.name, exact: true }),
+        });
+      await expect(lifetime).toContainText("1.000,00");
+      await expect(lifetime).toContainText("50,00");
+      await expect(
+        lifetime.getByRole("link", { name: customer.name, exact: true }),
+      ).toHaveAttribute("href", "#/customers/" + customer.id);
+      await check(page);
+    }
+    const stored = await (
+      await request.get("/api/finance/invoices/" + rows[4].id)
+    ).json();
+    expect(stored.currency).toBe("USD");
+    expect(stored.total_amount_minor).toBe(5000);
+    expect(stored.invoice_date).toBe("2024-06-01");
+  } finally {
+    for (const row of rows)
+      await request.delete("/api/finance/invoices/" + row.id);
+  }
+});
+
+test("finance settings preserve company data and mask keys without a migration card", async ({
   page,
   request,
 }, testInfo) => {
   const initial = await (await request.get("/api/finance/settings")).json();
+  const version = JSON.parse(
+    readFileSync(new URL("../../package.json", import.meta.url)),
+  ).version;
+  expect(initial.app_version).toBe(version);
+  const originalAddress = "Originalgasse 7\n1010 Wien";
+  expect(
+    (
+      await request.patch("/api/finance/settings", {
+        data: { company_address: originalAddress },
+      })
+    ).ok(),
+  ).toBe(true);
   let sentKey = null;
   await page.route("**/api/finance/settings/test-key", async (route) => {
     sentKey = route.request().postDataJSON();
@@ -383,22 +631,6 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
       contentType: "application/json",
       body: JSON.stringify({ ok: true }),
     });
-  });
-  await page.route("**/api/finance/billly/inspect*", (route) =>
-    route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        invoices: 4,
-        customers: 2,
-        contacts: 3,
-        files: { available: 4 },
-      }),
-    }),
-  );
-  let imports = 0;
-  await page.route("**/api/finance/billly/import", async (route) => {
-    imports++;
-    await route.fulfill({ contentType: "application/json", body: "{}" });
   });
   try {
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -408,21 +640,34 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
     ).toBeVisible();
     await expect(page.locator(".finance-tabs")).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText(/billly/i);
-    const tools = page.locator(".finance-settings-tools > .oj-panel");
-    await expect(tools).toHaveCount(2);
-    const desktopCards = await tools.evaluateAll((cards) =>
-      cards.map((card) => {
-        const rect = card.getBoundingClientRect();
-        return { top: rect.top, left: rect.left, right: rect.right };
-      }),
+    await expect(page.locator(".finance-app-version")).toHaveText(
+      "Version " + version,
     );
-    expect(
-      Math.abs(desktopCards[0].top - desktopCards[1].top),
-    ).toBeLessThanOrEqual(1);
-    expect(desktopCards[1].left).toBeGreaterThan(desktopCards[0].right);
+    const address = page.getByLabel("Firmenadresse", { exact: true });
+    await expect(address).toHaveJSProperty("tagName", "INPUT");
+    await expect(address).toHaveAttribute("type", "text");
+    await expect(address).toHaveValue("Originalgasse 7, 1010 Wien");
+    await expect(page.getByRole("heading", { name: "Ordnerüberwachung", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Daten in Pitchary übernehmen", exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Quelldatenbank", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Quelle prüfen und übernehmen", exact: true })).toHaveCount(0);
     const model = page.getByLabel("Erkennungsmodell", { exact: true });
     await expect(model).toHaveValue(initial.model);
+    await expect(model.locator("option")).toHaveCount(initial.models.length);
+    expect(
+      await model
+        .locator("option")
+        .evaluateAll((options) => options.map((option) => option.value)),
+    ).toEqual(initial.models.map((model) => model.id));
     await model.selectOption("gpt-4.1-mini");
+    await page
+      .getByRole("button", { name: "Einstellungen speichern", exact: true })
+      .click();
+    await expect(model).toHaveValue("gpt-4.1-mini");
+    expect(
+      (await (await request.get("/api/finance/settings")).json())
+        .company_address,
+    ).toBe(originalAddress);
     await check(page);
     await screenshot(page, testInfo, "settings", 1440);
     await page.setViewportSize({ width: 320, height: 900 });
@@ -434,7 +679,7 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
       .fill("me@example.test");
     await page
       .getByLabel("Firmenadresse", { exact: true })
-      .fill("Testgasse 42\n1010 Wien");
+      .fill("Testgasse 42, 1010 Wien");
     const key = "sk-local-fixture-1234";
     await page.getByLabel("Neuer OpenAI-Schlüssel", { exact: true }).fill(key);
     await expect(
@@ -455,6 +700,7 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
     ).toHaveValue("");
     const settings = await (await request.get("/api/finance/settings")).json();
     expect(settings.model).toBe("gpt-4.1-mini");
+    expect(settings.company_address).toBe("Testgasse 42, 1010 Wien");
     await expect(model).toHaveValue("gpt-4.1-mini");
     await page.reload();
     await expect(model).toHaveValue("gpt-4.1-mini");
@@ -470,42 +716,9 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
     await expect(
       page.getByText("Nicht konfiguriert", { exact: true }),
     ).toBeVisible();
-    await page
-      .getByLabel("Quelldatenbank", { exact: true })
-      .fill("/tmp/fixture-billly.sqlite");
-    await page
-      .getByRole("button", {
-        name: "Quelle prüfen und übernehmen",
-        exact: true,
-      })
-      .click();
-    const dialog = page.getByRole("dialog", {
-      name: "Daten in Pitchary übernehmen?",
-      exact: true,
-    });
-    await expect(dialog).toContainText(
-      "4 Rechnungen, 2 Kunden und 3 Ansprechpartner",
-    );
-    await expect(dialog).toContainText("4 PDF-Dateien sind verfügbar");
-    expect(imports).toBe(0);
-    await check(page);
-    await screenshot(page, testInfo, "billly-import", 320);
-    await dialog
-      .getByRole("button", { name: "Abbrechen", exact: true })
-      .click();
-    expect(imports).toBe(0);
     await check(page);
     await screenshot(page, testInfo, "settings", 320);
-    const mobileCards = await tools.evaluateAll((cards) =>
-      cards.map((card) => {
-        const rect = card.getBoundingClientRect();
-        return { top: rect.top, left: rect.left, bottom: rect.bottom };
-      }),
-    );
-    expect(
-      Math.abs(mobileCards[0].left - mobileCards[1].left),
-    ).toBeLessThanOrEqual(1);
-    expect(mobileCards[1].top).toBeGreaterThan(mobileCards[0].bottom);
+    await expect(page.getByRole("heading", { name: "Daten in Pitchary übernehmen", exact: true })).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText(/billly/i);
   } finally {
     await request.delete("/api/finance/settings/key");

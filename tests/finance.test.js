@@ -104,7 +104,7 @@ test("finance matching reuses normalized CRM names, preserves branding, and excl
   assert.equal(matched.customer_id, customer.id);
   assert.deepEqual(
     db.prepare("SELECT rowid,* FROM customers WHERE id=?").get(customer.id),
-    before,
+    Object.assign(Object.create(null), before, { customer_type: "customer" }),
   );
   assert.equal(finance.customer(customer.id).has_logo, true);
   db.prepare(
@@ -907,11 +907,17 @@ test("migration 008 preserves every populated schema 7 CRM row and immutable his
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 8);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 9);
     for (const [index, table] of tables.entries())
       assert.deepEqual(
         db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),
-        before[index],
+        table === "customers"
+          ? before[index].map((row) =>
+              Object.assign(Object.create(null), row, {
+                customer_type: "lead",
+              }),
+            )
+          : before[index],
       );
     assert.equal(
       db.prepare("SELECT count(*) AS n FROM finance_invoices").get().n,

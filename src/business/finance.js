@@ -4,6 +4,7 @@ import {
   financeInvoiceColumns,
 } from "../database/finance-repository.js";
 import { customerRecord } from "./customer-branding.js";
+import { revenueOverview } from "./revenue-overview.js";
 import {
   AppError,
   allowedKeys,
@@ -899,6 +900,13 @@ export function createFinance(
         createdAt,
       );
       return { id, imported: Boolean(result.changes) };
+    },
+    revenueOverview(filters = {}) {
+      object(filters);
+      return revenueOverview(
+        all(),
+        String(filters.year ?? today().slice(0, 4)),
+      );
     },
     dashboard(filters = {}) {
       object(filters);

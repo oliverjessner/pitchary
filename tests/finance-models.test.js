@@ -11,7 +11,14 @@ import { invoicePDF } from "./fixtures/finance-pdf.js";
 
 const clock = () => "2026-10-13T10:00:00.000Z";
 const tools = async () => ({ text: true, ocr: true, languages: ["eng"] });
-const modelIds = ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"];
+const modelIds = [
+  "gpt-4o-mini",
+  "gpt-4.1-mini",
+  "gpt-4.1",
+  "gpt-6-luna",
+  "gpt-6.1-sol",
+  "gpt-6-astra",
+];
 const invoiceData = {
   invoice_number: "MODEL-1",
   invoice_date: "2026-10-01",
@@ -102,7 +109,7 @@ test("recognition model defaults without writing settings and persists across da
       (await createFinanceSettings(db, { clock, tools }).public()).model,
       "gpt-4.1-mini",
     );
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 8);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 9);
   } finally {
     db.close();
   }
@@ -180,10 +187,19 @@ test("every selectable model drives strict invoice/customer requests and a match
     const [invoice, customer, keyTest] = mock.requests.slice(-3);
     for (const request of [invoice, customer]) {
       assert.equal(request.body.model, model);
-      assert.equal(request.body.temperature, 0.1);
-      assert.equal(request.body.max_completion_tokens, 4000);
+      if (["gpt-6.1-sol", "gpt-6-astra"].includes(model)) {
+        assert.equal(Object.hasOwn(request.body, "temperature"), false);
+        assert.equal(request.body.reasoning_effort, "low");
+        assert.equal(request.body.max_completion_tokens, 12000);
+      } else {
+        assert.equal(request.body.temperature, 0.1);
+        assert.equal(request.body.max_completion_tokens, 4000);
+        if (model === "gpt-6-luna")
+          assert.equal(request.body.reasoning_effort, "none");
+        else
+          assert.equal(Object.hasOwn(request.body, "reasoning_effort"), false);
+      }
       assert.equal(Object.hasOwn(request.body, "max_tokens"), false);
-      assert.equal(Object.hasOwn(request.body, "reasoning_effort"), false);
       assert.equal(request.body.response_format.type, "json_schema");
       assert.equal(request.body.response_format.json_schema.strict, true);
       assert.equal(

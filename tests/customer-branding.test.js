@@ -265,7 +265,7 @@ test("migration 003 preserves an existing schema 2 customer and persists logos a
   assert.equal(row.note, "Keep note");
   assert.equal(row.website, "");
   assert.equal(row.has_logo, false);
-  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 8);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 9);
   crm.updateEntity("customers", id, {
     website: "https://example.com",
     logo: demoCustomerLogo,

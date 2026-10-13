@@ -48,7 +48,7 @@ test("dashboard metrics use a two-by-two block beside recent contacts", async ({
     expect(Math.abs(layout.main - layout.container)).toBeLessThanOrEqual(1);
     await expect(
       page.getByRole("heading", { name: "Finanzen", exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Aktuelle Pipeline", exact: true }),
     ).toHaveCount(0);

@@ -132,7 +132,7 @@ test("desktop navigation and header stay visible while content scrolls", async (
   const navigation = page.getByRole("navigation", { name: "Hauptnavigation" });
   await expect(navigation.getByRole("link")).toHaveCount(8);
   await expect(
-    navigation.getByRole("link", { name: "Kundenumsatz", exact: true }),
+    navigation.getByRole("link", { name: "Umsatz", exact: true }),
   ).toHaveAttribute("href", "#/finance-customers");
   await expect(
     navigation.getByRole("link", { name: "Finanzen", exact: true }),

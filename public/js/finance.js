@@ -557,37 +557,6 @@ export function createFinanceActions(refresh, navigate) {
         "OpenAI-Schlüssel entfernt.",
       );
     },
-    financeBilllyImport: async (source) => {
-      const sourceRequest = async (path, options) => {
-        try {
-          return await api(path, options);
-        } catch (error) {
-          error.message = error.message
-            .replace(/Billly-Datenbank/gi, "Quelldatenbank")
-            .replace(/Billly/gi, "Quelldatenbank");
-          throw error;
-        }
-      };
-      const inspected = await sourceRequest(financePath + "/billly/inspect", {
-        query: source ? { source } : {},
-      });
-      if (
-        !(await confirmDialog({
-          title: "Daten in Pitchary übernehmen?",
-          message: `${inspected.invoices || 0} Rechnungen, ${inspected.customers || 0} Kunden und ${inspected.contacts || 0} Ansprechpartner werden mit Pitchary zusammengeführt. ${inspected.files?.available || inspected.files_available || 0} PDF-Dateien sind verfügbar. Die Quelldatenbank bleibt erhalten. E-Mail-Vorlagen und Zugangsdaten werden nicht übernommen.`,
-          confirmLabel: "Daten übernehmen",
-          cancelLabel: "Abbrechen",
-        }))
-      )
-        return;
-      const result = await sourceRequest(financePath + "/billly/import", {
-        method: "POST",
-        body: source ? { source } : {},
-      });
-      notice("Daten in Pitchary übernommen.");
-      await refresh();
-      return result;
-    },
   };
 }
 
@@ -604,14 +573,18 @@ function svgNode(tag, attrs = {}, ...children) {
     );
   return node;
 }
-function monthlyChart(rows, currency) {
+function monthlyChart(rows, currency, { split = false } = {}) {
   const series = rows.filter((row) => row.currency === currency);
   if (!series.length)
     return el("p", { class: "oj-muted" }, "Noch keine Monatswerte.");
   const containerWidth =
     document.querySelector(".app-content")?.clientWidth || window.innerWidth;
-  const narrow = containerWidth <= 700;
-  const width = narrow ? 360 : Math.max(720, containerWidth - 88),
+  const chartWidth =
+    split && window.innerWidth > 900
+      ? ((containerWidth - 88 - 16) * 2) / 3
+      : containerWidth - 88;
+  const narrow = chartWidth <= 700;
+  const width = Math.max(360, chartWidth),
     height = 290,
     left = narrow ? 60 : 76,
     right = 18,
@@ -754,36 +727,42 @@ function monthlyChart(rows, currency) {
     ),
   );
 }
+function combinedAmount(group) {
+  if (group.amounts.length === 1)
+    return money(group.total_amount_minor, group.amounts[0].currency);
+  return new Intl.NumberFormat("de-AT", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(group.total_amount_minor / 100);
+}
 function topList(title, rows) {
-  const currencies = [...new Set(rows.map((row) => row.currency))];
   return panel(
     title,
     rows.length
-      ? currencies.map((currency) =>
-          el(
-            "div",
-            { class: "oj-stack" },
-            currencies.length > 1
-              ? el("h3", { class: "oj-heading-4" }, currency)
-              : null,
+      ? el(
+          "ol",
+          { class: "finance-ranking" },
+          rows.slice(0, 4).map((row) =>
             el(
-              "ol",
-              { class: "finance-ranking" },
-              rows
-                .filter((row) => row.currency === currency)
-                .slice(0, 5)
-                .map((row) =>
-                  el(
-                    "li",
-                    {},
-                    el(
-                      "span",
-                      { class: "finance-ellipsis", title: row.name },
-                      row.name,
-                    ),
-                    moneyCell(row.total_amount_minor, row.currency),
-                  ),
-                ),
+              "li",
+              {},
+              el(
+                "span",
+                { class: "finance-ellipsis", title: row.name },
+                row.name,
+              ),
+              el(
+                "span",
+                {
+                  class: "finance-money",
+                  title: row.amounts
+                    .map(({ currency, total_amount_minor }) =>
+                      money(total_amount_minor, currency),
+                    )
+                    .join(" + "),
+                },
+                combinedAmount(row),
+              ),
             ),
           ),
         )
@@ -844,7 +823,9 @@ export async function financeDashboard(
         class: "finance-currency-group oj-stack",
         "aria-label": "Kennzahlen in " + row.currency,
       },
-      el("h3", { class: "oj-heading-3" }, row.currency),
+      currencies.length > 1
+        ? el("h2", { class: "oj-heading-3" }, row.currency)
+        : null,
       el(
         "div",
         { class: "finance-kpis" },
@@ -857,52 +838,19 @@ export async function financeDashboard(
           ["Gewinn · " + year, row.year.profit],
         ].map(([label, value]) => metric(label, money(value, row.currency))),
       ),
-      el(
-        "div",
-        { class: "finance-overdue" },
-        metric(
-          "Überfällige Einnahmen",
-          money(row.overdue.revenue, row.currency),
-          "Offene Rechnungen vor dem heutigen Fälligkeitsdatum",
-        ),
-        metric(
-          "Überfällige Ausgaben",
-          money(row.overdue.payable, row.currency),
-          "Offene Rechnungen vor dem heutigen Fälligkeitsdatum",
-        ),
-      ),
     ),
   );
+  const overdueValue = (category) =>
+    currencies.length === 1
+      ? money(currencies[0].overdue[category], currencies[0].currency)
+      : el(
+          "span",
+          { class: "finance-money-list" },
+          currencies.map((row) =>
+            moneyCell(row.overdue[category], row.currency),
+          ),
+        );
   const nodes = [
-    el(
-      "header",
-      { class: "oj-section-header" },
-      el(
-        "div",
-        {},
-        el(
-          "h2",
-          { class: "oj-heading-2", id: "dashboard-finance-title" },
-          "Finanzen",
-        ),
-        el(
-          "p",
-          { class: "oj-muted page-subtitle" },
-          "Einnahmen, Ausgaben und Kundenumsatz aus deinen Rechnungen.",
-        ),
-      ),
-      el(
-        "div",
-        { class: "section-actions" },
-        button("PDF importieren", () => actions.financeImport(), {
-          primary: true,
-          iconName: "file-arrow-up",
-        }),
-        button("Aktualisieren", () => actions.financeRefresh(), {
-          iconName: "rotate",
-        }),
-      ),
-    ),
     controls,
     ...metrics,
     !currencies.length
@@ -913,38 +861,52 @@ export async function financeDashboard(
           data.currencies.length
             ? "Deine gespeicherten Rechnungen findest du in der Rechnungsverwaltung."
             : "Importiere eine PDF oder hinterlege deine Rechnungsordner in den Finanz-Einstellungen.",
-          data.currencies.length
-            ? link("Rechnungen öffnen", "#/invoices")
-            : button("PDF importieren", () => actions.financeImport(), {
-                primary: true,
-              }),
+          link("Rechnungen öffnen", "#/invoices"),
         )
       : null,
-    currencies.length && data.months?.length
-      ? panel(
-          "Monatsentwicklung · " + currency,
-          monthlyChart(data.months.filter(visibleCurrency), currency),
+    currencies.length
+      ? el(
+          "div",
+          { class: "finance-chart-overdue" },
+          panel(
+            "Monatsentwicklung · " + currency,
+            monthlyChart(data.months.filter(visibleCurrency), currency, {
+              split: true,
+            }),
+          ),
+          el(
+            "div",
+            { class: "finance-overdue" },
+            metric(
+              "Überfällige Einnahmen",
+              overdueValue("revenue"),
+              "Offene Rechnungen vor dem heutigen Fälligkeitsdatum",
+            ),
+            metric(
+              "Überfällige Ausgaben",
+              overdueValue("payable"),
+              "Offene Rechnungen vor dem heutigen Fälligkeitsdatum",
+            ),
+          ),
         )
       : null,
     el(
       "div",
-      { class: "finance-two-columns" },
-      topList(
-        "Beste Kunden · " + year,
-        (data.top_revenue || []).filter(visibleCurrency),
+      { class: "finance-two-columns finance-open-invoices" },
+      panel(
+        "Offene Einnahmen",
+        invoiceTable(
+          (data.open_revenue || []).filter(visibleCurrency),
+          actions,
+        ),
       ),
-      topList(
-        "Höchste Kosten · " + year,
-        (data.top_payable || []).filter(visibleCurrency),
+      panel(
+        "Offene Ausgaben",
+        invoiceTable(
+          (data.open_payable || []).filter(visibleCurrency),
+          actions,
+        ),
       ),
-    ),
-    panel(
-      "Offene Einnahmen",
-      invoiceTable((data.open_revenue || []).filter(visibleCurrency), actions),
-    ),
-    panel(
-      "Offene Ausgaben",
-      invoiceTable((data.open_payable || []).filter(visibleCurrency), actions),
     ),
   ];
   return disposable(
@@ -953,7 +915,7 @@ export async function financeDashboard(
         "section",
         {
           class: "dashboard-finance oj-stack",
-          "aria-labelledby": "dashboard-finance-title",
+          "aria-label": "Finanzübersicht",
         },
         nodes,
       ),
@@ -1529,7 +1491,14 @@ export async function financeCustomers(
   actions,
   params = new URLSearchParams(),
 ) {
-  const data = await api(financePath + "/customers");
+  const year = params.get("year") || String(new Date().getFullYear());
+  const [data, rankings] = await Promise.all([
+    api(financePath + "/customers"),
+    api(financePath + "/revenue-overview", { query: { year } }),
+  ]);
+  const years = [...new Set([year, ...(rankings.years || [])])]
+    .sort()
+    .reverse();
   const search = params.get("search") || "",
     sort = params.get("sort") || "last_invoice_date",
     order = params.get("order") === "asc" ? "asc" : "desc",
@@ -1575,7 +1544,7 @@ export async function financeCustomers(
     ["Seit letzter Rechnung", "days_since_last_invoice"],
   ];
   const list = table(
-    "Kundenumsatz",
+    "Umsatz",
     heads.map(([label, key]) =>
       el(
         "button",
@@ -1653,9 +1622,55 @@ export async function financeCustomers(
   searchRows(search);
   return disposable(
     [
-      heading(
-        "Kundenumsatz",
-        "Rechnungsumsatz und Rechnungsdaten deiner CRM-Kunden.",
+      heading("Umsatz", "Jahresranglisten und Rechnungsumsatz deiner Kunden."),
+      el(
+        "div",
+        { class: "finance-overall-revenue" },
+        metric(
+          "Gesamtumsatz",
+          combinedAmount(rankings.overall_revenue),
+          "Alle Einnahmenrechnungen, über alle Jahre" +
+            (rankings.overall_revenue.amounts.length > 1
+              ? " · " +
+                rankings.overall_revenue.amounts
+                  .map(({ currency }) => currency)
+                  .join(" + ") +
+                ", ohne Währungsumrechnung"
+              : ""),
+        ),
+      ),
+      el(
+        "section",
+        {
+          class: "finance-rankings oj-stack",
+          "aria-label": "Jahresranglisten",
+        },
+        el(
+          "div",
+          { class: "finance-ranking-year" },
+          field("Jahr", "year", {
+            options: years.map((value) => [value, value]),
+            value: year,
+            helper:
+              "Jahr für die Ranglisten. Originalbeträge werden ohne Währungsumrechnung verglichen.",
+            onchange: (event) =>
+              routeFilter("/finance-customers", params, {
+                year: event.target.value,
+              }),
+          }),
+        ),
+        el(
+          "div",
+          { class: "finance-two-columns" },
+          topList("Beste Kunden · " + year, rankings.top_revenue || []),
+          topList("Höchste Kosten · " + year, rankings.top_payable || []),
+        ),
+      ),
+      el("h2", { class: "oj-heading-3" }, "Umsatz nach Kunden"),
+      el(
+        "p",
+        { class: "oj-small oj-muted" },
+        "Gesamter Rechnungsumsatz über alle Jahre, je Währung.",
       ),
       el(
         "div",
@@ -1765,6 +1780,10 @@ export function customerFinanceSections(row, actions) {
 
 export async function financeSettings(actions) {
   const row = await api(financePath + "/settings");
+  const addressValue = String(row.company_address || "").replace(
+    /\r?\n/g,
+    ", ",
+  );
   const models = row.models || [{ id: "gpt-4o-mini", label: "GPT-4o Mini" }];
   const error = el("p", {
     class: "oj-alert oj-alert-danger",
@@ -1798,6 +1817,8 @@ export async function financeSettings(actions) {
         save.setAttribute("aria-busy", "true");
         try {
           const body = Object.fromEntries(new FormData(form));
+          if (body.company_address === addressValue)
+            body.company_address = row.company_address || "";
           if (!body.openai_api_key) delete body.openai_api_key;
           await api(financePath + "/settings", { method: "PATCH", body });
           notice("Finanz-Einstellungen gespeichert.");
@@ -1854,8 +1875,8 @@ export async function financeSettings(actions) {
           maxlength: 200,
         }),
         field("Firmenadresse", "company_address", {
-          type: "textarea",
-          value: row.company_address || "",
+          type: "text",
+          value: addressValue,
           maxlength: 2000,
           wide: true,
         }),
@@ -1948,68 +1969,43 @@ export async function financeSettings(actions) {
   });
   const tools = row.tools || {},
     watcher = row.watcher || {};
-  const source = field("Quelldatenbank", "source_database", {
-    placeholder: "Optional: absoluter Pfad zur Quelldatenbank",
-    helper:
-      "Ohne Pfadangabe wird die Standardquelle automatisch erkannt. Die Quelle wird nur gelesen.",
-  });
   return [
     heading(
       "Einstellungen",
       "Rechnungsordner, Firmenangaben und automatische Erkennung.",
     ),
     form,
+    panel(
+      "Ordnerüberwachung",
+      facts([
+        ["Status", watcher.running ? "Aktiv" : "Keine Ordner aktiv"],
+        [
+          "Letzter Scan",
+          watcher.last_scan ? datetime(watcher.last_scan) : "Noch kein Scan",
+        ],
+        ["PDF-Text", tools.text ? "Verfügbar" : "Nicht verfügbar"],
+        ["OCR", tools.ocr ? "Verfügbar" : "Nicht verfügbar"],
+        [
+          "Erkennungsmodell",
+          models.find(({ id }) => id === row.model)?.label || "GPT-4o Mini",
+        ],
+      ]),
+      watcher.error
+        ? el(
+            "p",
+            { class: "oj-alert oj-alert-warning", role: "status" },
+            watcher.error,
+          )
+        : null,
+      button("Ordner jetzt einlesen", () => actions.financeScan(), {
+        iconName: "folder-open",
+      }),
+    ),
     el(
-      "div",
-      { class: "finance-two-columns finance-settings-tools" },
-      panel(
-        "Ordnerüberwachung",
-        facts([
-          ["Status", watcher.running ? "Aktiv" : "Keine Ordner aktiv"],
-          [
-            "Letzter Scan",
-            watcher.last_scan ? datetime(watcher.last_scan) : "Noch kein Scan",
-          ],
-          ["PDF-Text", tools.text ? "Verfügbar" : "Nicht verfügbar"],
-          ["OCR", tools.ocr ? "Verfügbar" : "Nicht verfügbar"],
-          [
-            "Erkennungsmodell",
-            models.find(({ id }) => id === row.model)?.label || "GPT-4o Mini",
-          ],
-        ]),
-        watcher.error
-          ? el(
-              "p",
-              { class: "oj-alert oj-alert-warning", role: "status" },
-              watcher.error,
-            )
-          : null,
-        button("Ordner jetzt einlesen", () => actions.financeScan(), {
-          iconName: "folder-open",
-        }),
-      ),
-      panel(
-        "Daten in Pitchary übernehmen",
-        el(
-          "p",
-          { class: "oj-small oj-muted" },
-          "Übernimmt vorhandene Rechnungen, Korrekturen, Kunden und Ansprechpartner. Bereits übernommene Datensätze werden erkannt. Vor der Übernahme wird eine Sicherung erstellt.",
-        ),
-        source,
-        button(
-          "Quelle prüfen und übernehmen",
-          () =>
-            actions.financeBilllyImport(
-              source.querySelector("input").value.trim(),
-            ),
-          { iconName: "database" },
-        ),
-        el(
-          "p",
-          { class: "oj-small oj-muted" },
-          "Du kannst auch PDFs einzeln importieren oder deine Rechnungsordner hinterlegen.",
-        ),
-      ),
+      "p",
+      { class: "finance-app-version oj-small oj-muted" },
+      "Version ",
+      row.app_version || "–",
     ),
   ];
 }

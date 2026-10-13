@@ -7,6 +7,7 @@ import { AppError, choice } from "./validation.js";
 import {
   defaultRecognitionModel,
   recognitionModelIds,
+  recognitionModels,
 } from "../config/recognition-models.js";
 
 const exec = promisify(execFile);
@@ -246,8 +247,7 @@ export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
         },
         body: JSON.stringify({
           model: modelId,
-          temperature: 0.1,
-          max_completion_tokens: 4000,
+          ...recognitionModels.find(({ id }) => id === modelId).parameters,
           messages: [
             {
               role: "system",

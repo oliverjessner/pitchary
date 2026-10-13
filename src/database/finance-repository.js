@@ -41,10 +41,30 @@ const projection =
   ",pdf_data IS NOT NULL AS has_file";
 export function createFinanceRepository(db) {
   let savepoint = 0;
+  let operationDepth = 0;
+  const pendingClassification = new Set();
+  const promoteCustomer = db.prepare(
+    "UPDATE customers SET customer_type='customer' WHERE customer_type='lead' AND id IN (SELECT customer_id FROM finance_invoice_customer_classification WHERE id=? AND category='revenue')",
+  );
+  const flushClassification = () => {
+    for (const id of pendingClassification) promoteCustomer.run(id);
+    pendingClassification.clear();
+  };
+  const invoiceStatement = (sql, idIndex) => {
+    const statement = db.prepare(sql);
+    return {
+      run(...args) {
+        const result = statement.run(...args);
+        pendingClassification.add(args[idIndex]);
+        if (!operationDepth && !db.isTransaction) flushClassification();
+        return result;
+      },
+    };
+  };
   const repo = {
     databasePath: db.location("main"),
     customer: db.prepare(
-      "SELECT id,name,note,website,logo_mime,logo_data IS NOT NULL AS has_logo,created_at,updated_at,archived_at FROM customers WHERE id=?",
+      "SELECT id,name,note,website,logo_mime,logo_data IS NOT NULL AS has_logo,created_at,updated_at,archived_at,customer_type FROM customers WHERE id=?",
     ),
     invoice: db.prepare(
       `SELECT ${projection} FROM finance_invoices WHERE id=?`,
@@ -80,8 +100,9 @@ export function createFinanceRepository(db) {
     saveOverride: db.prepare(
       "INSERT INTO finance_invoice_overrides(invoice_id,field_name,override_value,created_at,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(invoice_id,field_name) DO UPDATE SET override_value=excluded.override_value,updated_at=excluded.updated_at",
     ),
-    setInvoiceCustomer: db.prepare(
+    setInvoiceCustomer: invoiceStatement(
       "UPDATE finance_invoices SET customer_id=? WHERE id=?",
+      1,
     ),
     profile: db.prepare(
       "SELECT billing_address,general_email,enrichment_status,enriched_at,enrichment_invoice_id,created_at AS profile_created_at,updated_at AS profile_updated_at FROM finance_customer_profiles WHERE customer_id=?",
@@ -89,8 +110,9 @@ export function createFinanceRepository(db) {
     billlyInvoice: db.prepare(
       "SELECT id FROM finance_invoices WHERE source_billly_id=?",
     ),
-    touchInvoice: db.prepare(
+    touchInvoice: invoiceStatement(
       "UPDATE finance_invoices SET updated_at=? WHERE id=?",
+      1,
     ),
     clearOverrides: db.prepare(
       "DELETE FROM finance_invoice_overrides WHERE invoice_id=?",
@@ -127,7 +149,7 @@ export function createFinanceRepository(db) {
       "SELECT customer_id FROM finance_customer_profiles",
     ),
     customers: db.prepare(
-      "SELECT id,name,note,website,logo_mime,logo_data IS NOT NULL AS has_logo,created_at,updated_at,archived_at FROM customers ORDER BY name COLLATE NOCASE,id",
+      "SELECT id,name,note,website,logo_mime,logo_data IS NOT NULL AS has_logo,created_at,updated_at,archived_at,customer_type FROM customers ORDER BY name COLLATE NOCASE,id",
     ),
     employees: db.prepare(
       "SELECT * FROM employees WHERE customer_id=? ORDER BY name COLLATE NOCASE,id",
@@ -150,16 +172,35 @@ export function createFinanceRepository(db) {
       "INSERT INTO employees(id,customer_id,name,email,position,linkedin,created_at,updated_at,archived_at) VALUES(?,?,?,?,'','',?,?,NULL)",
     ),
     atomic(callback) {
-      if (!db.isTransaction) return transaction(db, callback);
-      const name = `finance_${++savepoint}`;
-      db.exec(`SAVEPOINT ${name}`);
+      const previous = new Set(pendingClassification);
+      const execute = () => {
+        operationDepth++;
+        try {
+          const value = callback();
+          // Classify only final effective invoice values. A Billly import or
+          // batch reassignment can stage several corrections in nested calls.
+          if (operationDepth === 1) flushClassification();
+          return value;
+        } finally {
+          operationDepth--;
+        }
+      };
       try {
-        const result = callback();
-        db.exec(`RELEASE ${name}`);
-        return result;
+        if (!db.isTransaction) return transaction(db, execute);
+        const name = `finance_${++savepoint}`;
+        db.exec(`SAVEPOINT ${name}`);
+        try {
+          const result = execute();
+          db.exec(`RELEASE ${name}`);
+          return result;
+        } catch (error) {
+          db.exec(`ROLLBACK TO ${name}`);
+          db.exec(`RELEASE ${name}`);
+          throw error;
+        }
       } catch (error) {
-        db.exec(`ROLLBACK TO ${name}`);
-        db.exec(`RELEASE ${name}`);
+        pendingClassification.clear();
+        for (const id of previous) pendingClassification.add(id);
         throw error;
       }
     },
@@ -175,6 +216,8 @@ export function createFinanceRepository(db) {
           .map((key) => `${key}=excluded.${key}`)
           .join(",")}`,
       ).run(...values);
+      pendingClassification.add(values[keys.indexOf("id")]);
+      if (!operationDepth && !db.isTransaction) flushClassification();
     },
   };
   return repo;

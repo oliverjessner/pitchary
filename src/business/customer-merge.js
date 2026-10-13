@@ -171,7 +171,17 @@ export function createCustomerMerge(db) {
         "note",
         "Die zusammengeführten Kundennotizen überschreiten 10.000 Zeichen. Bitte vorher kürzen oder separat sichern.",
       );
-    return { note, website, logo_data: logo, logo_mime: mime };
+    return {
+      note,
+      website,
+      logo_data: logo,
+      logo_mime: mime,
+      customer_type:
+        source.customer_type === "customer" ||
+        target.customer_type === "customer"
+          ? "customer"
+          : "lead",
+    };
   }
   function verifyLinks(sourceId, targetId) {
     if (repo.foreignKeyViolations().length)
@@ -311,6 +321,7 @@ export function createCustomerMerge(db) {
           values.website,
           values.logo_mime,
           values.logo_data,
+          values.customer_type,
           at,
           target,
         );

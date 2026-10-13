@@ -118,6 +118,20 @@ test("complete customer, contact and offer workflow with persistence", async ({
   await expect(
     page.getByRole("button", { name: "Als erledigt markieren" }),
   ).toBeVisible();
+  const acceptedBadge = page.getByRole("table", { name: "Statusphasen", exact: true }).getByText("Angenommen", { exact: true });
+  for (const width of [1440, 737, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(acceptedBadge).toBeVisible();
+    const layout = await acceptedBadge.evaluate((badge) => {
+      const range = document.createRange();
+      range.selectNodeContents(badge);
+      const bounds = badge.getBoundingClientRect(), cell = badge.closest("td").getBoundingClientRect();
+      return { lines: range.getClientRects().length, right: bounds.right, cellRight: cell.right };
+    });
+    expect(layout.lines).toBe(1);
+    expect(layout.right).toBeLessThanOrEqual(layout.cellRight);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("button", { name: "Als erledigt markieren" }).click();
   await page.getByRole("button", { name: "Speichern", exact: true }).click();
   await expect(

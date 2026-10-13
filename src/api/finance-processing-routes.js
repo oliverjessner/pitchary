@@ -8,6 +8,7 @@ import { MAX_PDF_BYTES } from "../business/finance-extraction.js";
 import { normalizeKey } from "../business/finance-settings.js";
 import { inspectBillly, importBillly } from "../business/billly-import.js";
 import { defaultBilllySource } from "../config/billly-source.js";
+import { applicationVersion } from "../config/application.js";
 
 export async function registerFinanceProcessingAPI(
   app,
@@ -20,12 +21,17 @@ export async function registerFinanceProcessingAPI(
   };
   app.get("/api/finance/settings", async () => ({
     ...(await settings.public()),
+    app_version: applicationVersion,
     watcher: { ...processor.state },
   }));
   app.patch("/api/finance/settings", objectBody, async (request) => {
     const result = await settings.save(request.body ?? {});
     processor.start();
-    return { ...result, watcher: { ...processor.state } };
+    return {
+      ...result,
+      app_version: applicationVersion,
+      watcher: { ...processor.state },
+    };
   });
   app.delete("/api/finance/settings/key", async () => settings.removeKey());
   app.post("/api/finance/settings/test-key", objectBody, async (request) => {

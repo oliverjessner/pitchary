@@ -131,7 +131,7 @@ test("customer overview combines branding, contacts, offer history and editable 
         navigation.getByRole("link", { name: "Kunden", exact: true }),
       ).toHaveAttribute("aria-current", "page");
       await expect(
-        navigation.getByRole("link", { name: "Kundenumsatz", exact: true }),
+        navigation.getByRole("link", { name: "Umsatz", exact: true }),
       ).not.toHaveAttribute("aria-current", "page");
       await expect(page.locator(".finance-tabs")).toHaveCount(0);
       await expect(
@@ -317,18 +317,14 @@ test("customer overview combines branding, contacts, offer history and editable 
     await expect(
       navigation.getByRole("link", { name: "Kunden", exact: true }),
     ).toHaveAttribute("aria-current", "page");
-    await navigation
-      .getByRole("link", { name: "Kundenumsatz", exact: true })
-      .click();
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      "Kundenumsatz",
-    );
+    await navigation.getByRole("link", { name: "Umsatz", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Umsatz");
     await expect(
-      navigation.getByRole("link", { name: "Kundenumsatz", exact: true }),
+      navigation.getByRole("link", { name: "Umsatz", exact: true }),
     ).toHaveAttribute("aria-current", "page");
     await page.getByLabel("Kunden suchen", { exact: true }).fill(customer.name);
     await page
-      .getByRole("table", { name: "Kundenumsatz", exact: true })
+      .getByRole("table", { name: "Umsatz", exact: true })
       .getByRole("link", { name: customer.name, exact: true })
       .click();
     await expect(page).toHaveURL(

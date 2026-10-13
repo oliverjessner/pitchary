@@ -54,6 +54,9 @@ export async function registerFinanceAPI(app, finance) {
   app.get("/api/finance/dashboard", (request) =>
     finance.dashboard(request.query),
   );
+  app.get("/api/finance/revenue-overview", (request) =>
+    finance.revenueOverview(request.query),
+  );
   app.get("/api/finance/customers", (request) => ({
     items: finance.customers(request.query),
   }));
