@@ -287,7 +287,7 @@ export async function dashboard(actions, params) {
     .slice(0, 4);
   const finances = await financeDashboard(actions, params);
   const content = [
-    heading("Dashboard", "Ein Blick auf deine Kunden und laufenden Angebote."),
+    heading("Dashboard"),
     ...finances,
     el(
       "div",
