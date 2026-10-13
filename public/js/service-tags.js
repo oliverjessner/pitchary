@@ -121,6 +121,39 @@ export function tagFilter(tags, onChange) {
     el("span", { id: prefix + "-label", class: "oj-label" }, "Tags"),
     details,
   );
+  function positionPanel() {
+    if (!details.open || !details.isConnected) return;
+    const gap = 8;
+    const viewport = window.visualViewport;
+    const left = viewport?.offsetLeft ?? 0;
+    const top = viewport?.offsetTop ?? 0;
+    const width = viewport?.width ?? innerWidth;
+    const height = viewport?.height ?? innerHeight;
+    const anchor = summary.getBoundingClientRect();
+    const panelWidth = Math.min(Math.max(anchor.width, 288), width - 2 * gap);
+    panel.style.width = panelWidth + "px";
+    panel.style.left =
+      Math.max(
+        left + gap,
+        Math.min(anchor.left, left + width - panelWidth - gap),
+      ) + "px";
+    const below = top + height - anchor.bottom - gap;
+    const above = anchor.top - top - gap;
+    const useBelow =
+      below >= Math.min(panel.scrollHeight, 320) || below >= above;
+    panel.style.maxHeight = Math.max(1, useBelow ? below : above) + "px";
+    const panelHeight = panel.getBoundingClientRect().height;
+    panel.style.top =
+      (useBelow
+        ? anchor.bottom + gap
+        : Math.max(top + gap, anchor.top - panelHeight - gap)) + "px";
+  }
+  summary.addEventListener("click", (event) => {
+    event.preventDefault();
+    details.open = !details.open;
+    positionPanel();
+  });
+  details.addEventListener("toggle", positionPanel);
   function update() {
     const ids = picker.value();
     const names = tags
@@ -135,6 +168,7 @@ export function tagFilter(tags, onChange) {
     summary.title = names.join(", ");
     reset.disabled = !ids.length;
     onChange(ids);
+    positionPanel();
   }
   picker.node.addEventListener("change", update);
   search.querySelector("input").addEventListener("input", (event) => {
@@ -144,9 +178,24 @@ export function tagFilter(tags, onChange) {
       choice.hidden = !tags[index].name.toLocaleLowerCase().includes(term);
     });
     noMatches.hidden = !tags.length || choices.some((choice) => !choice.hidden);
+    positionPanel();
   });
   let focusFrame;
   const listeners = new AbortController();
+  window.addEventListener("resize", positionPanel, {
+    signal: listeners.signal,
+  });
+  window.addEventListener("scroll", positionPanel, {
+    capture: true,
+    passive: true,
+    signal: listeners.signal,
+  });
+  window.visualViewport?.addEventListener("resize", positionPanel, {
+    signal: listeners.signal,
+  });
+  window.visualViewport?.addEventListener("scroll", positionPanel, {
+    signal: listeners.signal,
+  });
   document.addEventListener(
     "keydown",
     (event) => {

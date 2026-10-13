@@ -200,3 +200,119 @@ test("desktop navigation and header stay visible while content scrolls", async (
     path: `artifacts/screenshots/${testInfo.project.name}-390-header-scrolled.png`,
   });
 });
+
+test("pipeline heading, filters and toolbar stay fixed while the board scrolls", async ({
+  page,
+  request,
+}, testInfo) => {
+  const create = async (resource, data) => {
+    const response = await request.post(`/api/${resource}`, { data });
+    expect(response.status()).toBe(201);
+    return response.json();
+  };
+  const name = "Feste Pipeline " + testInfo.project.name;
+  const tag = await create("service-tags", {
+    name: "Scrollfilter " + testInfo.project.name,
+  });
+  const customer = await create("customers", { name });
+  const service = await create("services", {
+    name: "Scrollbare Angebote " + testInfo.project.name,
+    tag_ids: [tag.id],
+  });
+  for (let i = 0; i < 24; i++)
+    await create("customer-services", {
+      customer_id: customer.id,
+      service_id: service.id,
+      current_offered_price_minor: 40000,
+    });
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  mkdirSync("artifacts/screenshots", { recursive: true });
+  for (const [width, height] of [
+    [1440, 800],
+    [1000, 360],
+    [737, 800],
+    [390, 800],
+    [320, 600],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#/pipeline?status=open");
+    await page.getByLabel("Suchen", { exact: true }).fill(name);
+    await expect(page.locator(".offer-card")).toHaveCount(24);
+    const board = page.locator(".pipeline-board");
+    const boardBounds = await board.boundingBox();
+    expect(boardBounds.height).toBeGreaterThan(72);
+    expect(boardBounds.y + boardBounds.height).toBeLessThanOrEqual(height);
+    const fixed = page.locator(
+      ".app-topbar, .pipeline-controls > .oj-section-header, .pipeline-controls > .filters, .pipeline-toolbar",
+    );
+    const before = await fixed.evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().y),
+    );
+    await page.mouse.move(
+      boardBounds.x + boardBounds.width / 2,
+      boardBounds.y + boardBounds.height / 2,
+    );
+    await page.mouse.wheel(0, 800);
+    await expect
+      .poll(() => board.evaluate((node) => node.scrollTop))
+      .toBeGreaterThan(250);
+    const after = await fixed.evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().y),
+    );
+    expect(after).toEqual(before);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(
+      page.locator(".pipeline-controls .page-title"),
+    ).toBeInViewport();
+    await expect(page.locator(".pipeline-toolbar")).toBeInViewport();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    await page.locator(".tag-filter-trigger").click();
+    const popup = page.locator(".tag-filter-panel");
+    const popupBounds = await popup.boundingBox();
+    expect(popupBounds.x).toBeGreaterThanOrEqual(0);
+    expect(popupBounds.y).toBeGreaterThanOrEqual(0);
+    expect(popupBounds.x + popupBounds.width).toBeLessThanOrEqual(width);
+    expect(popupBounds.y + popupBounds.height).toBeLessThanOrEqual(height + 1);
+    await page.getByRole("checkbox", { name: tag.name, exact: true }).check();
+    await expect(page.locator(".offer-card")).toHaveCount(24);
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".tag-filter-trigger")).toBeFocused();
+    const last = board
+      .locator(".offer-card")
+      .last()
+      .getByRole("button", { name: "Pitch erfassen", exact: true });
+    await last.focus();
+    await expect(last).toBeInViewport();
+    await expect
+      .poll(async () => {
+        const focused = await last.boundingBox();
+        const viewport = await board.boundingBox();
+        return focused.y + focused.height - viewport.y - viewport.height;
+      })
+      .toBeLessThanOrEqual(1);
+    const buttonBounds = await last.boundingBox();
+    expect(buttonBounds.y).toBeGreaterThanOrEqual(boardBounds.y);
+    expect(buttonBounds.y + buttonBounds.height).toBeLessThanOrEqual(
+      boardBounds.y + boardBounds.height + 1,
+    );
+    const axe = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+      .analyze();
+    expect(axe.violations).toEqual([]);
+    await page.screenshot({
+      path: `artifacts/screenshots/${testInfo.project.name}-${width}x${height}-pipeline-fixed-controls.png`,
+    });
+  }
+  await page.getByRole("link", { name: "Analytics", exact: true }).click();
+  await expect(page.locator("#main")).not.toHaveClass(/view-pipeline/);
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});

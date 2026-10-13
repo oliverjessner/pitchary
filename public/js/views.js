@@ -746,7 +746,28 @@ export async function pipeline(actions, params) {
   const observer = new ResizeObserver(updateScrollControls);
   observer.observe(board);
   board.addEventListener("scroll", updateScrollControls, { passive: true });
-  let frame;
+  let frame, focusFrame;
+  board.addEventListener("focusin", (event) => {
+    if (event.target === board) return;
+    const target = event.target;
+    cancelAnimationFrame(focusFrame);
+    focusFrame = requestAnimationFrame(() => {
+      if (!board.isConnected || document.activeElement !== target) return;
+      const bounds = board.getBoundingClientRect();
+      const focused = target.getBoundingClientRect();
+      const bottom = bounds.top + board.clientHeight;
+      const right = bounds.left + board.clientWidth;
+      const top =
+        focused.top < bounds.top + 8
+          ? focused.top - bounds.top - 8
+          : Math.max(0, focused.bottom - bottom + 8);
+      const left =
+        focused.left < bounds.left + 8
+          ? focused.left - bounds.left - 8
+          : Math.max(0, focused.right - right + 8);
+      board.scrollBy({ top, left, behavior: "instant" });
+    });
+  });
   const updateAfterRender = () => {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(updateScrollControls);
@@ -817,24 +838,42 @@ export async function pipeline(actions, params) {
   });
   render();
   const content = [
-    heading(
-      "Pipeline",
-      "Jeder Auftrag ist ein eigener Vorgang. Follow-ups gehören zum bestehenden Angebot.",
-      [
-        button("Neues Angebot", () => actions.offer(), {
-          primary: true,
-          iconName: "plus",
-        }),
-      ],
+    el(
+      "div",
+      {
+        class: "pipeline-controls",
+        role: "region",
+        "aria-label": "Pipeline-Steuerung",
+        tabindex: 0,
+      },
+      heading(
+        "Pipeline",
+        "Jeder Auftrag ist ein eigener Vorgang. Follow-ups gehören zum bestehenden Angebot.",
+        [
+          button("Neues Angebot", () => actions.offer(), {
+            primary: true,
+            compact: true,
+            iconName: "plus",
+          }),
+        ],
+      ),
+      el(
+        "div",
+        { class: "filters" },
+        search,
+        tagSelection.node,
+        status,
+        archive,
+      ),
+      toolbar,
     ),
-    el("div", { class: "filters" }, search, tagSelection.node, status, archive),
-    toolbar,
     board,
   ];
   content.dispose = () => {
     tagSelection.dispose();
     observer.disconnect();
     cancelAnimationFrame(frame);
+    cancelAnimationFrame(focusFrame);
   };
   return content;
 }
