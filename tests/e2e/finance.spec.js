@@ -253,11 +253,7 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     await expect(
       page.getByLabel("Diagramm-Währung", { exact: true }),
     ).toHaveCount(0);
-    await expect(
-      page
-        .getByRole("navigation", { name: "Finanzen" })
-        .getByRole("link", { name: "Übersicht", exact: true }),
-    ).toHaveAttribute("href", "#/dashboard");
+    await expect(page.locator(".finance-tabs")).toHaveCount(0);
     await expect(page.getByLabel("Jahr", { exact: true })).toHaveValue("2026");
     await expect(page.getByLabel("Monat", { exact: true })).toHaveValue("10");
     const layout = await page.locator("#main").evaluate((main) => ({
@@ -302,6 +298,7 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     page.getByRole("link", { name: dollar.invoice_number, exact: true }),
   ).toBeVisible();
   await page.goto("/#/finance-customers/" + customer.id);
+  await expect(page).toHaveURL(new RegExp("#/customers/" + customer.id + "$"));
   await expect(
     page.getByRole("heading", { name: customer.name, exact: true }),
   ).toBeVisible();
@@ -327,10 +324,10 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
   await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
   await expect(page.locator("#main")).toContainText("office@example.test");
   await page
-    .getByRole("button", { name: "Ansprechpartner hinzufügen", exact: true })
+    .getByRole("button", { name: "Mitarbeiter anlegen", exact: true })
     .click();
   dialog = page.getByRole("dialog", {
-    name: "Ansprechpartner hinzufügen",
+    name: "Mitarbeiter anlegen",
     exact: true,
   });
   await dialog.getByLabel("Name", { exact: true }).fill("Rechnungskontakt");
@@ -339,24 +336,29 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     .fill("billing@example.test");
   await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Rechnungskontakt", exact: true }),
+    page.getByRole("cell", { name: "Rechnungskontakt", exact: true }),
   ).toBeVisible();
   await check(page);
   await screenshot(page, testInfo, "customer", 320);
-  await page.getByRole("button", { name: "Archivieren", exact: true }).click();
+  const contactRow = page
+    .getByRole("table", { name: "Mitarbeiter", exact: true })
+    .getByRole("row")
+    .filter({ hasText: "Rechnungskontakt" });
+  await contactRow
+    .getByRole("button", { name: "Archivieren", exact: true })
+    .click();
   await page
-    .getByRole("dialog", { name: "Ansprechpartner archivieren?", exact: true })
+    .getByRole("dialog", { name: "Archivieren?", exact: true })
     .getByRole("button", { name: "Archivieren", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Rechnungskontakt", exact: true }),
-  ).toHaveCount(0);
-  await page.getByText("Archivierte Ansprechpartner", { exact: true }).click();
-  await page
+    contactRow.getByText("Archiviert", { exact: true }),
+  ).toBeVisible();
+  await contactRow
     .getByRole("button", { name: "Wiederherstellen", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Rechnungskontakt", exact: true }),
+    page.getByRole("cell", { name: "Rechnungskontakt", exact: true }),
   ).toBeVisible();
   await page.goto("/#/finance-customers");
   await page.getByLabel("Kunden suchen", { exact: true }).fill(customer.name);
@@ -399,8 +401,31 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
     await route.fulfill({ contentType: "application/json", body: "{}" });
   });
   try {
-    await page.setViewportSize({ width: 320, height: 900 });
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/#/finance-settings");
+    await expect(
+      page.getByRole("heading", { name: "Einstellungen", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".finance-tabs")).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText(/billly/i);
+    const tools = page.locator(".finance-settings-tools > .oj-panel");
+    await expect(tools).toHaveCount(2);
+    const desktopCards = await tools.evaluateAll((cards) =>
+      cards.map((card) => {
+        const rect = card.getBoundingClientRect();
+        return { top: rect.top, left: rect.left, right: rect.right };
+      }),
+    );
+    expect(
+      Math.abs(desktopCards[0].top - desktopCards[1].top),
+    ).toBeLessThanOrEqual(1);
+    expect(desktopCards[1].left).toBeGreaterThan(desktopCards[0].right);
+    const model = page.getByLabel("Erkennungsmodell", { exact: true });
+    await expect(model).toHaveValue(initial.model);
+    await model.selectOption("gpt-4.1-mini");
+    await check(page);
+    await screenshot(page, testInfo, "settings", 1440);
+    await page.setViewportSize({ width: 320, height: 900 });
     await page
       .getByLabel("Firmenname", { exact: true })
       .fill("Finance Test " + testInfo.project.name);
@@ -418,7 +443,7 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
     await page
       .getByRole("button", { name: "Schlüssel prüfen", exact: true })
       .click();
-    expect(sentKey).toEqual({ api_key: key });
+    expect(sentKey).toEqual({ api_key: key, model: "gpt-4.1-mini" });
     await page
       .getByRole("button", { name: "Einstellungen speichern", exact: true })
       .click();
@@ -429,6 +454,10 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
       page.getByLabel("Neuer OpenAI-Schlüssel", { exact: true }),
     ).toHaveValue("");
     const settings = await (await request.get("/api/finance/settings")).json();
+    expect(settings.model).toBe("gpt-4.1-mini");
+    await expect(model).toHaveValue("gpt-4.1-mini");
+    await page.reload();
+    await expect(model).toHaveValue("gpt-4.1-mini");
     expect(settings.openai_api_key_last4).toBe("1234");
     expect(JSON.stringify(settings)).not.toContain(key);
     await page
@@ -442,7 +471,7 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
       page.getByText("Nicht konfiguriert", { exact: true }),
     ).toBeVisible();
     await page
-      .getByLabel("Billly-Datenbank", { exact: true })
+      .getByLabel("Quelldatenbank", { exact: true })
       .fill("/tmp/fixture-billly.sqlite");
     await page
       .getByRole("button", {
@@ -451,7 +480,7 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
       })
       .click();
     const dialog = page.getByRole("dialog", {
-      name: "Billly-Daten übernehmen?",
+      name: "Daten in Pitchary übernehmen?",
       exact: true,
     });
     await expect(dialog).toContainText(
@@ -467,6 +496,17 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
     expect(imports).toBe(0);
     await check(page);
     await screenshot(page, testInfo, "settings", 320);
+    const mobileCards = await tools.evaluateAll((cards) =>
+      cards.map((card) => {
+        const rect = card.getBoundingClientRect();
+        return { top: rect.top, left: rect.left, bottom: rect.bottom };
+      }),
+    );
+    expect(
+      Math.abs(mobileCards[0].left - mobileCards[1].left),
+    ).toBeLessThanOrEqual(1);
+    expect(mobileCards[1].top).toBeGreaterThan(mobileCards[0].bottom);
+    await expect(page.locator("body")).not.toContainText(/billly/i);
   } finally {
     await request.delete("/api/finance/settings/key");
     await request.patch("/api/finance/settings", {
@@ -474,6 +514,7 @@ test("finance settings preserve company data, mask keys and inspect legacy impor
         company_name: initial.company_name,
         company_email: initial.company_email,
         company_address: initial.company_address,
+        model: initial.model,
       },
     });
   }

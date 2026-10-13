@@ -74,6 +74,10 @@ async function render(focus = true) {
     location.replace("#/dashboard" + (query ? "?" + query : ""));
     return;
   }
+  if (section === "finance-customers" && id) {
+    location.replace("#/customers/" + id + (query ? "?" + query : ""));
+    return;
+  }
   if (section === "new-offer") {
     navigate("/pipeline");
     await guarded.offer();
@@ -109,9 +113,7 @@ async function render(focus = true) {
         ? await financeViews.invoiceDetail(id, guarded)
         : await financeViews.invoiceList(guarded, params);
     else if (section === "finance-customers")
-      content = id
-        ? await financeViews.financeCustomer(id, guarded)
-        : await financeViews.financeCustomers(guarded, params);
+      content = await financeViews.financeCustomers(guarded, params);
     else if (section === "finance-settings")
       content = await financeViews.financeSettings(guarded);
     else
@@ -135,12 +137,7 @@ async function render(focus = true) {
       .forEach((a) => {
         if (
           a.hash ===
-          "#/" +
-            (section === "relationships"
-              ? "pipeline"
-              : section === "finance-customers"
-                ? "customers"
-                : section)
+          "#/" + (section === "relationships" ? "pipeline" : section)
         )
           a.setAttribute("aria-current", "page");
         else a.removeAttribute("aria-current");

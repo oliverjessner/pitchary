@@ -1,47 +1,47 @@
 {
-  "name": "pitchary",
-  "version": "1.0.0",
-  "description": "Local single-user CRM for customers, services and sales",
-  "license": "MIT",
-  "homepage": "https://github.com/oliverjessner/pitchary#readme",
-  "bugs": {
-    "url": "https://github.com/oliverjessner/pitchary/issues"
-  },
-  "author": {
-    "name": "oliverjessner",
-    "url": "https://oliverjessner.at"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/oliverjessner/pitchary.git"
-  },
-  "type": "module",
-  "scripts": {
-    "postinstall": "node scripts/sync-designsystem.js",
-    "sync:designsystem": "node scripts/sync-designsystem.js",
-    "dev": "node --watch src/server/server.js",
-    "start": "node src/server/server.js",
-    "migrate": "node scripts/migrate.js",
-    "seed": "node scripts/seed.js",
-    "backup": "node scripts/backup.js",
-    "restore": "node scripts/restore.js",
-    "import:billly": "node scripts/import-billly.js",
-    "test": "node --test tests/*.test.js",
-    "test:ui": "playwright test",
-    "format": "prettier --write src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js",
-    "format:check": "prettier --check src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js"
-  },
-  "dependencies": {
-    "@fastify/static": "10.1.6",
-    "fastify": "5.12.5",
-    "oj-designsystem": "0.2.0"
-  },
-  "devDependencies": {
-    "@axe-core/playwright": "4.13.0",
-    "@playwright/test": "1.64.0",
-    "prettier": "3.9.10"
-  },
-  "engines": {
-    "node": ">=26 <27"
-  }
+    "name": "pitchary",
+    "version": "0.1.0",
+    "description": "Local single-user CRM for customers, services and sales",
+    "license": "MIT",
+    "homepage": "https://github.com/oliverjessner/pitchary#readme",
+    "bugs": {
+        "url": "https://github.com/oliverjessner/pitchary/issues"
+    },
+    "author": {
+        "name": "oliverjessner",
+        "url": "https://oliverjessner.at"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/oliverjessner/pitchary.git"
+    },
+    "type": "module",
+    "scripts": {
+        "postinstall": "node scripts/sync-designsystem.js",
+        "sync:designsystem": "node scripts/sync-designsystem.js",
+        "dev": "node --watch src/server/server.js",
+        "start": "node src/server/server.js",
+        "migrate": "node scripts/migrate.js",
+        "seed": "node scripts/seed.js",
+        "backup": "node scripts/backup.js",
+        "restore": "node scripts/restore.js",
+        "import:billly": "node scripts/import-billly.js",
+        "test": "node --test tests/*.test.js",
+        "test:ui": "playwright test",
+        "format": "prettier --write src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js",
+        "format:check": "prettier --check src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js"
+    },
+    "dependencies": {
+        "@fastify/static": "10.1.6",
+        "fastify": "5.12.5",
+        "oj-designsystem": "0.2.0"
+    },
+    "devDependencies": {
+        "@axe-core/playwright": "4.13.0",
+        "@playwright/test": "1.64.0",
+        "prettier": "3.9.10"
+    },
+    "engines": {
+        "node": ">=26 <27"
+    }
 }

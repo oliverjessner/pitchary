@@ -2,9 +2,14 @@ import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 import { readFile, writeFile, mkdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { homedir } from "node:os";
-import { AppError, allowedKeys, text, invalid } from "./validation.js";
+import { AppError, allowedKeys, text, invalid, choice } from "./validation.js";
 import { extractionTools } from "./finance-extraction.js";
 import { createFinanceProcessingRepository } from "../database/finance-processing-repository.js";
+import {
+  defaultRecognitionModel,
+  recognitionModels,
+  recognitionModelIds,
+} from "../config/recognition-models.js";
 
 export function normalizeKey(value) {
   if (typeof value !== "string")
@@ -34,6 +39,12 @@ export function createFinanceSettings(
   };
   const read = (key) => repo.setting(key);
   const write = (key, value) => repo.saveSetting(key, value, now());
+  const model = () =>
+    choice(
+      read("recognition_model") || defaultRecognitionModel,
+      recognitionModelIds,
+      "model",
+    );
   async function masterKey(create = false) {
     if (!secretPath) return (memoryKey ??= randomBytes(32));
     try {
@@ -107,6 +118,7 @@ export function createFinanceSettings(
     );
   return {
     values,
+    model,
     getKey,
     read,
     write,
@@ -126,7 +138,8 @@ export function createFinanceSettings(
         openai_api_key_present: present,
         openai_api_key_last4: last4,
         openai_api_key_error: keyError,
-        model: "gpt-4o-mini",
+        model: model(),
+        models: recognitionModels.map(({ id, label }) => ({ id, label })),
         tools: await tools(),
       };
     },
@@ -140,8 +153,15 @@ export function createFinanceSettings(
         "company_email",
         "company_address",
         "openai_api_key",
+        "model",
       ]);
       const patch = {};
+      if (Object.hasOwn(input, "model"))
+        patch.recognition_model = choice(
+          input.model,
+          recognitionModelIds,
+          "model",
+        );
       for (const field of ["revenue_folder", "payable_folder"])
         if (field in input) patch[field] = await folder(input[field], field);
       const combined = { ...values(), ...patch };

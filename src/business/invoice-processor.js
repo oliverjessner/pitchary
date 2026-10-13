@@ -10,6 +10,7 @@ import {
   validatePDF,
 } from "./finance-extraction.js";
 import { createFinanceProcessingRepository } from "../database/finance-processing-repository.js";
+import { recognitionModelIds } from "../config/recognition-models.js";
 
 export function createInvoiceProcessor(
   db,
@@ -127,7 +128,9 @@ export function createInvoiceProcessor(
         );
         return { invoice, skipped: false };
       }
-      const resultAI = await ai.invoice(key, sanitized, extractionCategory);
+      const resultAI = await ai.invoice(key, sanitized, extractionCategory, {
+        model: settings.model(),
+      });
       finance.get(invoice.id);
       invoice = finance.record({
         id: invoice.id,
@@ -397,7 +400,8 @@ export function createInvoiceProcessor(
         ).invoice;
       });
     },
-    async testKey(input) {
+    async testKey(input, model = settings.model()) {
+      choice(model, recognitionModelIds, "model");
       const key = input || (await settings.getKey());
       if (!key)
         throw new AppError(
@@ -405,7 +409,7 @@ export function createInvoiceProcessor(
           "missing_api_key",
           "Bitte zuerst einen OpenAI-Schlüssel eingeben.",
         );
-      return ai.test(key);
+      return ai.test(key, { model });
     },
     enrich(id) {
       return enqueue(async () => {
@@ -435,6 +439,7 @@ export function createInvoiceProcessor(
           const data = await ai.customer(
             key,
             redactProfile(invoice.ocr_text, settings.values()),
+            { model: settings.model() },
           );
           const source = finance.get(latest);
           if (source.customer_id !== id)

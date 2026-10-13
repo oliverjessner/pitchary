@@ -3,7 +3,11 @@ import { promisify } from "node:util";
 import { mkdtemp, writeFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { AppError } from "./validation.js";
+import { AppError, choice } from "./validation.js";
+import {
+  defaultRecognitionModel,
+  recognitionModelIds,
+} from "../config/recognition-models.js";
 
 const exec = promisify(execFile);
 export const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -227,7 +231,8 @@ const customerSchema = {
   required: ["billing_address", "general_email"],
 };
 export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
-  async function request(key, schema, name, prompt, text) {
+  async function request(key, schema, name, prompt, text, model) {
+    const modelId = choice(model, recognitionModelIds, "model");
     const response = await fetchImpl(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -240,7 +245,7 @@ export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: modelId,
           temperature: 0.1,
           max_completion_tokens: 4000,
           messages: [
@@ -285,9 +290,21 @@ export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
     }
   }
   return {
-    async invoice(key, text, category) {
+    async invoice(
+      key,
+      text,
+      category,
+      { model = defaultRecognitionModel } = {},
+    ) {
       const prompt = `Extract invoice number, ISO YYYY-MM-DD invoice/due dates, ISO3 currency, counterparty (the billed customer for revenue; supplier for payable), decimal monetary amounts as strings with at most two decimals, confidence_score 0..1 and concise extraction_notes. Missing values must be null. ${category === "payable" ? "Assign up to three tags from the schema list when clearly applicable." : "Return an empty tags array."}`;
-      const result = await request(key, invoiceSchema, "invoice", prompt, text);
+      const result = await request(
+        key,
+        invoiceSchema,
+        "invoice",
+        prompt,
+        text,
+        model,
+      );
       const data = result.data;
       if (
         !data ||
@@ -329,7 +346,7 @@ export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
         },
       };
     },
-    async customer(key, text) {
+    async customer(key, text, { model = defaultRecognitionModel } = {}) {
       return (
         await request(
           key,
@@ -337,12 +354,14 @@ export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
           "customer",
           "Extract the billed customer's billing_address and general_email explicitly present on this outgoing invoice; exclude sender information and use null when unclear.",
           text,
+          model,
         )
       ).data;
     },
-    async test(key) {
+    async test(key, { model = defaultRecognitionModel } = {}) {
+      const modelId = choice(model, recognitionModelIds, "model");
       const response = await fetchImpl(
-        "https://api.openai.com/v1/models/gpt-4o-mini",
+        "https://api.openai.com/v1/models/" + encodeURIComponent(modelId),
         {
           headers: { Authorization: `Bearer ${key}` },
           signal: AbortSignal.timeout(15000),
@@ -352,9 +371,9 @@ export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
         throw new AppError(
           422,
           "invalid_api_key",
-          `Schlüssel konnte nicht bestätigt werden (HTTP ${response.status}).`,
+          `Zugriff auf das gewählte Modell konnte nicht bestätigt werden (HTTP ${response.status}). Schlüssel und Modellzugriff prüfen.`,
         );
-      return { ok: true };
+      return { ok: true, model: modelId };
     },
   };
 }

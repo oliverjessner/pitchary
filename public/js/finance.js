@@ -114,28 +114,6 @@ const fileLink = (row) =>
         "PDF öffnen",
       )
     : el("span", { class: "oj-small oj-muted" }, "Keine PDF-Datei verfügbar");
-function financeTabs(current) {
-  return el(
-    "nav",
-    { class: "finance-tabs", "aria-label": "Finanzen" },
-    [
-      ["Übersicht", "#/dashboard"],
-      ["Rechnungen", "#/invoices"],
-      ["Kundenumsatz", "#/finance-customers"],
-      ["Einstellungen", "#/finance-settings"],
-    ].map(([text, href]) =>
-      el(
-        "a",
-        {
-          class: "oj-button oj-button-ghost oj-button-compact",
-          href,
-          "aria-current": href === current ? "page" : null,
-        },
-        text,
-      ),
-    ),
-  );
-}
 function routeFilter(route, params, values) {
   const next = new URLSearchParams(params);
   for (const [key, value] of Object.entries(values))
@@ -299,7 +277,7 @@ function invoiceTable(rows, actions, { sorting, onSort } = {}) {
         row.customer_id
           ? link(
               row.customer_name || row.counterparty_name || "–",
-              "#/finance-customers/" + row.customer_id,
+              "#/customers/" + row.customer_id,
             )
           : row.counterparty_name || "–",
         row.is_overdue
@@ -550,10 +528,10 @@ export function createFinanceActions(refresh, navigate) {
         api(financePath + "/settings", { method: "PATCH", body }),
         "Finanz-Einstellungen gespeichert.",
       ),
-    financeKeyTest: async (key) => {
+    financeKeyTest: async (key, model) => {
       const result = await api(financePath + "/settings/test-key", {
         method: "POST",
-        body: key ? { api_key: key } : {},
+        body: { ...(key ? { api_key: key } : {}), ...(model ? { model } : {}) },
       });
       notice(
         result.ok
@@ -580,23 +558,33 @@ export function createFinanceActions(refresh, navigate) {
       );
     },
     financeBilllyImport: async (source) => {
-      const inspected = await api(financePath + "/billly/inspect", {
+      const sourceRequest = async (path, options) => {
+        try {
+          return await api(path, options);
+        } catch (error) {
+          error.message = error.message
+            .replace(/Billly-Datenbank/gi, "Quelldatenbank")
+            .replace(/Billly/gi, "Quelldatenbank");
+          throw error;
+        }
+      };
+      const inspected = await sourceRequest(financePath + "/billly/inspect", {
         query: source ? { source } : {},
       });
       if (
         !(await confirmDialog({
-          title: "Billly-Daten übernehmen?",
-          message: `${inspected.invoices || 0} Rechnungen, ${inspected.customers || 0} Kunden und ${inspected.contacts || 0} Ansprechpartner werden mit Pitchary zusammengeführt. ${inspected.files?.available || inspected.files_available || 0} PDF-Dateien sind verfügbar. Die Billly-Datenbank bleibt erhalten. E-Mail-Vorlagen und Zugangsdaten werden nicht übernommen.`,
+          title: "Daten in Pitchary übernehmen?",
+          message: `${inspected.invoices || 0} Rechnungen, ${inspected.customers || 0} Kunden und ${inspected.contacts || 0} Ansprechpartner werden mit Pitchary zusammengeführt. ${inspected.files?.available || inspected.files_available || 0} PDF-Dateien sind verfügbar. Die Quelldatenbank bleibt erhalten. E-Mail-Vorlagen und Zugangsdaten werden nicht übernommen.`,
           confirmLabel: "Daten übernehmen",
           cancelLabel: "Abbrechen",
         }))
       )
         return;
-      const result = await api(financePath + "/billly/import", {
+      const result = await sourceRequest(financePath + "/billly/import", {
         method: "POST",
         body: source ? { source } : {},
       });
-      notice("Billly-Daten übernommen.");
+      notice("Daten in Pitchary übernommen.");
       await refresh();
       return result;
     },
@@ -915,7 +903,6 @@ export async function financeDashboard(
         }),
       ),
     ),
-    financeTabs("#/dashboard"),
     controls,
     ...metrics,
     !currencies.length
@@ -1091,7 +1078,6 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
           }),
         ],
       ),
-      financeTabs("#/invoices"),
       query.customer_id || query.customer_service_id
         ? el(
             "div",
@@ -1368,7 +1354,6 @@ export async function invoiceDetail(id, actions) {
         ),
       ],
     ),
-    financeTabs("#/invoices"),
     link("← Alle Rechnungen", "#/invoices"),
     ["failed", "missing", "pending"].includes(row.ingestion_status)
       ? el(
@@ -1615,7 +1600,7 @@ export async function financeCustomers(
         "div",
         { class: "finance-customer-identity" },
         customerLogo(row),
-        link(row.name, "#/finance-customers/" + row.id),
+        link(row.name, "#/customers/" + row.id),
       ),
       dateLabel(row.first_invoice_date),
       dateLabel(row.last_invoice_date),
@@ -1672,7 +1657,6 @@ export async function financeCustomers(
         "Kundenumsatz",
         "Rechnungsumsatz und Rechnungsdaten deiner CRM-Kunden.",
       ),
-      financeTabs("#/finance-customers"),
       el(
         "div",
         { class: "finance-filters" },
@@ -1707,155 +1691,81 @@ export async function financeCustomers(
   );
 }
 
-export async function financeCustomer(id, actions) {
-  const row = await api(financePath + "/customers/" + id);
-  const contacts = row.employees || [];
+export function withFinanceRefresh(nodes, actions) {
+  return disposable(nodes, actions);
+}
+
+export function customerFinanceSections(row, actions) {
   const enrichmentLabels = {
     pending: "Noch nicht geprüft",
     completed: "Ergänzt",
     failed: "Prüfung fehlgeschlagen",
     skipped: "Keine Angaben gefunden",
   };
-  return disposable(
-    [
-      heading(row.name, "Rechnungsdaten und Umsatz", [
-        button("Rechnungsdaten bearbeiten", () => actions.financeProfile(row), {
-          primary: true,
-          iconName: "pen",
-        }),
-        link("CRM-Kunde öffnen", "#/customers/" + id),
-      ]),
-      financeTabs("#/finance-customers"),
-      link("← Kundenumsatz", "#/finance-customers"),
-      el(
-        "div",
-        { class: "finance-customer-metrics" },
-        metric("Rechnungen", row.invoice_count || 0),
-        metric("Seit letzter Rechnung", customerDays(row)),
-        metric(
-          "Kundenbeziehung",
-          `${row.active_months || 1} ${(row.active_months || 1) === 1 ? "Monat" : "Monate"}`,
-        ),
+  return [
+    el(
+      "div",
+      { class: "finance-customer-metrics" },
+      metric("Rechnungen", row.invoice_count || 0),
+      metric("Seit letzter Rechnung", customerDays(row)),
+      metric(
+        "Kundenbeziehung",
+        row.invoice_count
+          ? `${row.active_months} ${row.active_months === 1 ? "Monat" : "Monate"}`
+          : "–",
       ),
-      ...currencyMetrics(row).map((stat) =>
-        panel(
-          "Umsatz · " + stat.currency,
-          el(
-            "div",
-            { class: "finance-customer-metrics" },
-            metric("Umsatz gesamt", money(currencyTotal(stat), stat.currency)),
-            metric(
-              "Pro aktivem Monat",
-              money(currencyAverage(stat), stat.currency),
-            ),
-            metric("Noch offen", money(stat.open_amount_minor, stat.currency)),
-          ),
-        ),
-      ),
+    ),
+    ...currencyMetrics(row).map((stat) =>
       panel(
-        "Rechnungsdaten",
-        facts([
-          [
-            "Rechnungsadresse",
-            el("span", { class: "note-text" }, row.billing_address || "–"),
-          ],
-          ["Haupt-E-Mail", row.general_email || "–"],
-          ["Erste Rechnung", dateLabel(row.first_invoice_date)],
-          ["Letzte Rechnung", dateLabel(row.last_invoice_date)],
-          [
-            "Automatische Ergänzung",
-            enrichmentLabels[row.enrichment_status] || "Noch nicht geprüft",
-          ],
-        ]),
-        button(
-          "Angaben aus Rechnung ergänzen",
-          () => actions.financeEnrich(id),
-          { iconName: "wand-magic-sparkles", disabled: !row.latest_invoice_id },
-        ),
+        "Umsatz · " + stat.currency,
         el(
-          "p",
-          { class: "oj-small oj-muted" },
-          "Ergänzt fehlende Adresse und E-Mail aus der letzten Rechnung. Vorhandene Angaben bleiben erhalten.",
+          "div",
+          { class: "finance-customer-metrics" },
+          metric("Umsatz gesamt", money(currencyTotal(stat), stat.currency)),
+          metric(
+            "Pro aktivem Monat",
+            money(currencyAverage(stat), stat.currency),
+          ),
+          metric("Noch offen", money(stat.open_amount_minor, stat.currency)),
         ),
       ),
-      panel(
-        "Ansprechpartner",
-        button("Ansprechpartner hinzufügen", () => actions.financeContact(id), {
-          iconName: "user-plus",
-        }),
-        contacts.length
-          ? el(
-              "div",
-              { class: "finance-contacts" },
-              contacts.map((contact) =>
-                el(
-                  "article",
-                  { class: "finance-contact" },
-                  el(
-                    "div",
-                    {},
-                    el("h3", { class: "oj-heading-4" }, contact.name),
-                    el(
-                      "p",
-                      { class: "oj-small oj-muted" },
-                      contact.position || "",
-                    ),
-                    el(
-                      "p",
-                      { class: "oj-small" },
-                      contact.email || "Keine E-Mail",
-                    ),
-                  ),
-                  el(
-                    "div",
-                    { class: "finance-actions" },
-                    button(
-                      "Bearbeiten",
-                      () => actions.financeContact(id, contact),
-                      { compact: true, iconName: "pen" },
-                    ),
-                    button(
-                      "Archivieren",
-                      () => actions.financeArchiveContact(contact),
-                      { compact: true, iconName: "box-archive" },
-                    ),
-                  ),
-                ),
-              ),
-            )
-          : el("p", { class: "oj-muted" }, "Noch keine Ansprechpartner."),
-        row.archived_employees?.length
-          ? el(
-              "details",
-              { class: "oj-accordion" },
-              el("summary", {}, "Archivierte Ansprechpartner"),
-              el(
-                "div",
-                { class: "oj-accordion-body finance-contacts" },
-                row.archived_employees.map((contact) =>
-                  el(
-                    "div",
-                    { class: "finance-contact" },
-                    el("span", {}, contact.name),
-                    button(
-                      "Wiederherstellen",
-                      () => actions.financeRestoreContact(contact),
-                      { compact: true, iconName: "rotate-left" },
-                    ),
-                  ),
-                ),
-              ),
-            )
-          : null,
+    ),
+    panel(
+      "Rechnungsprofil",
+      button("Rechnungsdaten bearbeiten", () => actions.financeProfile(row), {
+        iconName: "pen",
+      }),
+      facts([
+        [
+          "Rechnungsadresse",
+          el("span", { class: "note-text" }, row.billing_address || "–"),
+        ],
+        ["Haupt-E-Mail", row.general_email || "–"],
+        ["Erste Rechnung", dateLabel(row.first_invoice_date)],
+        ["Letzte Rechnung", dateLabel(row.last_invoice_date)],
+        [
+          "Automatische Ergänzung",
+          enrichmentLabels[row.enrichment_status] || "Noch nicht geprüft",
+        ],
+      ]),
+      button(
+        "Angaben aus Rechnung ergänzen",
+        () => actions.financeEnrich(row.id),
+        { iconName: "wand-magic-sparkles", disabled: !row.latest_invoice_id },
       ),
-      panel("Rechnungen", invoiceTable(row.invoices || [], actions)),
-    ],
-    actions,
-  );
+      el(
+        "p",
+        { class: "oj-small oj-muted" },
+        "Ergänzt fehlende Adresse und E-Mail aus der letzten Rechnung. Vorhandene Angaben bleiben erhalten.",
+      ),
+    ),
+    panel("Rechnungen", invoiceTable(row.invoices || [], actions)),
+  ];
 }
 
 export async function financeSettings(actions) {
   const row = await api(financePath + "/settings");
+  const models = row.models || [{ id: "gpt-4o-mini", label: "GPT-4o Mini" }];
   const error = el("p", {
     class: "oj-alert oj-alert-danger",
     role: "alert",
@@ -1983,6 +1893,12 @@ export async function financeSettings(actions) {
           )
         : null,
       keyField,
+      field("Erkennungsmodell", "model", {
+        value: row.model || "gpt-4o-mini",
+        options: models.map(({ id, label }) => [id, label]),
+        helper:
+          "Wird für die Rechnungserkennung und das Ergänzen der Kundendaten verwendet.",
+      }),
       el(
         "p",
         { class: "oj-small oj-muted" },
@@ -1999,6 +1915,7 @@ export async function financeSettings(actions) {
             try {
               await actions.financeKeyTest(
                 form.elements.namedItem("openai_api_key").value.trim(),
+                form.elements.namedItem("model").value,
               );
             } finally {
               control.disabled = false;
@@ -2031,62 +1948,67 @@ export async function financeSettings(actions) {
   });
   const tools = row.tools || {},
     watcher = row.watcher || {};
-  const billlySource = field("Billly-Datenbank", "billly_source", {
-    placeholder:
-      "Standard: ~/Library/Application Support/com.oli.billly/billly.sqlite",
+  const source = field("Quelldatenbank", "source_database", {
+    placeholder: "Optional: absoluter Pfad zur Quelldatenbank",
     helper:
-      "Optional ein anderer absoluter Pfad zur vorhandenen billly.sqlite. Die Quelle wird nur gelesen.",
+      "Ohne Pfadangabe wird die Standardquelle automatisch erkannt. Die Quelle wird nur gelesen.",
   });
   return [
     heading(
-      "Finanz-Einstellungen",
+      "Einstellungen",
       "Rechnungsordner, Firmenangaben und automatische Erkennung.",
     ),
-    financeTabs("#/finance-settings"),
     form,
-    panel(
-      "Ordnerüberwachung",
-      facts([
-        ["Status", watcher.running ? "Aktiv" : "Keine Ordner aktiv"],
-        [
-          "Letzter Scan",
-          watcher.last_scan ? datetime(watcher.last_scan) : "Noch kein Scan",
-        ],
-        ["PDF-Text", tools.text ? "Verfügbar" : "Nicht verfügbar"],
-        ["OCR", tools.ocr ? "Verfügbar" : "Nicht verfügbar"],
-        ["Erkennungsmodell", row.model || "gpt-4o-mini"],
-      ]),
-      watcher.error
-        ? el(
-            "p",
-            { class: "oj-alert oj-alert-warning", role: "status" },
-            watcher.error,
-          )
-        : null,
-      button("Ordner jetzt einlesen", () => actions.financeScan(), {
-        iconName: "folder-open",
-      }),
-    ),
-    panel(
-      "Aus Billly übernehmen",
-      el(
-        "p",
-        { class: "oj-small oj-muted" },
-        "Übernimmt vorhandene Rechnungen, Korrekturen, Kunden und Ansprechpartner. Bereits übernommene Datensätze werden erkannt. Vor der Übernahme wird eine Sicherung erstellt.",
+    el(
+      "div",
+      { class: "finance-two-columns finance-settings-tools" },
+      panel(
+        "Ordnerüberwachung",
+        facts([
+          ["Status", watcher.running ? "Aktiv" : "Keine Ordner aktiv"],
+          [
+            "Letzter Scan",
+            watcher.last_scan ? datetime(watcher.last_scan) : "Noch kein Scan",
+          ],
+          ["PDF-Text", tools.text ? "Verfügbar" : "Nicht verfügbar"],
+          ["OCR", tools.ocr ? "Verfügbar" : "Nicht verfügbar"],
+          [
+            "Erkennungsmodell",
+            models.find(({ id }) => id === row.model)?.label || "GPT-4o Mini",
+          ],
+        ]),
+        watcher.error
+          ? el(
+              "p",
+              { class: "oj-alert oj-alert-warning", role: "status" },
+              watcher.error,
+            )
+          : null,
+        button("Ordner jetzt einlesen", () => actions.financeScan(), {
+          iconName: "folder-open",
+        }),
       ),
-      billlySource,
-      button(
-        "Quelle prüfen und übernehmen",
-        () =>
-          actions.financeBilllyImport(
-            billlySource.querySelector("input").value.trim(),
-          ),
-        { iconName: "database" },
-      ),
-      el(
-        "p",
-        { class: "oj-small oj-muted" },
-        "Falls keine Billly-Datenbank vorhanden ist, kannst du PDFs einzeln importieren oder deine Rechnungsordner hinterlegen.",
+      panel(
+        "Daten in Pitchary übernehmen",
+        el(
+          "p",
+          { class: "oj-small oj-muted" },
+          "Übernimmt vorhandene Rechnungen, Korrekturen, Kunden und Ansprechpartner. Bereits übernommene Datensätze werden erkannt. Vor der Übernahme wird eine Sicherung erstellt.",
+        ),
+        source,
+        button(
+          "Quelle prüfen und übernehmen",
+          () =>
+            actions.financeBilllyImport(
+              source.querySelector("input").value.trim(),
+            ),
+          { iconName: "database" },
+        ),
+        el(
+          "p",
+          { class: "oj-small oj-muted" },
+          "Du kannst auch PDFs einzeln importieren oder deine Rechnungsordner hinterlegen.",
+        ),
       ),
     ),
   ];

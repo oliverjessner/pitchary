@@ -29,9 +29,10 @@ export async function registerFinanceProcessingAPI(
   });
   app.delete("/api/finance/settings/key", async () => settings.removeKey());
   app.post("/api/finance/settings/test-key", objectBody, async (request) => {
-    allowedKeys(request.body ?? {}, ["api_key"]);
+    allowedKeys(request.body ?? {}, ["api_key", "model"]);
     return processor.testKey(
       request.body?.api_key ? normalizeKey(request.body.api_key) : null,
+      request.body?.model,
     );
   });
   app.post("/api/finance/scan", async () => processor.scan({ settle: true }));

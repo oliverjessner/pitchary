@@ -8,10 +8,10 @@ Pitchary integriert Billlys PDF-Rechnungsverwaltung in denselben lokalen Server 
 - **Rechnungen** bietet Einnahmen/Ausgaben, Suche, Jahres- und Statusfilter, sortierbare Spalten sowie offen/bezahlt. Beim Bezahlen wird das heutige Datum in Europe/Vienna gesetzt; beim Wiederöffnen wird es gelöscht.
 - Eine **PDF importieren** oder in **Einstellungen** getrennte lokale Rechnungsordner angeben. Der Server liest PDFs bis zu zwei Unterordnerebenen, beobachtet neue/geänderte Dateien und prüft zusätzlich alle zehn Sekunden. Symlinks werden nicht verfolgt. Dateien müssen mindestens 700 ms unverändert sein.
 - Rechnungsdetails erlauben Korrekturen, Zahlungsdatum, Kategorie, Ausgaben-Tags und die Zuordnung zu einem CRM-Kunden sowie einem seiner Angebote. Einzelne oder alle Korrekturen sind zurücksetzbar. Erneute Verarbeitung erhält Korrekturen, Zahlungsstatus und Links.
-- **Kundenumsatz** zeigt Rechnungsanzahl, erste/letzte Rechnung, Umsatz und Monatsdurchschnitt je Währung. Rechnungsadresse, Kontaktadresse und CRM-Ansprechpartner sind dort bearbeitbar. Die KI-Anreicherung aus der letzten Einnahmen-Rechnung ergänzt ausschließlich leere Profilfelder.
+- **Kundenumsatz** ist ein eigener Eintrag im Hauptmenü und zeigt Rechnungsanzahl, erste/letzte Rechnung, Umsatz und Monatsdurchschnitt je Währung. Kundennamen öffnen dieselbe gemeinsame Kundendetailansicht wie **Kunden**. Dort stehen Angebote, Kontakte und Rechnungen zusammen; Rechnungsadresse, Kontaktadresse und CRM-Ansprechpartner sind bearbeitbar. Die KI-Anreicherung aus der letzten Einnahmen-Rechnung ergänzt ausschließlich leere Profilfelder. Dashboard, Rechnungen, Kundenumsatz und Einstellungen sind direkt im Hauptmenü erreichbar.
 - **PDF öffnen** verwendet die gespeicherte Kopie. Löschen entfernt den Datensatz samt Korrekturen/Protokollen, erhält die Quelldatei und verhindert den sofortigen Neuimport unveränderter Dateien. Geänderte Quelldateien werden wieder eingelesen.
 
-Bestehende Billly-Daten können unter **Einstellungen → Billly-Daten übernehmen** nach einer Zusammenfassung und Sicherung importiert werden. Alternativ: `npm run import:billly -- --source /pfad/billly.sqlite` zur Prüfung, danach mit `--apply` zum Import. Details: [Billly-Import](billly-import.md).
+Bestehende Billly-Daten können unter **Einstellungen → Daten in Pitchary übernehmen** nach einer Zusammenfassung und Sicherung importiert werden. Alternativ: `npm run import:billly -- --source /pfad/billly.sqlite` zur Prüfung, danach mit `--apply` zum Import. Details: [Billly-Import](billly-import.md).
 
 ## PDF, OCR und OpenAI
 
@@ -19,7 +19,9 @@ PDFs bis 20 MiB werden in SQLite gespeichert; Backups schließen die Dokumente e
 
 Auf macOS: `brew install poppler tesseract`; `tesseract-lang` ergänzt weitere Sprachen. Die Einstellungen zeigen verfügbare Werkzeuge. Manuelle Korrekturen benötigen keinen API-Schlüssel.
 
-Mit einem gespeicherten OpenAI-Schlüssel werden lokal erkannte Texte an `gpt-4o-mini` übergeben. Eigener Firmenname, E-Mail und Anschrift werden vor Textspeicherung und Anfrage entfernt. Die PDF bleibt lokal. Die Extraktion verwendet ein striktes JSON-Schema, prüft Datum/Beträge/Konfidenz und speichert Roh-JSON sowie Notizen. Dokumentinhalte werden ausschließlich als Daten behandelt. Grundlage: [offizielle OpenAI-Dokumentation zu Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=chat).
+Mit einem gespeicherten OpenAI-Schlüssel werden lokal erkannte Texte an das ausgewählte Erkennungsmodell übergeben. Eigener Firmenname, E-Mail und Anschrift werden vor Textspeicherung und Anfrage entfernt. Die PDF bleibt lokal. Die Extraktion verwendet ein striktes JSON-Schema, prüft Datum/Beträge/Konfidenz und speichert Roh-JSON sowie Notizen. Dokumentinhalte werden ausschließlich als Daten behandelt. Grundlage: [offizielle OpenAI-Dokumentation zu Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=chat).
+
+In **Einstellungen** stehen [GPT-4o Mini](https://developers.openai.com/api/docs/models/gpt-4o-mini), [GPT-4.1 Mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini) und [GPT-4.1](https://developers.openai.com/api/docs/models/gpt-4.1) zur Auswahl. Die Auswahl wird unter `recognition_model` gespeichert und gilt für neue Erkennungsanfragen, erneutes Verarbeiten und Kundenergänzung. Ohne gespeicherte Auswahl bleibt GPT-4o Mini der Standard. Vorhandene Rechnungsdaten ändern sich erst durch erneutes Verarbeiten. „Schlüssel prüfen“ kontrolliert den Zugriff auf das im Formular ausgewählte Modell, auch vor dem Speichern; der tatsächliche Modellzugriff hängt vom OpenAI-Projekt ab.
 
 Ohne Schlüssel bleiben PDF und Text gespeichert; die Erkennung ist ausstehend. Fehler erscheinen im Verarbeitungsprotokoll und können mit **Erneut verarbeiten** wiederholt werden. Bei fehlender Quelldatei bleiben Datensatz und PDF-Kopie erhalten.
 
@@ -35,15 +37,15 @@ Beträge liegen als vorzeichenbehaftete ganze Cent vor. Einnahmen-Gutschriften d
 
 Alle Pfade liegen unter `/api/finance` und verwenden die lokalen Host-/Origin-Schutzregeln des CRM.
 
-| Funktion            | Endpunkte                                                                                                 |
-| ------------------- | --------------------------------------------------------------------------------------------------------- |
-| Übersicht           | `GET /dashboard?year=2026&month=10`                                                                       |
-| Rechnungen          | `GET /invoices`, `GET/PATCH/DELETE /invoices/:id`                                                         |
-| Korrekturen         | `POST /invoices/:id/reset` mit `{field:"total_amount_minor"}` oder `{}`                                   |
-| Dokument/Protokoll  | `GET /invoices/:id/file`, `GET /invoices/:id/logs`                                                        |
-| Import/Verarbeitung | `POST /import` mit `{category,file_name,data}` (PDF-Base64), `POST /invoices/:id/reprocess`, `POST /scan` |
-| Kunden              | `GET /customers`, `GET/PATCH /customers/:id`, `POST /customers/:id/enrich`                                |
-| Einstellungen       | `GET/PATCH /settings`, `POST /settings/test-key` mit `{api_key}` oder `{}`, `DELETE /settings/key`        |
-| Billly-Import       | `GET /billly/inspect?source=/pfad/billly.sqlite`, `POST /billly/import` mit `{source}`                    |
+| Funktion            | Endpunkte                                                                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Übersicht           | `GET /dashboard?year=2026&month=10`                                                                                                                 |
+| Rechnungen          | `GET /invoices`, `GET/PATCH/DELETE /invoices/:id`                                                                                                   |
+| Korrekturen         | `POST /invoices/:id/reset` mit `{field:"total_amount_minor"}` oder `{}`                                                                             |
+| Dokument/Protokoll  | `GET /invoices/:id/file`, `GET /invoices/:id/logs`                                                                                                  |
+| Import/Verarbeitung | `POST /import` mit `{category,file_name,data}` (PDF-Base64), `POST /invoices/:id/reprocess`, `POST /scan`                                           |
+| Kunden              | `GET /customers`, `GET/PATCH /customers/:id`, `POST /customers/:id/enrich`                                                                          |
+| Einstellungen       | `GET/PATCH /settings` (Modellauswahl mit `{model}`), `POST /settings/test-key` mit optionalen Feldern `api_key` und `model`, `DELETE /settings/key` |
+| Billly-Import       | `GET /billly/inspect?source=/pfad/billly.sqlite`, `POST /billly/import` mit `{source}`                                                              |
 
 Rechnungsfilter: `category=revenue|payable`, `year`, `status=open|paid|overdue`, `search`, `customer_id`, `customer_service_id`, `sort` und `order=asc|desc`. Rechnungsantworten enthalten wirksame Felder, `original`, `overrides`, `tags` und `has_file`, keine PDF-Bytes in JSON. PDF-Zugriff erfolgt ausschließlich über die Rechnungs-ID.

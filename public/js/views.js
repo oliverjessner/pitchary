@@ -1,5 +1,9 @@
 import { api } from "./api.js";
-import { financeDashboard } from "./finance.js";
+import {
+  financeDashboard,
+  customerFinanceSections,
+  withFinanceRefresh,
+} from "./finance.js";
 import {
   customerIdentity,
   customerLogo,
@@ -433,24 +437,16 @@ export async function entityList(type, actions) {
   ];
 }
 export async function customerDetail(id, actions) {
-  const row = await api("/customers/" + id);
+  const [row, finance] = await Promise.all([
+    api("/customers/" + id),
+    api("/finance/customers/" + id),
+  ]);
   const employees = [...row.employees, ...row.archived_employees];
-  return [
+  const content = [
     heading(
       row.name,
       row.archived_at ? "Archivierter Kunde" : "Kundendetails",
-      [
-        ...entityState(row, "customers", actions),
-        el(
-          "a",
-          {
-            class: "oj-button oj-button-secondary",
-            href: "#/finance-customers/" + id,
-          },
-          icon("file-invoice"),
-          "Rechnungen & Umsatz",
-        ),
-      ],
+      entityState(row, "customers", actions),
     ),
     row.website || row.has_logo
       ? el(
@@ -469,7 +465,7 @@ export async function customerDetail(id, actions) {
             { class: "section-actions" },
             button(
               "Mitarbeiter anlegen",
-              () => actions.entity("employees", { customer_id: id }),
+              () => actions.entity("employees", { customer_id: row.id }),
               { primary: true, iconName: "plus" },
             ),
           )
@@ -575,7 +571,9 @@ export async function customerDetail(id, actions) {
           ),
         )
       : null,
+    ...customerFinanceSections(finance, actions),
   ];
+  return withFinanceRefresh(content, actions);
 }
 export async function serviceDetail(id, actions) {
   const row = await api("/services/" + id);
