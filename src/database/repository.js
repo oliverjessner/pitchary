@@ -5,18 +5,50 @@ const tables = new Set([
   "customer_services",
   "customer_service_status_history",
   "activities",
+  "service_tags",
 ]);
 const joins = `SELECT cs.*, c.name AS customer_name, c.archived_at AS customer_archived_at, s.name AS service_name, s.archived_at AS service_archived_at, e.name AS employee_name FROM customer_services cs JOIN customers c ON c.id=cs.customer_id JOIN services s ON s.id=cs.service_id LEFT JOIN employees e ON e.id=cs.primary_employee_id`;
 const projection = (name) =>
   name === "customers"
     ? "id,name,note,website,logo_mime,created_at,updated_at,archived_at,logo_data IS NOT NULL AS has_logo"
-    : "*";
+    : name === "service_tags"
+      ? "id,name,note,color,created_at,updated_at"
+      : "*";
 export function createRepository(db) {
   const table = (name) => {
     if (!tables.has(name)) throw new Error("Unknown repository");
     return name;
   };
   return {
+    pitchChannels: () =>
+      db
+        .prepare("SELECT id,label FROM pitch_channels ORDER BY sort_order,id")
+        .all(),
+    tags: () =>
+      db
+        .prepare(
+          "SELECT t.id,t.name,t.note,t.color,t.created_at,t.updated_at,count(a.service_id) AS service_count FROM service_tags t LEFT JOIN service_tag_assignments a ON a.tag_id=t.id GROUP BY t.id ORDER BY t.name_key,t.id",
+        )
+        .all(),
+    tagByKey: (key) =>
+      db.prepare("SELECT id FROM service_tags WHERE name_key=?").get(key),
+    serviceTags: (id) =>
+      db
+        .prepare(
+          `SELECT t.id,t.name,t.note,t.color,a.service_id FROM service_tags t JOIN service_tag_assignments a ON a.tag_id=t.id ${id ? "WHERE a.service_id=?" : ""} ORDER BY t.name_key,t.id`,
+        )
+        .all(...(id ? [id] : [])),
+    replaceServiceTags(id, tagIds) {
+      db.prepare("DELETE FROM service_tag_assignments WHERE service_id=?").run(
+        id,
+      );
+      const insert = db.prepare(
+        "INSERT INTO service_tag_assignments(service_id,tag_id) VALUES(?,?)",
+      );
+      tagIds.forEach((tagId) => insert.run(id, tagId));
+    },
+    deleteTag: (id) =>
+      db.prepare("DELETE FROM service_tags WHERE id=?").run(id),
     get: (name, id) =>
       db
         .prepare(`SELECT ${projection(name)} FROM ${table(name)} WHERE id=?`)
@@ -37,10 +69,14 @@ export function createRepository(db) {
         clauses.push(
           "(" +
             fields.map((field) => field + " LIKE ? ESCAPE '\\'").join(" OR ") +
+            (name === "services"
+              ? " OR EXISTS (SELECT 1 FROM service_tag_assignments a JOIN service_tags t ON t.id=a.tag_id WHERE a.service_id=services.id AND t.name LIKE ? ESCAPE '\\')"
+              : "") +
             ")",
         );
         const term = "%" + search.replace(/[\\%_]/g, "\\$&") + "%";
         params.push(...fields.map(() => term));
+        if (name === "services") params.push(term);
       }
       if (customer_id) {
         clauses.push("customer_id=?");

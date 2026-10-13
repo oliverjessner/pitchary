@@ -9,6 +9,7 @@ import { api } from "./api.js";
 import { el, button, field, options, labels, minor, decimal } from "./dom.js";
 import { logoEditor } from "./customer-branding.js";
 import { createOfferForm } from "./offer-form.js";
+import { tagPicker } from "./service-tags.js";
 let modalNumber = 0;
 export function showForm(
   title,
@@ -187,10 +188,17 @@ export function createActions(refresh, navigate) {
       toast(err.message, { type: "error", dismissLabel: "Schließen" });
     }
   }
-  function entity(type, row) {
+  async function entity(type, row) {
     const employee = type === "employees";
     const customer = type === "customers";
     const branding = customer ? logoEditor(row) : null;
+    const tags =
+      type === "services"
+        ? tagPicker(
+            await api("/service-tags"),
+            (row?.tags ?? []).map((tag) => tag.id),
+          )
+        : null;
     const fields = [
       field(employee ? "Name" : "Name", "name", {
         value: row?.name ?? "",
@@ -236,6 +244,7 @@ export function createActions(refresh, navigate) {
             }),
           ]),
     ];
+    if (tags) fields.push(tags.node);
     const dialog = showForm(
       row?.id
         ? "Bearbeiten"
@@ -246,6 +255,7 @@ export function createActions(refresh, navigate) {
             : "Dienstleistung anlegen",
       fields,
       async (data) => {
+        if (tags) data.tag_ids = tags.value();
         if (customer) {
           const value = await branding.value();
           delete data.logo;
@@ -269,6 +279,67 @@ export function createActions(refresh, navigate) {
     if (branding)
       dialog.addEventListener("close", branding.cleanup, { once: true });
     return dialog;
+  }
+  function tag(row) {
+    return showForm(
+      row ? "Tag bearbeiten" : "Tag anlegen",
+      [
+        field("Name", "name", {
+          value: row?.name ?? "",
+          required: true,
+          maxlength: 80,
+          autofocus: true,
+        }),
+        field("Farbe", "color", {
+          type: "color",
+          value: row?.color ?? "#4d8dff",
+          required: true,
+        }),
+        field("Notiz", "note", {
+          type: "textarea",
+          value: row?.note ?? "",
+          maxlength: 2000,
+          wide: true,
+        }),
+      ],
+      (data) =>
+        api(`/service-tags${row ? "/" + row.id : ""}`, {
+          method: row ? "PATCH" : "POST",
+          body: data,
+        }),
+      { onSaved: refresh },
+    );
+  }
+  async function assignTags(row) {
+    const picker = tagPicker(
+      await api("/service-tags"),
+      row.tags.map((tag) => tag.id),
+    );
+    return showForm(
+      "Tags zuweisen",
+      [picker.node],
+      () =>
+        api("/services/" + row.id, {
+          method: "PATCH",
+          body: { tag_ids: picker.value() },
+        }),
+      { onSaved: refresh, description: row.name },
+    );
+  }
+  async function deleteTag(row) {
+    if (
+      !(await confirmDialog({
+        title: "Tag löschen?",
+        message: `„${row.name}“ wird gelöscht und von ${row.service_count} ${row.service_count === 1 ? "Dienstleistung" : "Dienstleistungen"} entfernt.`,
+        confirmLabel: "Löschen",
+        cancelLabel: "Abbrechen",
+        variant: "danger",
+      }))
+    )
+      return;
+    await api("/service-tags/" + row.id, { method: "DELETE" });
+    toast("Tag gelöscht.", { type: "success", dismissLabel: "Schließen" });
+    await refresh();
   }
   async function offer({ customer, service, batch = false } = {}) {
     const [customers, services] = await Promise.all([
@@ -588,6 +659,10 @@ export function createActions(refresh, navigate) {
     );
   }
   return {
+    tag,
+    assignTags,
+    deleteTag,
+    manageTags: () => navigate("/services/tags"),
     archive,
     entity,
     offer,

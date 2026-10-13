@@ -1,0 +1,8 @@
+[
+  { "id": "linkedin", "label": "LinkedIn" },
+  { "id": "email", "label": "E-Mail" },
+  { "id": "phone", "label": "Telefon" },
+  { "id": "meeting", "label": "Meeting" },
+  { "id": "internal_software", "label": "Interne Software" },
+  { "id": "other", "label": "Sonstiges" }
+]

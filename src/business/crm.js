@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { transaction } from "../database/database.js";
 import { createRepository } from "../database/repository.js";
 import { website, logo, customerRecord } from "./customer-branding.js";
+import { createServiceTags } from "./service-tags.js";
 import {
   AppError,
   invalid,
@@ -12,7 +13,6 @@ import {
   dateTime,
   filterInput,
   allowedKeys,
-  channels,
   billingTypes,
   currencies,
   statuses,
@@ -31,7 +31,9 @@ export function createCRM(
   { clock = () => new Date().toISOString(), idFactory = randomUUID } = {},
 ) {
   const repo = createRepository(db);
+  const channels = repo.pitchChannels().map(({ id }) => id);
   const now = () => clock();
+  const serviceTags = createServiceTags(db, repo, { now, idFactory });
   const requireRecord = (table, id, active = false) => {
     uuid(id, "id");
     const row = repo.get(table, id);
@@ -62,6 +64,7 @@ export function createCRM(
     allowedKeys(data, [
       ...keys,
       ...(table === "customers" ? ["logo"] : []),
+      ...(table === "services" ? ["tag_ids"] : []),
       ...(table === "employees" && creating ? ["customer_id"] : []),
     ]);
     const out = {};
@@ -133,6 +136,7 @@ export function createCRM(
   }
   const crm = {
     repo,
+    ...serviceTags,
     listEntities(table, filters = {}) {
       const rows = repo.list(table, {
         archived: filters.archived === true || filters.archived === "true",
@@ -141,6 +145,14 @@ export function createCRM(
           ? uuid(filters.customer_id, "customer_id")
           : undefined,
       });
+      if (table === "services") {
+        const tags = new Map();
+        for (const { service_id, ...tag } of repo.serviceTags()) {
+          if (!tags.has(service_id)) tags.set(service_id, []);
+          tags.get(service_id).push(tag);
+        }
+        return rows.map((row) => ({ ...row, tags: tags.get(row.id) ?? [] }));
+      }
       return table === "customers" ? rows.map(customerRecord) : rows;
     },
     entity(table, id) {
@@ -162,31 +174,58 @@ export function createCRM(
       if (table === "services")
         return {
           ...row,
+          tags: repo.serviceTags(id).map(({ service_id, ...tag }) => tag),
           relationships: repo.relationships({ service_id: id }),
         };
       return row;
     },
     createEntity(table, data) {
-      const values = entityData(table, data, true),
-        at = now();
-      const id = idFactory();
-      repo.insert(table, {
-        id,
-        ...values,
-        created_at: at,
-        updated_at: at,
-        archived_at: null,
-      });
-      const result = repo.get(table, id);
-      return table === "customers" ? customerRecord(result) : result;
+      const save = () => {
+        const values = entityData(table, data, true),
+          at = now();
+        const tagIds =
+          table === "services"
+            ? serviceTags.validateTagIds(data.tag_ids ?? [])
+            : null;
+        const id = idFactory();
+        repo.insert(table, {
+          id,
+          ...values,
+          created_at: at,
+          updated_at: at,
+          archived_at: null,
+        });
+        if (tagIds) repo.replaceServiceTags(id, tagIds);
+        const result = repo.get(table, id);
+        if (table === "services")
+          return {
+            ...result,
+            tags: repo.serviceTags(id).map(({ service_id, ...tag }) => tag),
+          };
+        return table === "customers" ? customerRecord(result) : result;
+      };
+      return table === "services" ? transaction(db, save) : save();
     },
     updateEntity(table, id, data) {
-      requireRecord(table, id, true);
-      const result = repo.update(table, id, {
-        ...entityData(table, data),
-        updated_at: now(),
-      });
-      return table === "customers" ? customerRecord(result) : result;
+      const save = () => {
+        requireRecord(table, id, true);
+        const tagIds =
+          table === "services" && data.tag_ids !== undefined
+            ? serviceTags.validateTagIds(data.tag_ids)
+            : null;
+        const result = repo.update(table, id, {
+          ...entityData(table, data),
+          updated_at: now(),
+        });
+        if (tagIds) repo.replaceServiceTags(id, tagIds);
+        if (table === "services")
+          return {
+            ...result,
+            tags: repo.serviceTags(id).map(({ service_id, ...tag }) => tag),
+          };
+        return table === "customers" ? customerRecord(result) : result;
+      };
+      return table === "services" ? transaction(db, save) : save();
     },
     archive(table, id, archived = true) {
       requireRecord(table, id);
@@ -209,7 +248,7 @@ export function createCRM(
     },
     relationships(filters = {}) {
       return repo.relationships({
-        ...filterInput(filters),
+        ...filterInput(filters, channels),
         archived: filters.archived === true || filters.archived === "true",
       });
     },
@@ -540,7 +579,7 @@ export function createCRM(
       });
     },
     activities(filters = {}) {
-      const f = filterInput(filters);
+      const f = filterInput(filters, channels);
       const ids = new Set(
         repo
           .relationships(

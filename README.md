@@ -60,15 +60,19 @@ Pitchary verwendet Kobaltblau (`#4D8DFF`) als Produktakzent über `--oj-accent` 
 
 Die linke Navigation bleibt auf Desktop an ihrer Position und ist auf die Fensterhöhe begrenzt. In niedrigen Fenstern scrollt das Menü intern; auf Mobil wird es oberhalb des Inhalts angezeigt. Der obere Header bleibt beim Scrollen sichtbar. Das Menü enthält Dashboard, Kunden, Dienstleistungen, Pipeline und Analytics. Die Kundentabelle zeigt Name und Logo; die Website bleibt in den Kundendetails und der Bearbeitung verfügbar und kann weiterhin gesucht werden.
 
+Das Dashboard zeigt die vier Kennzahlen als 2×2-Block neben „Letzte Kontakte“. Auf kleinen Fenstern stehen die Kontakte darunter. „Aktuelle Pipeline“ entfällt; die Kennzahlen werden weiterhin aus den gespeicherten Angeboten berechnet.
+
 Die Pipeline nutzt die gesamte verfügbare Containerbreite. Statusspalten sind mindestens 336 px breit und verteilen zusätzlichen Platz gleichmäßig, sobald alle sechs Phasen in das Fenster passen. Auf kleinen Mobilfenstern passen sie in die verfügbare Breite; bei Filterung bleibt eine einzelne Spalte 336 px breit. Karten trennen Kunde/Dienstleistung, Preis/Abrechnung und Kontakt/Verweildauer. Pro Karte wird eine nächste Aktion hervorgehoben. Weitere Phasen sind per horizontalem Scrollen oder über die Pfeilbuttons erreichbar; die Angebotsanzahl folgt Suche und Statusfilter.
 
 `npm install` synchronisiert über `postinstall` die unveränderten gebauten CSS-/ESM-/Font-/Icon-Assets und Lizenzen nach `public/vendor/oj-designsystem/`. Der reproduzierbare Sync kann mit `npm run sync:designsystem` erneut ausgeführt werden; `package-lock.json` fixiert die Paketversion. Bei Installation mit `--ignore-scripts` ist dieser Befehl vor dem Start erforderlich. Das Designsystem wird nicht verändert. Jede dynamische View und jeder Dialog besitzt einen `initOJ()`-Cleanup, der vor dem Entfernen der Oberfläche aufgerufen wird.
 
 ## Datenmodell und fachliche Regeln
 
-Die sechs fachlichen Tabellen sind `customers`, `employees`, `services`, `customer_services`, `customer_service_status_history` und `activities`. Schema-Versionen werden in `PRAGMA user_version` geführt; es gibt keine zusätzliche fachliche Tabelle. Migration 001 erstellt die Tabellen, Indizes und Integritätstrigger; 002 ergänzt die Angebotsarchivierung; 003 ergänzt `website`, `logo_mime` und `logo_data` bei Kunden. Bestehende Kunden erhalten eine leere Website und kein Logo. Migration 004 erweitert die Status-Constraints um `ghosted` und erhält alle Daten einschließlich Historie, Aktivitäten und Zeilenreihenfolge. Der Tabellenumbau erfolgt in einer Transaktion mit Foreign-Key-Prüfung vor dem Commit; danach wird die Foreign-Key-Erzwingung wieder aktiviert.
+Die sechs Kerntabellen sind `customers`, `employees`, `services`, `customer_services`, `customer_service_status_history` und `activities`. `pitch_channels` speichert registrierte Kanäle; `service_tags` und `service_tag_assignments` speichern Tags und deren Zuordnung zu Dienstleistungen. Schema-Versionen werden in `PRAGMA user_version` geführt. Migration 001 erstellt die Kerntabellen, Indizes und Integritätstrigger; 002 ergänzt die Angebotsarchivierung; 003 ergänzt `website`, `logo_mime` und `logo_data` bei Kunden. Bestehende Kunden erhalten eine leere Website und kein Logo. Migration 004 erweitert die Status-Constraints um `ghosted` und erhält alle Daten einschließlich Historie, Aktivitäten und Zeilenreihenfolge. Der Tabellenumbau erfolgt in einer Transaktion mit Foreign-Key-Prüfung vor dem Commit; danach wird die Foreign-Key-Erzwingung wieder aktiviert.
 
 Migration 005 erlaubt das endgültige Löschen eines vollständigen Angebots samt Historie und Aktivitäten. Ein SQLite-Trigger entfernt dessen Ereignisse innerhalb derselben Transaktion. Einzelne Historien- und Aktivitätseinträge bleiben gegen Änderungen und Löschungen geschützt; die Migration erhält alle bestehenden Daten.
+
+Migration 006 ersetzt die festen Kanal-Enums durch Foreign Keys auf `pitch_channels` und erhält alle Angebots-, Historien- und Aktivitätszeilen. Migration 007 ergänzt die Tag-Tabellen. Kanäle aus der JSON-Datei werden beim Start registriert; weitere Einträge benötigen keine zusätzliche Schema-Migration.
 
 - IDs sind UUIDs. Kunden besitzen beliebig viele Mitarbeiter. Dienstleistungen können ohne Kunden existieren.
 - Ein Angebot ist genau eine Kunden-Dienstleistungs-Beziehung. **Kein UNIQUE-Constraint** auf Kunde/Dienstleistung: wiederholte Aufträge sind unabhängig.
@@ -78,11 +82,27 @@ Migration 005 erlaubt das endgültige Löschen eines vollständigen Angebots sam
 - Der erste tatsächliche Pitch hält den zu diesem Zeitpunkt angebotenen Preis in `first_pitched_price_minor` fest. Vor dem Pitch ist dieses Feld NULL. Verhandlungen ändern nur den aktuellen Angebotspreis und erzeugen strukturierte `price_change`-Aktivitäten mit Preisfeld, altem und neuem Betrag.
 - Die Zusage speichert separat `accepted_price_minor`; auch dessen Erfassung und spätere Änderungen werden protokolliert. Nach Zusage wird eine Preisänderung am vereinbarten Preis durchgeführt.
 - Geld wird ausschließlich als nichtnegative **Integer-Cent** gespeichert. v1 unterstützt EUR, USD und GBP (je zwei Nachkommastellen), bis 1.000.000.000.000 Cent je Preis. Eingaben wie `1200,50` werden anhand der Ziffern verarbeitet. Währung, Abrechnungsmodell und ursprünglicher Pitch-Kanal sind nach dem ersten Pitch festgeschrieben.
-- Abrechnung: `one_time`, `monthly`, `yearly`, `hourly`, `daily`. Kanäle: `linkedin`, `email`, `phone`, `meeting`, `other`.
+- Abrechnung: `one_time`, `monthly`, `yearly`, `hourly`, `daily`. Standardkanäle: `linkedin`, `email`, `phone`, `meeting`, `internal_software`, `other`.
 - Absagegründe werden als JSON mit `code` und optionaler `note` gespeichert: `budget`, `timing`, `competitor`, `no_need`, `no_response`, `other`. Die jeweilige Absage bleibt in der Historie erhalten, auch nach Wiederaufnahme.
 - Kontaktaktivitäten: `pitch`, `follow_up`, `call`, `meeting`, `note`. Sie ändern keinen Status. Ein initialer Pitch ist zuerst über die Statusaktion zu erfassen. Zeitpunkte sind ISO-8601 mit Zeitzone, Speicherung in UTC, Anzeige in der Browser-Zeitzone.
 - Historie und Aktivitäten sind append-only und zusätzlich durch SQLite-Trigger gegen reguläres UPDATE/DELETE geschützt. Archivierung erhält alle Geschäftsdaten. Foreign Keys, WAL und Busy Timeout (5 Sekunden) sind aktiv.
 - In den Angebotsdetails löscht **Löschen** nach Bestätigung das gesamte Angebot inklusive Statushistorie, Kontakt- und Preisaktivitäten, auch bei archivierten Angeboten. Kunden, Dienstleistungen, Mitarbeiter und andere Angebote bleiben erhalten. Gelöschte Angebote werden nicht mehr in Analytics ausgewertet. Nach erfolgreichem Löschen öffnet sich die Pipeline; bei einem Fehler bleibt die Detailansicht erhalten.
+
+## Pitch-Kanäle erweitern
+
+Die gemeinsame Konfiguration liegt in [public/config/pitch-channels.json](public/config/pitch-channels.json). Backend-Validierung, Formulare, Aktivitäten und Analytics verwenden dieselben registrierten Kanäle. Zum Ergänzen einen Eintrag hinzufügen und den Server neu starten:
+
+```json
+{ "id": "referral", "label": "Empfehlung" }
+```
+
+`id` beginnt mit einem Kleinbuchstaben und darf Kleinbuchstaben, Ziffern und Unterstriche enthalten (maximal 64 Zeichen). `label` ist der sichtbare Name (maximal 80 Zeichen). Bestehende IDs beibehalten; sichtbare Namen können angepasst werden. Bereits registrierte Kanäle bleiben für gespeicherte Vorgänge erhalten. Ungültige/mehrfach vergebene IDs und leere Namen verhindern den Start mit einer erklärenden Fehlermeldung.
+
+## Dienstleistungs-Tags
+
+Unter **Dienstleistungen → Tags verwalten** werden Tags mit Name, optionaler Notiz und Farbe angelegt, bearbeitet oder gelöscht. Für die Eindeutigkeitsprüfung werden Namen normalisiert und in Kleinschreibung verglichen. Namen sind auf 80, Notizen auf 2000 Zeichen begrenzt; Farben verwenden `#RRGGBB`.
+
+Tags können beim Anlegen/Bearbeiten einer Dienstleistung ausgewählt werden. In deren Details öffnet **Tags bearbeiten** die Zuweisung. Mehrere Dienstleistungen können dieselben Tags verwenden. Die Liste zeigt farbige Tags und unterstützt die Suche nach Tag-Namen; die Details zeigen zusätzlich die Notizen. Entfernen einer Zuweisung verändert den globalen Tag nicht. Löschen eines Tags entfernt nach Bestätigung alle Zuordnungen, einschließlich archivierter Dienstleistungen. Änderungen an Dienstleistung und Zuordnungen werden gemeinsam gespeichert oder vollständig zurückgerollt.
 
 ## Analytics-Definitionen
 

@@ -98,16 +98,67 @@
 .metrics-grid > * {
   align-content: start;
 }
-.status-overview a > span {
-  display: flex;
-  justify-content: space-between;
-  inline-size: 100%;
-  gap: var(--oj-space-4);
-}
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--oj-space-4);
+  align-items: start;
+}
+.dashboard-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.service-identity {
+  gap: var(--oj-space-2);
+}
+.service-tag-list,
+.service-tag-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--oj-space-2);
+}
+.service-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--oj-space-2);
+  max-inline-size: 100%;
+  padding: var(--oj-space-1) var(--oj-space-2);
+  border: 1px solid color-mix(in srgb, var(--tag-color) 45%, var(--oj-border));
+  border-radius: var(--oj-radius-full);
+  background: color-mix(in srgb, var(--tag-color) 12%, var(--oj-surface));
+  color: var(--oj-text);
+  font-size: var(--oj-text-xs);
+  overflow-wrap: anywhere;
+}
+.service-tag-dot {
+  flex-shrink: 0;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: var(--tag-color);
+}
+.tag-picker {
+  margin: 0;
+  padding: var(--oj-space-3);
+  border: 1px solid var(--oj-border);
+  border-radius: var(--oj-radius-md);
+}
+.service-tag-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--oj-space-2);
+  max-inline-size: 100%;
+  padding: var(--oj-space-2);
+  border: 1px solid var(--oj-border);
+  border-radius: var(--oj-radius-sm);
+  cursor: pointer;
+}
+.service-tag-choice:has(input:checked) {
+  border-color: var(--oj-accent);
+  background: var(--oj-surface-active);
+}
+.service-tag-choice input {
+  flex-shrink: 0;
+  accent-color: var(--oj-accent);
 }
 .detail-grid {
   display: grid;
@@ -486,17 +537,6 @@ img.customer-logo {
   display: flex;
   flex-wrap: wrap;
   gap: var(--oj-space-2);
-}
-.status-overview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--oj-space-4);
-}
-.status-overview a {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--oj-space-4);
 }
 .small-list {
   list-style: none;

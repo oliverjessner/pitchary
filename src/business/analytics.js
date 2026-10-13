@@ -4,7 +4,10 @@ const average = (values) =>
   values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 export function createAnalytics(repo) {
   return (filters) => {
-    const f = filterInput(filters);
+    const f = filterInput(
+      filters,
+      repo.pitchChannels().map(({ id }) => id),
+    );
     delete f.archived;
     const rows = repo.relationships(f);
     const histories = new Map();

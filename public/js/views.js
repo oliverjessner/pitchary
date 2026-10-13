@@ -4,6 +4,7 @@ import {
   customerLogo,
   customerWebsite,
 } from "./customer-branding.js";
+import { tagBadge, tagList } from "./service-tags.js";
 import {
   el,
   icon,
@@ -272,60 +273,34 @@ export async function dashboard(actions) {
     api("/activities"),
   ]);
   const s = analytics.summary;
+  const contacts = activities
+    .filter((a) => a.type !== "price_change")
+    .slice(0, 4);
   return [
     heading("Dashboard", "Ein Blick auf deine Kunden und laufenden Angebote."),
     el(
       "div",
-      { class: "metrics-grid" },
-      metric(
-        "Angebote gesamt",
-        s.created,
-        "Alle Vorgänge, einschließlich Archiv",
-      ),
-      metric("Tatsächlich gepitcht", s.pitched),
-      metric("Gewonnene Angebote", s.won, "Angenommen und erledigt"),
-      metric(
-        "Abschlussquote",
-        percent(s.win_rate),
-        "Unter entschiedenen Angeboten",
-      ),
-    ),
-    el(
-      "div",
       { class: "dashboard-grid" },
-      panel(
-        "Aktuelle Pipeline",
-        el(
-          "div",
-          { class: "status-overview" },
-          Object.entries(labels.status).map(([status, label]) =>
-            link(
-              el(
-                "span",
-                {},
-                label,
-                el(
-                  "span",
-                  { class: "oj-badge" },
-                  rows.filter((r) => r.status === status).length,
-                ),
-              ),
-              "#/pipeline?status=" + status,
-            ),
-          ),
+      el(
+        "div",
+        { class: "metrics-grid dashboard-metrics" },
+        metric(
+          "Angebote gesamt",
+          s.created,
+          "Alle Vorgänge, einschließlich Archiv",
         ),
-        el(
-          "p",
-          { class: "oj-small oj-muted" },
-          "Aktive Angebote. Archivierte Vorgänge bleiben in Analytics erhalten.",
+        metric("Tatsächlich gepitcht", s.pitched),
+        metric("Gewonnene Angebote", s.won, "Angenommen und erledigt"),
+        metric(
+          "Abschlussquote",
+          percent(s.win_rate),
+          "Unter entschiedenen Angeboten",
         ),
       ),
       panel(
         "Letzte Kontakte",
-        activities.length
-          ? activityList(
-              activities.filter((a) => a.type !== "price_change").slice(0, 4),
-            )
+        contacts.length
+          ? activityList(contacts)
           : el("p", { class: "oj-muted" }, "Noch keine Kontaktaktivitäten."),
       ),
     ),
@@ -348,7 +323,7 @@ export async function entityList(type, actions) {
       type: "search",
       placeholder: isCustomer
         ? "Name, Website oder Notiz"
-        : "Dienstleistung oder Notiz",
+        : "Dienstleistung, Notiz oder Tag",
     }),
     archived = field("Ansicht", "archived", {
       value: "false",
@@ -364,7 +339,15 @@ export async function entityList(type, actions) {
   function render() {
     const term = search.querySelector("input").value.toLocaleLowerCase();
     const filtered = rows.filter((r) =>
-      (r.name + " " + r.note + " " + (r.website ?? ""))
+      (
+        r.name +
+        " " +
+        r.note +
+        " " +
+        (r.website ?? "") +
+        " " +
+        (r.tags ?? []).map((tag) => tag.name).join(" ")
+      )
         .toLocaleLowerCase()
         .includes(term),
     );
@@ -376,7 +359,12 @@ export async function entityList(type, actions) {
         filtered.map((r) => [
           isCustomer
             ? customerIdentity(r)
-            : link(r.name, "#/" + type + "/" + r.id),
+            : el(
+                "div",
+                { class: "oj-stack service-identity" },
+                link(r.name, "#/" + type + "/" + r.id),
+                tagList(r.tags),
+              ),
           el("span", { class: "note-text oj-small" }, r.note || "–"),
           datetime(r.created_at),
           archiveMode
@@ -418,6 +406,11 @@ export async function entityList(type, actions) {
         ? "Kunden und ihre Ansprechpartner an einem Ort."
         : "Wiederverwendbare Leistungen mit eigenständigen Angeboten.",
       [
+        !isCustomer
+          ? button("Tags verwalten", () => actions.manageTags(), {
+              iconName: "tags",
+            })
+          : null,
         button(
           isCustomer ? "Kunde anlegen" : "Dienstleistung anlegen",
           () => actions.entity(type),
@@ -577,6 +570,30 @@ export async function serviceDetail(id, actions) {
       el("p", { class: "note-text" }, row.note || "Noch keine Notiz."),
     ),
     panel(
+      "Tags",
+      !row.archived_at
+        ? button("Tags bearbeiten", () => actions.assignTags(row), {
+            iconName: "tags",
+          })
+        : null,
+      row.tags.length
+        ? el(
+            "ul",
+            { class: "small-list" },
+            row.tags.map((tag) =>
+              el(
+                "li",
+                {},
+                tagBadge(tag),
+                tag.note
+                  ? el("p", { class: "note-text oj-small oj-muted" }, tag.note)
+                  : null,
+              ),
+            ),
+          )
+        : el("p", { class: "oj-muted" }, "Noch keine Tags zugewiesen."),
+    ),
+    panel(
       "Kundenbeziehungen",
       !row.archived_at
         ? el(
@@ -592,6 +609,40 @@ export async function serviceDetail(id, actions) {
           )
         : null,
       offerTable(row.relationships),
+    ),
+  ];
+}
+export async function serviceTagManagement(actions) {
+  const tags = await api("/service-tags");
+  return [
+    el(
+      "nav",
+      { class: "oj-breadcrumb", "aria-label": "Brotkrumennavigation" },
+      link("Dienstleistungen", "#/services"),
+    ),
+    heading("Tags", "Tags für Dienstleistungen anlegen und bearbeiten.", [
+      button("Tag anlegen", () => actions.tag(), {
+        primary: true,
+        iconName: "plus",
+      }),
+    ]),
+    table(
+      "Dienstleistungs-Tags",
+      ["Tag", "Notiz", "Dienstleistungen", "Aktionen"],
+      tags.map((tag) => [
+        tagBadge(tag),
+        el("span", { class: "note-text oj-small" }, tag.note || "–"),
+        tag.service_count,
+        el(
+          "div",
+          { class: "section-actions" },
+          button("Bearbeiten", () => actions.tag(tag), { compact: true }),
+          button("Löschen", () => actions.deleteTag(tag), {
+            compact: true,
+            danger: true,
+          }),
+        ),
+      ]),
     ),
   ];
 }

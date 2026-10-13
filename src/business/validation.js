@@ -1,3 +1,4 @@
+import { pitchChannels } from "../config/pitch-channels.js";
 export const statuses = [
   "open",
   "pitched",
@@ -6,7 +7,7 @@ export const statuses = [
   "done",
   "rejected",
 ];
-export const channels = ["linkedin", "email", "phone", "meeting", "other"];
+export const channels = pitchChannels.map(({ id }) => id);
 export const billingTypes = [
   "one_time",
   "monthly",
@@ -92,14 +93,14 @@ export function dateTime(value, now, earliest, field = "occurred_at") {
     );
   return normalized;
 }
-export function filterInput(filters = {}) {
+export function filterInput(filters = {}, channelChoices = channels) {
   const out = {};
   for (const key of ["customer_id", "service_id"])
     if (filters[key]) out[key] = uuid(filters[key], key);
   if (filters.pitch_channel)
     out.pitch_channel = choice(
       filters.pitch_channel,
-      channels,
+      channelChoices,
       "pitch_channel",
     );
   if (filters.status) out.status = choice(filters.status, statuses, "status");

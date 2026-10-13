@@ -10,6 +10,19 @@ export async function registerAPI(app, crm) {
   const schema = { params: idSchema };
   const bodySchema = { params: idSchema, body: object };
   app.get("/api/health", () => ({ status: "ok", application: "pitchary" }));
+  app.get("/api/pitch-channels", () => crm.repo.pitchChannels());
+  app.get("/api/service-tags", () => crm.listTags());
+  app.post(
+    "/api/service-tags",
+    { schema: { body: object } },
+    (request, reply) => reply.code(201).send(crm.createTag(request.body)),
+  );
+  app.patch("/api/service-tags/:id", { schema: bodySchema }, (request) =>
+    crm.updateTag(request.params.id, request.body),
+  );
+  app.delete("/api/service-tags/:id", { schema }, (request) =>
+    crm.deleteTag(request.params.id),
+  );
   app.get("/api/customers/:id/logo", { schema }, (request, reply) => {
     const image = crm.customerLogo(request.params.id);
     return reply

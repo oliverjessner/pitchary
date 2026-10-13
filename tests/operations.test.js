@@ -22,7 +22,15 @@ test("online backup includes WAL data; restore validates and never overwrites fi
       website: "https://example.com",
       logo: demoCustomerLogo,
     }),
-    s = crm.createEntity("services", { name: "Backup service" });
+    tag = crm.createTag({
+      name: "Backup tag",
+      note: "Keep tags",
+      color: "#ff6b35",
+    }),
+    s = crm.createEntity("services", {
+      name: "Backup service",
+      tag_ids: [tag.id],
+    });
   const r = crm.createRelationship({
     customer_id: c.id,
     service_id: s.id,
@@ -76,6 +84,23 @@ test("online backup includes WAL data; restore validates and never overwrites fi
     assert.deepEqual(
       Buffer.from(restoredCustomer.logo_data),
       Buffer.from(demoCustomerLogo.data_base64, "base64"),
+    );
+    assert.equal(
+      copy.prepare("SELECT note FROM service_tags WHERE id=?").get(tag.id).note,
+      "Keep tags",
+    );
+    assert.equal(
+      copy.prepare("SELECT color FROM service_tags WHERE id=?").get(tag.id)
+        .color,
+      "#ff6b35",
+    );
+    assert.equal(
+      copy
+        .prepare(
+          "SELECT tag_id FROM service_tag_assignments WHERE service_id=?",
+        )
+        .get(s.id).tag_id,
+      tag.id,
     );
   } finally {
     copy.close();

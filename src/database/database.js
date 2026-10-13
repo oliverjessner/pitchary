@@ -2,11 +2,19 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  loadPitchChannels,
+  syncPitchChannels,
+} from "../config/pitch-channels.js";
 export const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
 export const defaultDatabasePath = path.resolve(
   process.env.DATABASE_PATH || path.join(projectRoot, "data/pitchary.sqlite"),
 );
-export function openDatabase(filename = defaultDatabasePath) {
+export function openDatabase(
+  filename = defaultDatabasePath,
+  { channelConfigPath } = {},
+) {
+  const channelDefinitions = loadPitchChannels(channelConfigPath);
   if (filename !== ":memory:")
     mkdirSync(path.dirname(path.resolve(filename)), {
       recursive: true,
@@ -47,7 +55,13 @@ export function openDatabase(filename = defaultDatabasePath) {
     }
     current = version;
   }
-  return db;
+  try {
+    transaction(db, () => syncPitchChannels(db, channelDefinitions));
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 export function transaction(db, callback) {
   db.exec("BEGIN IMMEDIATE");

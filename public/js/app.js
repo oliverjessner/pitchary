@@ -46,9 +46,12 @@ async function render(focus = true) {
         ? await views.customerDetail(id, guarded)
         : await views.entityList("customers", guarded);
     else if (section === "services")
-      content = id
-        ? await views.serviceDetail(id, guarded)
-        : await views.entityList("services", guarded);
+      content =
+        id === "tags"
+          ? await views.serviceTagManagement(guarded)
+          : id
+            ? await views.serviceDetail(id, guarded)
+            : await views.entityList("services", guarded);
     else if (section === "pipeline")
       content = await views.pipeline(guarded, params);
     else if (section === "relationships" && id)

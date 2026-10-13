@@ -9,7 +9,7 @@ import { openDatabase, projectRoot } from "../src/database/database.js";
 import { createCRM } from "../src/business/crm.js";
 import { createAnalytics } from "../src/business/analytics.js";
 import { buildApp } from "../src/server/app.js";
-import { seedDemo } from "../scripts/seed.js";
+import { seedLegacyDemo } from "./fixtures/legacy-database.js";
 
 function fixture(t) {
   const db = openDatabase(":memory:");
@@ -205,7 +205,7 @@ test("migration 005 preserves a populated schema 4 database and keeps individual
       ),
     );
   db.exec("PRAGMA foreign_keys=ON; PRAGMA user_version=4");
-  seedDemo(db);
+  seedLegacyDemo(db);
   const tables = [
     "customers",
     "employees",
@@ -220,7 +220,7 @@ test("migration 005 preserves a populated schema 4 database and keeps individual
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 5);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 7);
     tables.forEach((table, index) =>
       assert.deepEqual(
         db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),

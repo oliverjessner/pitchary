@@ -2,23 +2,37 @@
 
 Basis: `http://127.0.0.1:3031/api`. JSON-Body mit `Content-Type: application/json`. GET liefert ein Objekt oder ein Array; POST-Erstellung liefert **201**, Änderungen/Archivierung **200**. DELETE auf den Ressourcen-Endpunkten archiviert. Der explizite Endpunkt `/customer-services/:id/permanent` löscht ein Angebot endgültig. Es gibt keine regulären Änderungs-/Löschendpunkte für einzelne Historien- oder Aktivitätseinträge.
 
-| Ressource         | Endpunkte                                                                                                       |
-| ----------------- | --------------------------------------------------------------------------------------------------------------- |
-| Kunden            | `GET/POST /customers`, `GET/PATCH/DELETE /customers/:id`, `POST /customers/:id/restore`                         |
-| Kundenlogo        | `GET /customers/:id/logo` liefert die gespeicherten Bildbytes mit passendem Content-Type                        |
-| Mitarbeiter       | `GET/POST /employees`, `GET/PATCH/DELETE /employees/:id`, `POST /employees/:id/restore`                         |
-| Dienstleistungen  | `GET/POST /services`, `GET/PATCH/DELETE /services/:id`, `POST /services/:id/restore`                            |
-| Angebote          | `GET/POST /customer-services`, `GET/PATCH/DELETE /customer-services/:id`, `POST /customer-services/:id/restore` |
-| Angebot löschen   | `DELETE /customer-services/:id/permanent` entfernt das Angebot mit allen zugehörigen Ereignissen                |
-| Mehrfachzuweisung | `POST /customer-services/batch` mit `customer_ids` statt `customer_id`                                          |
-| Status            | `POST /customer-services/:id/status`                                                                            |
-| Preise            | `POST /customer-services/:id/prices`                                                                            |
-| Kontakte          | `GET/POST /customer-services/:id/activities`                                                                    |
-| Alle Aktivitäten  | `GET /activities`                                                                                               |
-| Analytics         | `GET /analytics`                                                                                                |
-| Gesundheit        | `GET /health`                                                                                                   |
+| Ressource            | Endpunkte                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Kunden               | `GET/POST /customers`, `GET/PATCH/DELETE /customers/:id`, `POST /customers/:id/restore`                         |
+| Kundenlogo           | `GET /customers/:id/logo` liefert die gespeicherten Bildbytes mit passendem Content-Type                        |
+| Mitarbeiter          | `GET/POST /employees`, `GET/PATCH/DELETE /employees/:id`, `POST /employees/:id/restore`                         |
+| Dienstleistungen     | `GET/POST /services`, `GET/PATCH/DELETE /services/:id`, `POST /services/:id/restore`                            |
+| Angebote             | `GET/POST /customer-services`, `GET/PATCH/DELETE /customer-services/:id`, `POST /customer-services/:id/restore` |
+| Angebot löschen      | `DELETE /customer-services/:id/permanent` entfernt das Angebot mit allen zugehörigen Ereignissen                |
+| Mehrfachzuweisung    | `POST /customer-services/batch` mit `customer_ids` statt `customer_id`                                          |
+| Status               | `POST /customer-services/:id/status`                                                                            |
+| Preise               | `POST /customer-services/:id/prices`                                                                            |
+| Kontakte             | `GET/POST /customer-services/:id/activities`                                                                    |
+| Alle Aktivitäten     | `GET /activities`                                                                                               |
+| Analytics            | `GET /analytics`                                                                                                |
+| Gesundheit           | `GET /health`                                                                                                   |
+| Pitch-Kanäle         | `GET /pitch-channels` liefert die registrierten IDs und Anzeigenamen                                            |
+| Dienstleistungs-Tags | `GET/POST /service-tags`, `PATCH/DELETE /service-tags/:id`                                                      |
 
 Listen für Kunden/Mitarbeiter/Dienstleistungen unterstützen `search` und `archived=true`; Mitarbeiter zusätzlich `customer_id`. Angebote unterstützen `customer_id`, `service_id`, `pitch_channel`, `status`, `from`, `to` und `archived=true`. Standardmäßig werden aktive Datensätze gelistet. Kundendetails enthalten aktive/archivierte Mitarbeiter sowie alle Angebote inklusive Historie und Aktivitäten. Angebotsdetails enthalten Timeline-Daten, Statusphasen und erste Pitch-/Zusagezeitpunkte.
+
+Dienstleistungslisten und -details enthalten `tags: [{id,name,note,color}]`. `search` findet auch zugewiesene Tag-Namen. `POST/PATCH /services` akzeptiert zusätzlich `tag_ids` (bis zu 100 UUIDs; Duplikate werden zusammengefasst). Beim PATCH erhält ein weggelassenes `tag_ids` die Zuordnung; `[]` entfernt alle Zuordnungen. Änderungen sind atomar mit den übrigen Dienstleistungsfeldern.
+
+`GET /pitch-channels` liefert `[{id,label}]`. Die gemeinsame Konfiguration ist `public/config/pitch-channels.json`; neue IDs werden beim Serverstart registriert. `internal_software` hat das Label „Interne Software“ und kann für Angebote, Aktivitäten und Filter verwendet werden. Unregistrierte Kanäle werden fachlich und durch Foreign Keys abgewiesen.
+
+Tag anlegen mit `POST /service-tags` (**201**):
+
+```json
+{ "name": "Wartung", "note": "Wiederkehrende Betreuung", "color": "#4d8dff" }
+```
+
+Name erforderlich (maximal 80 Zeichen), Notiz optional (maximal 2000 Zeichen), Farbe optional mit Standard `#4d8dff`. Namen sind nach Unicode-Normalisierung und Kleinschreibung eindeutig; doppelte Namen/ungültige Farben liefern **422**. Die Liste enthält zusätzlich `service_count`, einschließlich archivierter Dienstleistungen. PATCH erlaubt `name`, `note` und `color`. DELETE entfernt den Tag mit allen Zuordnungen und liefert **200**: `{id,deleted:true}`. Fehlende Tags liefern **404**.
 
 Analytics unterstützt `from`/`to` (`YYYY-MM-DD`, inklusive, Angebots-Anlagedatum UTC), `customer_id`, `service_id` und `pitch_channel`. Archivierte Angebote sind immer enthalten. Aktivitäten unterstützen dieselben Filter; hier filtern die Datumsgrenzen den Aktivitätszeitpunkt.
 

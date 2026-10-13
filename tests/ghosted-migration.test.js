@@ -7,7 +7,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { openDatabase, projectRoot } from "../src/database/database.js";
 import { createCRM } from "../src/business/crm.js";
-import { seedDemo } from "../scripts/seed.js";
+import { seedLegacyDemo } from "./fixtures/legacy-database.js";
 
 function previousDatabase(t) {
   const folder = mkdtempSync(path.join(os.tmpdir(), "pitchary-ghosted-"));
@@ -27,7 +27,7 @@ function previousDatabase(t) {
       ),
     );
   db.exec("PRAGMA user_version=3");
-  seedDemo(db);
+  seedLegacyDemo(db);
   return { db, filename };
 }
 
@@ -47,14 +47,17 @@ test("migration 004 preserves schema 3 rows, logos, archives, history and databa
   const archived = db
     .prepare("SELECT id FROM customer_services WHERE id!=? LIMIT 1")
     .get(row.id);
-  createCRM(db).archive("customer_services", archived.id);
+  db.prepare("UPDATE customer_services SET archived_at=? WHERE id=?").run(
+    "2026-10-01T09:00:00.000Z",
+    archived.id,
+  );
   const before = tables.map((table) =>
     db.prepare(`SELECT rowid, * FROM ${table} ORDER BY rowid`).all(),
   );
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 5);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 7);
     assert.equal(db.prepare("PRAGMA foreign_keys").get().foreign_keys, 1);
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
     assert.equal(

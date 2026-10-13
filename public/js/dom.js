@@ -1,3 +1,5 @@
+import { api } from "./api.js";
+const pitchChannels = await api("/pitch-channels");
 export function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
@@ -63,13 +65,9 @@ export const labels = {
     done: "Erledigt",
     rejected: "Abgelehnt",
   },
-  channel: {
-    linkedin: "LinkedIn",
-    email: "E-Mail",
-    phone: "Telefon",
-    meeting: "Meeting",
-    other: "Sonstiges",
-  },
+  channel: Object.fromEntries(
+    pitchChannels.map(({ id, label }) => [id, label]),
+  ),
   billing: {
     one_time: "Einmalig",
     monthly: "Monatlich",

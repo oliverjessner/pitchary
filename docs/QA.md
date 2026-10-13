@@ -1,14 +1,17 @@
 # Lokale Verifikation
 
-Geprüft am 12. Oktober 2026 auf macOS mit Node.js 26.10.0.
+Geprüft am 13. Oktober 2026 auf macOS mit Node.js 26.10.0.
 
-- `npm test`: **35 Tests bestanden**, keine Fehler oder übersprungenen Tests.
-- `npm run test:ui`: **24 Tests bestanden**, je zwölf Abläufe in Chromium und WebKit.
+- `npm test`: **43 Tests bestanden**, keine Fehler oder übersprungenen Tests.
+- `npm run test:ui`: **30 Tests bestanden**, je fünfzehn Abläufe in Chromium und WebKit.
 - `npm run format:check` und `git diff --check`: bestanden.
-- Große/normalgroße Bildschirme (2560px/1440px), kompakte/niedrige Fenster (737px bzw. 1000 × 360px) und Mobil (390px und 320px): fünf Menübereiche, zusätzliche Aktivitätsübersicht, Kunden-, Dienstleistungs- und Angebotsdetails sowie Aktivitäts-, Kundenlogo-, Angebots- und Löschdialoge. **74 aktuelle Fixture-Screenshots** in `artifacts/screenshots/`.
+- Große/normalgroße Bildschirme (2560px/1440px), kompakte/niedrige Fenster (737px bzw. 1000 × 360px) und Mobil (390px und 320px): fünf Menübereiche, zusätzliche Aktivitätsübersicht, Kunden-, Dienstleistungs- und Angebotsdetails sowie Aktivitäts-, Kundenlogo-, Angebots-, Tag- und Löschdialoge. **84 aktuelle Fixture-Screenshots** in `artifacts/screenshots/`.
 - Axe-Prüfungen für WCAG 2 A/AA und 2.1 AA: keine gemeldeten Verstöße in den geprüften Ansichten/Dialogen. Keine JavaScript- oder fehlgeschlagenen Asset-Anfragen im geprüften Browserablauf.
 - Vollständiger UI-Ablauf: Stammdaten/Kontakt anlegen, Angebot erstellen, Pitch, Preisverhandlung, Follow-up, Absage, Wiederaufnahme, Zusage, Abschluss, Reload, Archivierung und Wiederherstellung.
 - Zusätzlich: Mehrfachzuweisung, Suche und Filter, sichere Textdarstellung, Dialogfokus und Escape.
+- Dashboard: keine „Aktuelle Pipeline“, vier Kennzahlen als 2×2-Block neben „Letzte Kontakte“ auf Desktop und darüber auf Mobil; Werte bleiben aus Analytics abgeleitet.
+- Kanäle: „Interne Software“ in Angebotsformular, Aktivitätsformular, Detailanzeige und Analytics-Filter. Ein zusätzlicher JSON-Kanal lässt sich ohne Schemaänderung registrieren und verwenden. Ungültige JSON-Einträge werden abgewiesen; gespeicherte Kanalreferenzen und alle alten Daten überstehen Migration 006.
+- Tags: Anlegen mit Name/Notiz/Farbe, native Farbauswahl, Mehrfachzuweisung, Abbrechen ohne Änderung, Reload, Bearbeiten und Namenssuche, sichere Notizdarstellung und bestätigtes Löschen. Farbanzeige und Axe-Prüfungen auf Desktop/Mobil in Chromium und WebKit bestanden. Backend prüft Normalisierung/Name-Eindeutigkeit, ungültige Farben, gemeinsame Nutzung, archivierte Dienstleistungen, Transaktions-Rollback und Persistenz.
 - Angebotsdialoge: ein/mehrere Kunden, Kontext der Dienstleistung, Auswahlzähler, Preis pro Kunde mit Währung und Abrechnung, gleiche Eingabehöhen, fest sichtbare Aktionen und Tastaturfokus. Suchfilter erhalten verdeckte Auswahlen; ungültige Preise blockieren die Anlage. Der Speichertest prüft zwei unabhängige Angebote mit identischen Konditionen.
 - Kunden-Website und Logos: PNG-Upload, lesbare Vorschau und Bildanzeige, JPEG-/WebP-Ersatz, Entfernen, Abbrechen ohne Datenänderung, ungültige Bilder und Website-Suche. Alte Schema-2-Kunden bleiben nach Migration 003 erhalten; neue Felder und Logos überstehen das erneute Öffnen der Datenbank.
 - Kundentabelle ohne Website unter dem Namen; Website und Logo bleiben in den Details verfügbar. Ghosted: eigene Pipeline-Spalte, Filter, Notiz und Historie, Wiederaufnahme mit Begründung und spätere Zusage/Absage. Analytics zählt Ghosted als unentschieden und schließt es aus dem Nenner der Abschlussquote aus.
@@ -18,7 +21,8 @@ Geprüft am 12. Oktober 2026 auf macOS mit Node.js 26.10.0.
 - Migration 004: bestehende Schema-3-Zeilen inklusive Logos, Archivierung, Aktivitäten und Reihenfolge bleiben erhalten. Foreign Keys und unveränderliche Historie bleiben aktiv; ein fehlgeschlagener Tabellenumbau wird vollständig zurückgerollt. Der lokale Bestand wurde mit dem vorab erstellten Backup verglichen: alle sechs Tabellen unverändert, Integritätsprüfung erfolgreich.
 - Endgültiges Löschen von aktiven und archivierten Angeboten: ausdrückliche Bestätigung mit Angebots- und Kundennamen, Abbrechen/Escape ohne Löschrequest, Fokuswiederherstellung, sichtbarer Fehler ohne Navigation, erfolgreiche Rückkehr zur Pipeline und Reload. Nur die gewählte Beziehung mit ihren Ereignissen wird entfernt; andere Angebote und Stammdaten bleiben erhalten. Ein erzwungener Fehler bei der Historienbereinigung rollt Beziehung, Aktivitäten und Historie gemeinsam zurück. Löschung bleibt nach erneutem Öffnen der Datenbank erhalten.
 - Migration 005 erhält alle Zeilen der Schema-4-Datenbank und schützt einzelne Ereignisse weiterhin gegen Änderungen/Löschungen. Der lokale Datenbestand wurde mit dem neuen Backup verglichen: alle sechs Tabellen unverändert, Foreign-Key- und Integritätsprüfung erfolgreich.
-- SQLite-Backup bei offener WAL-Verbindung und Restore in neue Datei einschließlich Website und Logo-BLOB geprüft; vorhandene Ziele und fremde Datenbanken werden verweigert.
+- Migrationen 006/007: Schema-5-Kerndaten inklusive Zeilenreihenfolge, Historie, Aktivitäten und Logos bleiben vollständig erhalten. Foreign Keys, Historien-/Aktivitätsschutz und Angebotslöschung bleiben aktiv. Der lokale Datenbestand wurde mit dem Backup vom 13. Oktober abgeglichen: alle sechs Kerntabellen unverändert, Integritätsprüfung `ok`, keine Foreign-Key-Verstöße.
+- SQLite-Backup bei offener WAL-Verbindung und Restore in neue Datei einschließlich Website, Logo-BLOB und Tag-Zuordnungen geprüft; vorhandene Ziele und fremde Datenbanken werden verweigert.
 
 Der Browserbericht liegt in [artifacts/browser-report/index.html](../artifacts/browser-report/index.html). Alle Tests verwenden temporäre oder In-Memory-Datenbanken. Der normale Datenbestand wurde nicht mit Demo-Daten gefüllt.
 
