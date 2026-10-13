@@ -10,6 +10,7 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng
       - run: npm run format:check
       - run: npm test
       - run: npx playwright install --with-deps chromium webkit

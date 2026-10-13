@@ -2,13 +2,52 @@ import { initOJ, toast } from "../vendor/oj-designsystem/index.js";
 import { el, heading, button } from "./dom.js";
 import { createActions } from "./dialogs.js";
 import * as views from "./views.js";
+import * as financeViews from "./finance.js";
 const main = document.querySelector("#main");
 let cleanup = () => {},
-  generation = 0;
+  generation = 0,
+  navigationFrame = 0;
+function revealPipelineNavigation(token) {
+  if (
+    !main.classList.contains("view-pipeline") ||
+    !window.matchMedia("(max-width: 700px)").matches
+  )
+    return;
+  document.fonts.ready.then(() => {
+    if (token !== generation) return;
+    cancelAnimationFrame(navigationFrame);
+    navigationFrame = requestAnimationFrame(() => {
+      navigationFrame = 0;
+      if (
+        token !== generation ||
+        !main.classList.contains("view-pipeline") ||
+        !window.matchMedia("(max-width: 700px)").matches
+      )
+        return;
+      const current = document.querySelector(
+        'nav[aria-label="Hauptnavigation"] a[aria-current="page"]',
+      );
+      if (!current) return;
+      const nav = current.parentElement,
+        target = current.getBoundingClientRect(),
+        bounds = nav.getBoundingClientRect();
+      const left =
+        target.left < bounds.left
+          ? target.left - bounds.left
+          : target.right > bounds.right
+            ? target.right - bounds.right
+            : 0;
+      if (left) nav.scrollBy({ left, behavior: "instant" });
+    });
+  });
+}
 const navigate = (path) => {
   location.hash = "#" + path;
 };
-const actions = createActions(() => render(false), navigate);
+const actions = {
+  ...createActions(() => render(false), navigate),
+  ...financeViews.createFinanceActions(() => render(false), navigate),
+};
 function safeActions(actions) {
   return Object.fromEntries(
     Object.entries(actions).map(([name, fn]) => [
@@ -24,6 +63,7 @@ function safeActions(actions) {
 }
 const guarded = safeActions(actions);
 async function render(focus = true) {
+  cancelAnimationFrame(navigationFrame);
   const token = ++generation;
   const [route, query = ""] = (location.hash.slice(1) || "/dashboard").split(
     "?",
@@ -59,6 +99,18 @@ async function render(focus = true) {
     else if (section === "activities")
       content = await views.activities(guarded);
     else if (section === "analytics") content = await views.analytics();
+    else if (section === "finance")
+      content = await financeViews.financeDashboard(guarded, params);
+    else if (section === "invoices")
+      content = id
+        ? await financeViews.invoiceDetail(id, guarded)
+        : await financeViews.invoiceList(guarded, params);
+    else if (section === "finance-customers")
+      content = id
+        ? await financeViews.financeCustomer(id, guarded)
+        : await financeViews.financeCustomers(guarded, params);
+    else if (section === "finance-settings")
+      content = await financeViews.financeSettings(guarded);
     else
       content = [
         heading("Seite nicht gefunden"),
@@ -80,7 +132,12 @@ async function render(focus = true) {
       .forEach((a) => {
         if (
           a.hash ===
-          "#/" + (section === "relationships" ? "pipeline" : section)
+          "#/" +
+            (section === "relationships"
+              ? "pipeline"
+              : section === "finance-customers"
+                ? "finance"
+                : section)
         )
           a.setAttribute("aria-current", "page");
         else a.removeAttribute("aria-current");
@@ -109,9 +166,11 @@ async function render(focus = true) {
   } finally {
     if (token === generation) {
       main.classList.toggle("view-pipeline", section === "pipeline");
+      if (section === "pipeline") revealPipelineNavigation(token);
       main.setAttribute("aria-busy", "false");
     }
   }
 }
 window.addEventListener("hashchange", () => render());
+window.addEventListener("resize", () => revealPipelineNavigation(generation));
 await render();

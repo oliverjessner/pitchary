@@ -5,17 +5,37 @@ import { openDatabase, projectRoot } from "../database/database.js";
 import { createCRM } from "../business/crm.js";
 import { AppError } from "../business/validation.js";
 import { registerAPI } from "../api/routes.js";
+import { createFinance } from "../business/finance.js";
+import { createFinanceSettings } from "../business/finance-settings.js";
+import { createInvoiceProcessor } from "../business/invoice-processor.js";
+import { registerFinanceAPI } from "../api/finance-routes.js";
+import { registerFinanceProcessingAPI } from "../api/finance-processing-routes.js";
 export async function buildApp({
   databasePath,
   db,
   logger = false,
   clock,
+  financeOptions = {},
 } = {}) {
   const database = db ?? openDatabase(databasePath);
   const app = Fastify({ logger, bodyLimit: 131072 });
   app.decorate("crm", createCRM(database, { clock }));
   app.decorate("database", database);
+  const finance = createFinance(database, { clock });
+  const settings = createFinanceSettings(database, {
+    clock,
+    ...financeOptions.settings,
+  });
+  const processor = createInvoiceProcessor(database, finance, settings, {
+    clock,
+    ...financeOptions,
+  });
+  app.decorate("finance", finance);
+  app.decorate("financeSettings", settings);
+  app.decorate("invoiceProcessor", processor);
+  app.addHook("onReady", async () => processor.start());
   app.addHook("onClose", async () => {
+    await processor.close();
     if (!db) database.close();
   });
   app.addHook("onRequest", async (request, reply) => {
@@ -69,6 +89,8 @@ export async function buildApp({
     });
   });
   await registerAPI(app, app.crm);
+  await registerFinanceAPI(app, finance);
+  await registerFinanceProcessingAPI(app, finance, settings, processor);
   await app.register(fastifyStatic, {
     root: path.join(projectRoot, "public"),
     prefix: "/",

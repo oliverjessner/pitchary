@@ -754,6 +754,8 @@ img.customer-logo {
   }
   .app-shell:has(.view-pipeline) > .app-sidebar {
     flex-shrink: 0;
+    align-self: stretch;
+    min-inline-size: 0;
   }
   .app-content:has(> .view-pipeline) {
     flex: 1;
@@ -775,6 +777,22 @@ img.customer-logo {
     overflow: visible;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .app-shell:has(.view-pipeline) > .app-sidebar nav {
+    display: flex;
+    flex-direction: row;
+    flex: none;
+    min-inline-size: 0;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scroll-padding-inline: var(--oj-space-2);
+  }
+  .app-shell:has(.view-pipeline) > .app-sidebar nav > a {
+    white-space: nowrap;
   }
   .sidebar-footer {
     display: none;
@@ -818,5 +836,18 @@ img.customer-logo {
   }
   .pipeline-controls .page-subtitle {
     display: none;
+  }
+}
+@media (max-width: 700px) and (max-height: 700px) {
+  .app-shell:has(.view-pipeline) > .app-sidebar {
+    padding-block: var(--oj-space-2);
+    gap: var(--oj-space-2);
+  }
+  .app-shell:has(.view-pipeline) .brand-subtitle,
+  .app-content:has(> .view-pipeline) > .app-topbar > span {
+    display: none;
+  }
+  .app-content:has(> .view-pipeline) > .app-topbar {
+    padding-block: var(--oj-space-2);
   }
 }

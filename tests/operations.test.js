@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { openDatabase, projectRoot } from "../src/database/database.js";
 import { createCRM } from "../src/business/crm.js";
+import { createFinance } from "../src/business/finance.js";
+import { invoicePDF } from "./fixtures/finance-pdf.js";
 import { demoCustomerLogo } from "../scripts/demo-assets.js";
 test("online backup includes WAL data; restore validates and never overwrites files", (t) => {
   const folder = mkdtempSync(path.join(os.tmpdir(), "pitchary-backup-"));
@@ -38,6 +40,21 @@ test("online backup includes WAL data; restore validates and never overwrites fi
   });
   crm.changeStatus(r.id, { status: "pitched" });
   crm.addActivity(r.id, { type: "follow_up", note: "Preserve history" });
+  const finance = createFinance(db);
+  const invoice = finance.record({
+    category: "revenue",
+    invoice_number: "BACKUP-1",
+    invoice_date: "2026-10-01",
+    counterparty_name: c.name,
+    customer_id: c.id,
+    customer_service_id: r.id,
+    total_amount_minor: 43210,
+    currency: "EUR",
+    pdf_data: invoicePDF(),
+    file_name: "backup.pdf",
+    ingestion_status: "processed",
+  });
+  finance.update(invoice.id, { total_amount_minor: 54321, status: "paid" });
   const run = (script, args = []) =>
     spawnSync(
       process.execPath,
@@ -102,6 +119,15 @@ test("online backup includes WAL data; restore validates and never overwrites fi
         .get(s.id).tag_id,
       tag.id,
     );
+    const restoredFinance = createFinance(copy);
+    assert.equal(restoredFinance.get(invoice.id).total_amount_minor, 54321);
+    assert.equal(
+      restoredFinance.get(invoice.id).original.total_amount_minor,
+      43210,
+    );
+    assert.equal(restoredFinance.get(invoice.id).customer_service_id, r.id);
+    assert.equal(restoredFinance.get(invoice.id).status, "paid");
+    assert.deepEqual(restoredFinance.file(invoice.id).data, invoicePDF());
   } finally {
     copy.close();
   }

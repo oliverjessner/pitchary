@@ -434,7 +434,18 @@ export async function customerDetail(id, actions) {
     heading(
       row.name,
       row.archived_at ? "Archivierter Kunde" : "Kundendetails",
-      entityState(row, "customers", actions),
+      [
+        ...entityState(row, "customers", actions),
+        el(
+          "a",
+          {
+            class: "oj-button oj-button-secondary",
+            href: "#/finance-customers/" + id,
+          },
+          icon("file-invoice"),
+          "Rechnungen & Umsatz",
+        ),
+      ],
     ),
     row.website || row.has_logo
       ? el(
@@ -930,6 +941,15 @@ export async function relationshipDetail(id, actions) {
           danger: true,
           iconName: "trash",
         }),
+        el(
+          "a",
+          {
+            class: "oj-button oj-button-secondary",
+            href: "#/invoices?customer_service_id=" + id,
+          },
+          icon("file-invoice"),
+          "Rechnungen",
+        ),
       ],
     ),
     el(

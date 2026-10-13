@@ -25,10 +25,11 @@
     "seed": "node scripts/seed.js",
     "backup": "node scripts/backup.js",
     "restore": "node scripts/restore.js",
+    "import:billly": "node scripts/import-billly.js",
     "test": "node --test tests/*.test.js",
     "test:ui": "playwright test",
-    "format": "prettier --write src public/js public/config public/index.html public/app.css scripts tests README.md docs/*.md package.json playwright.config.js",
-    "format:check": "prettier --check src public/js public/config public/index.html public/app.css scripts tests README.md docs/*.md package.json playwright.config.js"
+    "format": "prettier --write src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js",
+    "format:check": "prettier --check src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js"
   },
   "dependencies": {
     "@fastify/static": "10.1.6",

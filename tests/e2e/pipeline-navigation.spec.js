@@ -126,10 +126,11 @@ test("desktop navigation and header stay visible while content scrolls", async (
   await page.setViewportSize({ width: 1440, height: 800 });
   await page.goto("http://127.0.0.1:3218/#/analytics");
   await expect(page.locator("#main")).toHaveAttribute("aria-busy", "false");
+  await page.evaluate(() => document.fonts.ready);
   const sidebar = page.locator(".app-sidebar");
   const header = page.locator(".app-topbar");
   const navigation = page.getByRole("navigation", { name: "Hauptnavigation" });
-  await expect(navigation.getByRole("link")).toHaveCount(5);
+  await expect(navigation.getByRole("link")).toHaveCount(8);
   await expect(
     navigation.getByRole("link", { name: "Aktivitäten", exact: true }),
   ).toHaveCount(0);
@@ -168,9 +169,9 @@ test("desktop navigation and header stay visible while content scrolls", async (
   expect(
     await nav.evaluate((node) => node.scrollHeight > node.clientHeight),
   ).toBe(true);
-  await nav.getByRole("link", { name: "Analytics", exact: true }).focus();
+  await nav.getByRole("link", { name: "Einstellungen", exact: true }).focus();
   await expect(
-    nav.getByRole("link", { name: "Analytics", exact: true }),
+    nav.getByRole("link", { name: "Einstellungen", exact: true }),
   ).toBeInViewport();
   await expect(page.locator(".sidebar-footer")).toBeInViewport();
   await page.screenshot({
@@ -188,11 +189,14 @@ test("desktop navigation and header stay visible while content scrolls", async (
   ).toBe(true);
   expect((await sidebar.boundingBox()).height).toBeLessThan(400);
   await page.getByRole("link", { name: "Analytics", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Analytics", exact: true }),
+  ).toBeVisible();
   await expect(page.locator("#main")).toHaveAttribute("aria-busy", "false");
   await page.evaluate(() =>
     window.scrollTo(0, document.documentElement.scrollHeight),
   );
-  expect((await header.boundingBox()).y).toBe(0);
+  await expect.poll(async () => (await header.boundingBox()).y).toBe(0);
   await expect(
     header.getByRole("link", { name: "Neues Angebot", exact: true }),
   ).toBeInViewport();
@@ -237,6 +241,21 @@ test("pipeline heading, filters and toolbar stay fixed while the board scrolls",
   ]) {
     await page.setViewportSize({ width, height });
     await page.goto("/#/pipeline?status=open");
+    await page.evaluate(() => document.fonts.ready);
+    if (width <= 700) {
+      const nav = page.getByRole("navigation", { name: "Hauptnavigation" });
+      const current = nav.getByRole("link", { name: "Pipeline", exact: true });
+      expect(
+        await nav.evaluate((node) => node.scrollWidth > node.clientWidth),
+      ).toBe(true);
+      await expect(current).toBeInViewport();
+      const navBounds = await nav.boundingBox(),
+        currentBounds = await current.boundingBox();
+      expect(currentBounds.x).toBeGreaterThanOrEqual(navBounds.x - 1);
+      expect(currentBounds.x + currentBounds.width).toBeLessThanOrEqual(
+        navBounds.x + navBounds.width + 1,
+      );
+    }
     await page.getByLabel("Suchen", { exact: true }).fill(name);
     await expect(page.locator(".offer-card")).toHaveCount(24);
     const board = page.locator(".pipeline-board");

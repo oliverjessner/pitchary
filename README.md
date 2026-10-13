@@ -1,6 +1,6 @@
 # Pitchary
 
-Schlankes, lokales Single-User-CRM für Kunden, Ansprechpartner, Dienstleistungen und eigenständige Vertriebsangebote. Dashboard, Kunden, Dienstleistungen, Pipeline und Analytics sind vollständig mit der SQLite-Datenbank verbunden. Aktivitäten werden direkt am jeweiligen Angebot erfasst.
+Schlankes, lokales Single-User-CRM für Kunden, Ansprechpartner, Dienstleistungen und eigenständige Vertriebsangebote. Billlys PDF-Rechnungsverwaltung ergänzt Einnahmen, Ausgaben und Kundenumsatz im selben System. Alle Bereiche verwenden dieselbe SQLite-Datenbank. Aktivitäten werden direkt am jeweiligen Angebot erfasst.
 
 ## Start
 
@@ -58,7 +58,7 @@ Die Oberfläche nutzt das per npm installierte [oj-designsystem](https://github.
 
 Pitchary verwendet Kobaltblau (`#4D8DFF`) als Produktakzent über `--oj-accent` in `public/app.css`; das Favicon verwendet dieselbe Farbe.
 
-Die linke Navigation bleibt auf Desktop an ihrer Position und ist auf die Fensterhöhe begrenzt. In niedrigen Fenstern scrollt das Menü intern; auf Mobil wird es oberhalb des Inhalts angezeigt. Der obere Header bleibt beim Scrollen sichtbar. Das Menü enthält Dashboard, Kunden, Dienstleistungen, Pipeline und Analytics. Die Kundentabelle zeigt Name und Logo; die Website bleibt in den Kundendetails und der Bearbeitung verfügbar und kann weiterhin gesucht werden.
+Die linke Navigation bleibt auf Desktop an ihrer Position und ist auf die Fensterhöhe begrenzt. In niedrigen Fenstern scrollt das Menü intern; auf Mobil wird es oberhalb des Inhalts angezeigt. Der obere Header bleibt beim Scrollen sichtbar. Das Menü enthält Dashboard, Kunden, Dienstleistungen, Pipeline, Analytics, Finanzen, Rechnungen und Einstellungen. Die Kundentabelle zeigt Name und Logo; die Website bleibt in den Kundendetails und der Bearbeitung verfügbar und kann weiterhin gesucht werden.
 
 Das Dashboard zeigt die vier Kennzahlen als 2×2-Block neben „Letzte Kontakte“. Auf kleinen Fenstern stehen die Kontakte darunter. „Aktuelle Pipeline“ entfällt; die Kennzahlen werden weiterhin aus den gespeicherten Angeboten berechnet.
 
@@ -67,6 +67,8 @@ Die Pipeline nutzt die gesamte verfügbare Containerbreite und einen festen Bedi
 `npm install` synchronisiert über `postinstall` die unveränderten gebauten CSS-/ESM-/Font-/Icon-Assets und Lizenzen nach `public/vendor/oj-designsystem/`. Der reproduzierbare Sync kann mit `npm run sync:designsystem` erneut ausgeführt werden; `package-lock.json` fixiert die Paketversion. Bei Installation mit `--ignore-scripts` ist dieser Befehl vor dem Start erforderlich. Das Designsystem wird nicht verändert. Jede dynamische View und jeder Dialog besitzt einen `initOJ()`-Cleanup, der vor dem Entfernen der Oberfläche aufgerufen wird.
 
 ## Datenmodell und fachliche Regeln
+
+Billlys Funktionen sind unter **Finanzen**, **Rechnungen** und **Einstellungen** integriert: PDF-Import und Ordnerüberwachung, lokale Text-/OCR-Auslesung, optionale OpenAI-Erkennung, korrigierbare Rechnungsdaten, Zahlungsstatus, Ausgaben-Tags, Finanzdashboard und Kundenumsatz. Kunden und Ansprechpartner werden mit dem CRM geteilt. Migration 008 ergänzt ausschließlich Finanz-Tabellen. Einrichtung und API: [docs/finance.md](docs/finance.md). Vorhandene Daten übernehmen: [docs/billly-import.md](docs/billly-import.md).
 
 Die sechs Kerntabellen sind `customers`, `employees`, `services`, `customer_services`, `customer_service_status_history` und `activities`. `pitch_channels` speichert registrierte Kanäle; `service_tags` und `service_tag_assignments` speichern Tags und deren Zuordnung zu Dienstleistungen. Schema-Versionen werden in `PRAGMA user_version` geführt. Migration 001 erstellt die Kerntabellen, Indizes und Integritätstrigger; 002 ergänzt die Angebotsarchivierung; 003 ergänzt `website`, `logo_mime` und `logo_data` bei Kunden. Bestehende Kunden erhalten eine leere Website und kein Logo. Migration 004 erweitert die Status-Constraints um `ghosted` und erhält alle Daten einschließlich Historie, Aktivitäten und Zeilenreihenfolge. Der Tabellenumbau erfolgt in einer Transaktion mit Foreign-Key-Prüfung vor dem Commit; danach wird die Foreign-Key-Erzwingung wieder aktiviert.
 
@@ -81,7 +83,7 @@ Migration 006 ersetzt die festen Kanal-Enums durch Foreign Keys auf `pitch_chann
 - Bereits beim Anlegen wird `open` historisiert. Status und Historieneintrag werden gemeinsam in `BEGIN IMMEDIATE`/`COMMIT` gespeichert; Fehler rollen beide zurück. `status_since` markiert den Beginn der aktuellen Phase. Optional rückdatierte Statusereignisse dürfen nicht vor der aktuellen Phase oder in der Zukunft liegen.
 - Der erste tatsächliche Pitch hält den zu diesem Zeitpunkt angebotenen Preis in `first_pitched_price_minor` fest. Vor dem Pitch ist dieses Feld NULL. Verhandlungen ändern nur den aktuellen Angebotspreis und erzeugen strukturierte `price_change`-Aktivitäten mit Preisfeld, altem und neuem Betrag.
 - Die Zusage speichert separat `accepted_price_minor`; auch dessen Erfassung und spätere Änderungen werden protokolliert. Nach Zusage wird eine Preisänderung am vereinbarten Preis durchgeführt.
-- Geld wird ausschließlich als nichtnegative **Integer-Cent** gespeichert. v1 unterstützt EUR, USD und GBP (je zwei Nachkommastellen), bis 1.000.000.000.000 Cent je Preis. Eingaben wie `1200,50` werden anhand der Ziffern verarbeitet. Währung und Abrechnungsmodell sind nach dem ersten Pitch festgeschrieben. Der ursprüngliche Pitch-Kanal kann über **Bearbeiten** in den Angebotsdetails auch danach korrigiert werden; Analytics und Kanalfilter verwenden den korrigierten Wert. Historische Kontaktaktivitäten behalten ihren eigenen Kanal.
+- Angebotspreise werden ausschließlich als nichtnegative **Integer-Cent** gespeichert. v1 unterstützt EUR, USD und GBP (je zwei Nachkommastellen), bis 1.000.000.000.000 Cent je Preis. Eingaben wie `1200,50` werden anhand der Ziffern verarbeitet. Währung und Abrechnungsmodell sind nach dem ersten Pitch festgeschrieben. Der ursprüngliche Pitch-Kanal kann über **Bearbeiten** in den Angebotsdetails auch danach korrigiert werden; Analytics und Kanalfilter verwenden den korrigierten Wert. Historische Kontaktaktivitäten behalten ihren eigenen Kanal.
 - Abrechnung: `one_time`, `monthly`, `yearly`, `hourly`, `daily`. Standardkanäle: `linkedin`, `email`, `phone`, `meeting`, `internal_software`, `other`.
 - Absagegründe werden als JSON mit `code` und optionaler `note` gespeichert: `budget`, `timing`, `competitor`, `no_need`, `no_response`, `other`. Die jeweilige Absage bleibt in der Historie erhalten, auch nach Wiederaufnahme.
 - Kontaktaktivitäten: `pitch`, `follow_up`, `call`, `meeting`, `note`. Sie ändern keinen Status. Ein initialer Pitch ist zuerst über die Statusaktion zu erfassen. Zeitpunkte sind ISO-8601 mit Zeitzone, Speicherung in UTC, Anzeige in der Browser-Zeitzone.
@@ -165,4 +167,4 @@ Browser-Tests verwenden separate temporäre SQLite-Datenbanken. Eine zweite unve
 
 ## Umfang von v1
 
-Keine PDF-Erstellung, E-Mail-Anbindung, LinkedIn-Automatisierung, Rechnungsstellung, externes CRM-Syncing, komplexe Aufgabenverwaltung oder automatischen Wiedervorlagen. Externe Links zu manuell gepflegten Ansprechpartnerprofilen bleiben normale Links.
+PDF-Rechnungen werden importiert und verwaltet; neue Rechnungsdokumente werden nicht erzeugt. Keine E-Mail-Anbindung, LinkedIn-Automatisierung, externes CRM-Syncing, komplexe Aufgabenverwaltung oder automatischen Wiedervorlagen. Externe Links zu manuell gepflegten Ansprechpartnerprofilen bleiben normale Links.

@@ -1,5 +1,7 @@
 # REST API
 
+Die integrierte Rechnungsverwaltung verwendet `/api/finance`; alle Endpunkte und Datenregeln sind in [finance.md](finance.md) dokumentiert.
+
 Basis: `http://127.0.0.1:3031/api`. JSON-Body mit `Content-Type: application/json`. GET liefert ein Objekt oder ein Array; POST-Erstellung liefert **201**, Änderungen/Archivierung **200**. DELETE auf den Ressourcen-Endpunkten archiviert. Der explizite Endpunkt `/customer-services/:id/permanent` löscht ein Angebot endgültig. Es gibt keine regulären Änderungs-/Löschendpunkte für einzelne Historien- oder Aktivitätseinträge.
 
 | Ressource            | Endpunkte                                                                                                       |
