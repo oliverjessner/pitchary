@@ -97,6 +97,11 @@
   box-sizing: border-box;
   gap: var(--oj-space-4);
 }
+.view-dashboard {
+  inline-size: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
 .pipeline-controls {
   display: flex;
   flex-direction: column;

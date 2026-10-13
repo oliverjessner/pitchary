@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { AppError } from "./validation.js";
+import { redactFinanceLogMessage } from "./finance.js";
 import { openBilllyRepository } from "../database/billly-repository.js";
 
 const maximumPdfSize = 20 * 1024 * 1024;
@@ -468,7 +469,7 @@ function readCustomers(source) {
   });
 }
 
-function prepareImport(source, includeBytes) {
+function prepareImport(source, includeBytes, { includeLogs = false } = {}) {
   const invoices = source
     .invoices()
     .map((row) => prepareInvoice(row, includeBytes));
@@ -491,12 +492,42 @@ function prepareImport(source, includeBytes) {
     }
   }
   const customers = readCustomers(source);
+  const logs = [];
+  let excludedLogs = 0;
+  if (includeLogs)
+    for (const row of source.processingLogs()) {
+      const type = optionalText(row.process_type, "process_type", 100);
+      if (type && /(?:e[-_]?mail|gmail|oauth|send|smtp|google)/i.test(type)) {
+        excludedLogs++;
+        continue;
+      }
+      const status = optionalText(row.status, "log_status", 100);
+      if (!type?.trim() || !status?.trim())
+        importError("Billly enthält ein ungültiges Verarbeitungsprotokoll.");
+      const id = legacyId(row.id);
+      logs.push({
+        id: targetId(id, "processing-log"),
+        source_invoice_id:
+          row.invoice_id === null || row.invoice_id === undefined
+            ? null
+            : legacyId(row.invoice_id),
+        process_type: type,
+        status,
+        message: redactFinanceLogMessage(
+          optionalText(row.message, "log_message", maximumTextSize) ?? "",
+        ).slice(0, 20000),
+        created_at: timestamp(row.created_at, "log_created_at"),
+      });
+    }
   return {
     invoices,
     overrides,
     customers,
     ignoredOverrides,
     settings: readSettings(source),
+    logs,
+    includeLogs,
+    excludedLogs,
   };
 }
 
@@ -524,6 +555,12 @@ function summary(source, prepared) {
     ),
     files,
     available_settings: Object.keys(prepared.settings),
+    ...(prepared.includeLogs
+      ? {
+          processing_logs: prepared.logs.length,
+          excluded_logs: prepared.excludedLogs,
+        }
+      : {}),
   };
 }
 
@@ -542,7 +579,11 @@ export function inspectBillly(databasePath) {
  * imported invoices untouched, including corrections made later in Pitchary.
  * The finance adapter owns the target transaction and CRM merge rules.
  */
-export function importBillly(sourcePath, finance, { dryRun = true } = {}) {
+export function importBillly(
+  sourcePath,
+  finance,
+  { dryRun = true, includeLogs = false } = {},
+) {
   const source = openSource(sourcePath);
   try {
     if (
@@ -552,12 +593,13 @@ export function importBillly(sourcePath, finance, { dryRun = true } = {}) {
     )
       importError("Quell- und Zieldatenbank müssen verschieden sein.");
     // Validate every record before writes, but retain only one PDF at a time.
-    const prepared = prepareImport(source, false);
+    const prepared = prepareImport(source, false, { includeLogs });
     const result = {
       ...summary(source, prepared),
       dry_run: dryRun,
       imported: 0,
       skipped: 0,
+      ...(includeLogs ? { logs_imported: 0, logs_skipped: 0 } : {}),
     };
     if (dryRun) return result;
     if (
@@ -568,6 +610,8 @@ export function importBillly(sourcePath, finance, { dryRun = true } = {}) {
       typeof finance?.importTransaction !== "function"
     )
       throw new Error("Finance import adapter is incomplete.");
+    if (includeLogs && typeof finance?.importProcessingLog !== "function")
+      throw new Error("Finance processing log adapter is incomplete.");
     return finance.importTransaction(() => {
       const customerMap = new Map();
       for (const customer of prepared.customers) {
@@ -606,7 +650,7 @@ export function importBillly(sourcePath, finance, { dryRun = true } = {}) {
         }
         const imported = finance.record(payload);
         if (Object.keys(corrections).length) {
-          finance.update(imported.id, corrections);
+          finance.update(imported.id, corrections, { legacyImport: true });
           // Applying historical corrections must not replace Billly's last
           // invoice modification timestamp with today's import time.
           finance.record({ id: imported.id, updated_at: invoice.updated_at });
@@ -620,6 +664,16 @@ export function importBillly(sourcePath, finance, { dryRun = true } = {}) {
         );
         if (!invoice) continue;
         mergeCustomer(finance, customer, { enrichment_invoice_id: invoice.id });
+      }
+      for (const { source_invoice_id, ...log } of prepared.logs) {
+        const invoice = source_invoice_id
+          ? finance.findBilllyInvoice(source_invoice_id)
+          : null;
+        const imported = finance.importProcessingLog({
+          ...log,
+          invoice_id: invoice?.id ?? null,
+        });
+        imported.imported ? result.logs_imported++ : result.logs_skipped++;
       }
       return result;
     });

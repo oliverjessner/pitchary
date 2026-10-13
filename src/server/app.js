@@ -10,6 +10,8 @@ import { createFinanceSettings } from "../business/finance-settings.js";
 import { createInvoiceProcessor } from "../business/invoice-processor.js";
 import { registerFinanceAPI } from "../api/finance-routes.js";
 import { registerFinanceProcessingAPI } from "../api/finance-processing-routes.js";
+import { createCustomerMerge } from "../business/customer-merge.js";
+import { registerCustomerAliases } from "../api/customer-aliases.js";
 export async function buildApp({
   databasePath,
   db,
@@ -21,6 +23,9 @@ export async function buildApp({
   const app = Fastify({ logger, bodyLimit: 131072 });
   app.decorate("crm", createCRM(database, { clock }));
   app.decorate("database", database);
+  const customerMerge = createCustomerMerge(database);
+  app.decorate("customerMerge", customerMerge);
+  registerCustomerAliases(app, customerMerge);
   const finance = createFinance(database, { clock });
   const settings = createFinanceSettings(database, {
     clock,

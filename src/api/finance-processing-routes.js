@@ -7,6 +7,7 @@ import { AppError, allowedKeys, choice, text } from "../business/validation.js";
 import { MAX_PDF_BYTES } from "../business/finance-extraction.js";
 import { normalizeKey } from "../business/finance-settings.js";
 import { inspectBillly, importBillly } from "../business/billly-import.js";
+import { defaultBilllySource } from "../config/billly-source.js";
 
 export async function registerFinanceProcessingAPI(
   app,
@@ -17,13 +18,6 @@ export async function registerFinanceProcessingAPI(
   const objectBody = {
     schema: { body: { type: "object", additionalProperties: true } },
   };
-  const defaultSource = path.join(
-    homedir(),
-    "Library",
-    "Application Support",
-    "Billly",
-    "billly.sqlite",
-  );
   app.get("/api/finance/settings", async () => ({
     ...(await settings.public()),
     watcher: { ...processor.state },
@@ -76,7 +70,7 @@ export async function registerFinanceProcessingAPI(
     processor.enrich(request.params.id),
   );
   const sourcePath = (value) => {
-    if (value === undefined || value === "") return defaultSource;
+    if (value === undefined || value === "") return defaultBilllySource();
     const filename = text(value, "source", { required: true, max: 4000 });
     const resolved = filename.startsWith("~/")
       ? path.join(homedir(), filename.slice(2))

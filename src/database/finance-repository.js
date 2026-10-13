@@ -117,6 +117,9 @@ export function createFinanceRepository(db) {
     insertLog: db.prepare(
       "INSERT INTO finance_processing_logs(id,invoice_id,process_type,status,message,created_at) VALUES(?,?,?,?,?,?)",
     ),
+    importLog: db.prepare(
+      "INSERT INTO finance_processing_logs(id,invoice_id,process_type,status,message,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
+    ),
     invoiceLogs: db.prepare(
       "SELECT * FROM finance_processing_logs WHERE invoice_id=? ORDER BY created_at DESC,rowid DESC",
     ),

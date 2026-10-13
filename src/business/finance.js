@@ -64,6 +64,16 @@ const normalizedName = (value) =>
     .toLocaleLowerCase("de-AT");
 const own = (value, key) => Object.hasOwn(value, key);
 
+export function redactFinanceLogMessage(value) {
+  return value
+    .replace(/\bsk-[^\s"'<>\\]+/gi, "[Zugangsdaten entfernt]")
+    .replace(/\bBearer\s+[^\s"'<>\\]+/gi, "Bearer [Zugangsdaten entfernt]")
+    .replace(
+      /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+      "[Zugangsdaten entfernt]",
+    );
+}
+
 function object(value) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     invalid("Ein Objekt mit Feldern wird erwartet.");
@@ -688,7 +698,7 @@ export function createFinance(
         return finance.get(id);
       });
     },
-    update(id, payload) {
+    update(id, payload, { legacyImport = false } = {}) {
       const values = validateValues(payload);
       return atomic(() => {
         const current = finance.get(id),
@@ -720,13 +730,15 @@ export function createFinance(
         if (own(values, "tags") && candidate.category !== "payable")
           invalid("Tags stehen nur für Ausgaben zur Verfügung.", "tags");
         if (
+          !legacyImport &&
           values.status === "paid" &&
           !own(values, "paid_at") &&
           !candidate.paid_at
         )
           values.paid_at = today();
-        if (values.status === "open") values.paid_at = null;
+        if (!legacyImport && values.status === "open") values.paid_at = null;
         if (
+          !legacyImport &&
           candidate.status === "open" &&
           own(values, "paid_at") &&
           values.paid_at !== null
@@ -736,6 +748,7 @@ export function createFinance(
             "paid_at",
           );
         if (
+          !legacyImport &&
           candidate.status === "paid" &&
           own(values, "paid_at") &&
           values.paid_at === null
@@ -845,6 +858,47 @@ export function createFinance(
     logs(id) {
       finance.get(id);
       return repo.invoiceLogs.all(id);
+    },
+    importProcessingLog(payload) {
+      object(payload);
+      allowedKeys(payload, [
+        "id",
+        "invoice_id",
+        "process_type",
+        "status",
+        "message",
+        "created_at",
+      ]);
+      const id = uuid(payload.id, "id"),
+        invoiceId =
+          payload.invoice_id === null || payload.invoice_id === undefined
+            ? null
+            : uuid(payload.invoice_id, "invoice_id");
+      if (invoiceId) finance.get(invoiceId);
+      const type = text(payload.process_type, "process_type", {
+        required: true,
+        max: 100,
+      });
+      if (/(?:e[-_]?mail|gmail|oauth|send|smtp|google)/i.test(type))
+        invalid("E-Mail-Protokolle werden nicht übernommen.", "process_type");
+      const createdAt = timestamp(payload.created_at, "created_at");
+      if (!createdAt) invalid("Ein Zeitpunkt wird benötigt.", "created_at");
+      const message = redactFinanceLogMessage(
+        text(payload.message ?? "", "message", { max: 2000000 }),
+      ).slice(0, 20000);
+      const status = text(payload.status, "status", {
+        required: true,
+        max: 100,
+      });
+      const result = repo.importLog.run(
+        id,
+        invoiceId,
+        type,
+        status,
+        message,
+        createdAt,
+      );
+      return { id, imported: Boolean(result.changes) };
     },
     dashboard(filters = {}) {
       object(filters);

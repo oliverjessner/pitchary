@@ -4,7 +4,7 @@ Pitchary integriert Billlys PDF-Rechnungsverwaltung in denselben lokalen Server 
 
 ## Benutzung
 
-- **Finanzen** zeigt Einnahmen, Ausgaben und Gewinn für Monat und Jahr, überfällige Rechnungen, offene Posten, die fünf umsatzstärksten Kunden und höchsten Kosten je Währung sowie die letzten zwölf Monate im Diagramm. Monatswerte folgen dem Rechnungsdatum, unabhängig vom Zahlungsstatus.
+- **Dashboard** enthält die vollständige Finanzübersicht unter den CRM-Kennzahlen und nutzt die gesamte Containerbreite. Sie zeigt Einnahmen, Ausgaben und Gewinn für Monat und Jahr, überfällige Rechnungen, offene Posten, die fünf umsatzstärksten Kunden und höchsten Kosten je Währung sowie die letzten zwölf Monate im Diagramm. USD ist ausschließlich in dieser Übersicht ausgeblendet; USD-Rechnungen und Kundenumsätze bleiben gespeichert und zugänglich. Monatswerte folgen dem Rechnungsdatum, unabhängig vom Zahlungsstatus. Alte `#/finance`-Links führen mit ihren Datumsfiltern zum Dashboard.
 - **Rechnungen** bietet Einnahmen/Ausgaben, Suche, Jahres- und Statusfilter, sortierbare Spalten sowie offen/bezahlt. Beim Bezahlen wird das heutige Datum in Europe/Vienna gesetzt; beim Wiederöffnen wird es gelöscht.
 - Eine **PDF importieren** oder in **Einstellungen** getrennte lokale Rechnungsordner angeben. Der Server liest PDFs bis zu zwei Unterordnerebenen, beobachtet neue/geänderte Dateien und prüft zusätzlich alle zehn Sekunden. Symlinks werden nicht verfolgt. Dateien müssen mindestens 700 ms unverändert sein.
 - Rechnungsdetails erlauben Korrekturen, Zahlungsdatum, Kategorie, Ausgaben-Tags und die Zuordnung zu einem CRM-Kunden sowie einem seiner Angebote. Einzelne oder alle Korrekturen sind zurücksetzbar. Erneute Verarbeitung erhält Korrekturen, Zahlungsstatus und Links.

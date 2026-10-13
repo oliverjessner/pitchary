@@ -70,6 +70,10 @@ async function render(focus = true) {
   );
   const [section, id] = route.split("/").filter(Boolean);
   const params = new URLSearchParams(query);
+  if (section === "finance") {
+    location.replace("#/dashboard" + (query ? "?" + query : ""));
+    return;
+  }
   if (section === "new-offer") {
     navigate("/pipeline");
     await guarded.offer();
@@ -80,7 +84,8 @@ async function render(focus = true) {
   main.setAttribute("aria-busy", "true");
   try {
     let content;
-    if (section === "dashboard") content = await views.dashboard(guarded);
+    if (section === "dashboard")
+      content = await views.dashboard(guarded, params);
     else if (section === "customers")
       content = id
         ? await views.customerDetail(id, guarded)
@@ -99,8 +104,6 @@ async function render(focus = true) {
     else if (section === "activities")
       content = await views.activities(guarded);
     else if (section === "analytics") content = await views.analytics();
-    else if (section === "finance")
-      content = await financeViews.financeDashboard(guarded, params);
     else if (section === "invoices")
       content = id
         ? await financeViews.invoiceDetail(id, guarded)
@@ -136,7 +139,7 @@ async function render(focus = true) {
             (section === "relationships"
               ? "pipeline"
               : section === "finance-customers"
-                ? "finance"
+                ? "customers"
                 : section)
         )
           a.setAttribute("aria-current", "page");
@@ -166,6 +169,7 @@ async function render(focus = true) {
   } finally {
     if (token === generation) {
       main.classList.toggle("view-pipeline", section === "pipeline");
+      main.classList.toggle("view-dashboard", section === "dashboard");
       if (section === "pipeline") revealPipelineNavigation(token);
       main.setAttribute("aria-busy", "false");
     }

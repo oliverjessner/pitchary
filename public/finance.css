@@ -5,6 +5,14 @@
   padding-block-end: var(--oj-space-3);
   border-block-end: 1px solid var(--oj-border);
 }
+.dashboard-finance {
+  min-inline-size: 0;
+  padding-block-start: var(--oj-space-6);
+  border-block-start: 1px solid var(--oj-border);
+}
+.dashboard-finance > .oj-section-header h2 {
+  margin: 0;
+}
 .finance-tabs [aria-current="page"] {
   color: var(--oj-accent);
   background: var(--oj-surface);

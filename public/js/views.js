@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { financeDashboard } from "./finance.js";
 import {
   customerIdentity,
   customerLogo,
@@ -270,7 +271,7 @@ function entityState(row, type, actions) {
         }),
       ];
 }
-export async function dashboard(actions) {
+export async function dashboard(actions, params) {
   const [analytics, rows, activities] = await Promise.all([
     api("/analytics"),
     api("/customer-services"),
@@ -280,7 +281,8 @@ export async function dashboard(actions) {
   const contacts = activities
     .filter((a) => a.type !== "price_change")
     .slice(0, 4);
-  return [
+  const finances = await financeDashboard(actions, params);
+  const content = [
     heading("Dashboard", "Ein Blick auf deine Kunden und laufenden Angebote."),
     el(
       "div",
@@ -317,7 +319,10 @@ export async function dashboard(actions) {
             primary: true,
           }),
         ),
+    ...finances,
   ];
+  content.dispose = () => finances.dispose?.();
+  return content;
 }
 export async function entityList(type, actions) {
   const isCustomer = type === "customers";

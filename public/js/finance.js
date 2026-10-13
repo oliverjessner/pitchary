@@ -119,7 +119,7 @@ function financeTabs(current) {
     "nav",
     { class: "finance-tabs", "aria-label": "Finanzen" },
     [
-      ["Übersicht", "#/finance"],
+      ["Übersicht", "#/dashboard"],
       ["Rechnungen", "#/invoices"],
       ["Kundenumsatz", "#/finance-customers"],
       ["Einstellungen", "#/finance-settings"],
@@ -620,8 +620,10 @@ function monthlyChart(rows, currency) {
   const series = rows.filter((row) => row.currency === currency);
   if (!series.length)
     return el("p", { class: "oj-muted" }, "Noch keine Monatswerte.");
-  const narrow = window.innerWidth <= 600;
-  const width = narrow ? 360 : 720,
+  const containerWidth =
+    document.querySelector(".app-content")?.clientWidth || window.innerWidth;
+  const narrow = containerWidth <= 700;
+  const width = narrow ? 360 : Math.max(720, containerWidth - 88),
     height = 290,
     left = narrow ? 60 : 76,
     right = 18,
@@ -813,8 +815,13 @@ export async function financeDashboard(
     query: { year, month },
   });
   const years = [...new Set([year, ...(data.years || [])])].sort().reverse();
-  const currency =
-    params.get("currency") || data.currencies?.[0]?.currency || "EUR";
+  const visibleCurrency = (row) => row.currency !== "USD";
+  const currencies = data.currencies.filter(visibleCurrency);
+  const currency = currencies.some(
+    (row) => row.currency === params.get("currency"),
+  )
+    ? params.get("currency")
+    : currencies[0]?.currency || "EUR";
   const controls = el(
     "div",
     { class: "finance-filters" },
@@ -822,7 +829,7 @@ export async function financeDashboard(
       options: years.map((value) => [value, value]),
       value: year,
       onchange: (event) =>
-        routeFilter("/finance", params, { year: event.target.value }),
+        routeFilter("/dashboard", params, { year: event.target.value }),
     }),
     field("Monat", "month", {
       options: monthNames.map((label, index) => [
@@ -831,25 +838,25 @@ export async function financeDashboard(
       ]),
       value: month,
       onchange: (event) =>
-        routeFilter("/finance", params, { month: event.target.value }),
+        routeFilter("/dashboard", params, { month: event.target.value }),
     }),
-    data.currencies.length > 1
+    currencies.length > 1
       ? field("Diagramm-Währung", "currency", {
-          options: data.currencies.map((row) => [row.currency, row.currency]),
+          options: currencies.map((row) => [row.currency, row.currency]),
           value: currency,
           onchange: (event) =>
-            routeFilter("/finance", params, { currency: event.target.value }),
+            routeFilter("/dashboard", params, { currency: event.target.value }),
         })
       : null,
   );
-  const metrics = data.currencies.map((row) =>
+  const metrics = currencies.map((row) =>
     el(
       "section",
       {
         class: "finance-currency-group oj-stack",
         "aria-label": "Kennzahlen in " + row.currency,
       },
-      el("h2", { class: "oj-heading-3" }, row.currency),
+      el("h3", { class: "oj-heading-3" }, row.currency),
       el(
         "div",
         { class: "finance-kpis" },
@@ -879,10 +886,26 @@ export async function financeDashboard(
     ),
   );
   const nodes = [
-    heading(
-      "Finanzen",
-      "Einnahmen, Ausgaben und Kundenumsatz aus deinen Rechnungen.",
-      [
+    el(
+      "header",
+      { class: "oj-section-header" },
+      el(
+        "div",
+        {},
+        el(
+          "h2",
+          { class: "oj-heading-2", id: "dashboard-finance-title" },
+          "Finanzen",
+        ),
+        el(
+          "p",
+          { class: "oj-muted page-subtitle" },
+          "Einnahmen, Ausgaben und Kundenumsatz aus deinen Rechnungen.",
+        ),
+      ),
+      el(
+        "div",
+        { class: "section-actions" },
         button("PDF importieren", () => actions.financeImport(), {
           primary: true,
           iconName: "file-arrow-up",
@@ -890,36 +913,66 @@ export async function financeDashboard(
         button("Aktualisieren", () => actions.financeRefresh(), {
           iconName: "rotate",
         }),
-      ],
+      ),
     ),
-    financeTabs("#/finance"),
+    financeTabs("#/dashboard"),
     controls,
     ...metrics,
-    !data.currencies.length
+    !currencies.length
       ? empty(
-          "Noch keine Rechnungen",
-          "Importiere eine PDF oder hinterlege deine Rechnungsordner in den Finanz-Einstellungen.",
-          button("PDF importieren", () => actions.financeImport(), {
-            primary: true,
-          }),
+          data.currencies.length
+            ? "Keine Finanzwerte für diese Übersicht"
+            : "Noch keine Rechnungen",
+          data.currencies.length
+            ? "Deine gespeicherten Rechnungen findest du in der Rechnungsverwaltung."
+            : "Importiere eine PDF oder hinterlege deine Rechnungsordner in den Finanz-Einstellungen.",
+          data.currencies.length
+            ? link("Rechnungen öffnen", "#/invoices")
+            : button("PDF importieren", () => actions.financeImport(), {
+                primary: true,
+              }),
         )
       : null,
-    data.months?.length
+    currencies.length && data.months?.length
       ? panel(
           "Monatsentwicklung · " + currency,
-          monthlyChart(data.months, currency),
+          monthlyChart(data.months.filter(visibleCurrency), currency),
         )
       : null,
     el(
       "div",
       { class: "finance-two-columns" },
-      topList("Beste Kunden · " + year, data.top_revenue || []),
-      topList("Höchste Kosten · " + year, data.top_payable || []),
+      topList(
+        "Beste Kunden · " + year,
+        (data.top_revenue || []).filter(visibleCurrency),
+      ),
+      topList(
+        "Höchste Kosten · " + year,
+        (data.top_payable || []).filter(visibleCurrency),
+      ),
     ),
-    panel("Offene Einnahmen", invoiceTable(data.open_revenue || [], actions)),
-    panel("Offene Ausgaben", invoiceTable(data.open_payable || [], actions)),
+    panel(
+      "Offene Einnahmen",
+      invoiceTable((data.open_revenue || []).filter(visibleCurrency), actions),
+    ),
+    panel(
+      "Offene Ausgaben",
+      invoiceTable((data.open_payable || []).filter(visibleCurrency), actions),
+    ),
   ];
-  return disposable(nodes, actions);
+  return disposable(
+    [
+      el(
+        "section",
+        {
+          class: "dashboard-finance oj-stack",
+          "aria-labelledby": "dashboard-finance-title",
+        },
+        nodes,
+      ),
+    ],
+    actions,
+  );
 }
 
 export async function invoiceList(actions, params = new URLSearchParams()) {
@@ -1979,7 +2032,8 @@ export async function financeSettings(actions) {
   const tools = row.tools || {},
     watcher = row.watcher || {};
   const billlySource = field("Billly-Datenbank", "billly_source", {
-    placeholder: "Standard: ~/Library/Application Support/Billly/billly.sqlite",
+    placeholder:
+      "Standard: ~/Library/Application Support/com.oli.billly/billly.sqlite",
     helper:
       "Optional ein anderer absoluter Pfad zur vorhandenen billly.sqlite. Die Quelle wird nur gelesen.",
   });

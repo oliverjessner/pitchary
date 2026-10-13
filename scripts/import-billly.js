@@ -1,6 +1,5 @@
 import { DatabaseSync, backup } from "node:sqlite";
 import { chmodSync, existsSync, mkdirSync, realpathSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import {
   defaultDatabasePath,
@@ -9,27 +8,11 @@ import {
 } from "../src/database/database.js";
 import { createFinance } from "../src/business/finance.js";
 import { inspectBillly, importBillly } from "../src/business/billly-import.js";
-
-function defaultSource() {
-  if (process.platform === "darwin")
-    return path.join(
-      os.homedir(),
-      "Library/Application Support/Billly/billly.sqlite",
-    );
-  if (process.platform === "win32")
-    return path.join(
-      process.env.APPDATA ?? os.homedir(),
-      "Billly/billly.sqlite",
-    );
-  return path.join(
-    process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local/share"),
-    "Billly/billly.sqlite",
-  );
-}
+import { defaultBilllySource } from "../src/config/billly-source.js";
 
 function argumentsFrom(argv) {
   const result = {
-    source: defaultSource(),
+    source: defaultBilllySource(),
     database: defaultDatabasePath,
     apply: false,
     help: false,

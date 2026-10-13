@@ -944,3 +944,84 @@ test("Vienna calendar dates and Date-valued clocks drive payment and overdue sta
   );
   assert.equal(finance.get(row.id).created_at, "2026-10-13T22:30:00.000Z");
 });
+
+test("historical processing log adapter preserves dates, refuses mail events and protects existing log IDs", (t) => {
+  const { finance, db } = fixture(t);
+  const row = invoice(finance),
+    id = randomUUID();
+  const sensitive = "sk-fixture-secret-not-for-log";
+  const payload = {
+    id,
+    invoice_id: row.id,
+    process_type: "extract",
+    status: "success",
+    message: `Result ${sensitive}; Bearer private-fixture-token`,
+    created_at: "2026-10-01T12:00:00+02:00",
+  };
+  assert.equal(finance.importProcessingLog(payload).imported, true);
+  const log = finance.logs(row.id)[0];
+  assert.equal(log.created_at, "2026-10-01T10:00:00.000Z");
+  assert.equal(log.message.includes(sensitive), false);
+  assert.equal(log.message.includes("private-fixture-token"), false);
+  assert.equal(
+    finance.importProcessingLog({ ...payload, message: "Must not replace" })
+      .imported,
+    false,
+  );
+  assert.deepEqual(finance.logs(row.id)[0], log);
+  for (const patch of [
+    { id: "bad" },
+    { invoice_id: randomUUID() },
+    { process_type: "email" },
+    { process_type: "send_invoice" },
+    { created_at: "bad-date" },
+    { created_at: null },
+  ])
+    assert.throws(() => finance.importProcessingLog({ ...payload, ...patch }));
+  assert.equal(
+    db.prepare("SELECT count(*) AS n FROM finance_processing_logs").get().n,
+    1,
+  );
+});
+
+test("legacy corrections preserve unknown payment history while public payment actions keep current rules", (t) => {
+  const { finance } = fixture(t);
+  const row = invoice(finance);
+  const paidUnknown = finance.update(
+    row.id,
+    { status: "paid" },
+    { legacyImport: true },
+  );
+  assert.equal(paidUnknown.paid_at, null);
+  assert.equal(Object.hasOwn(paidUnknown.overrides, "paid_at"), false);
+  assert.equal(
+    finance.update(row.id, { total_amount_minor: 101 }).paid_at,
+    null,
+  );
+  assert.throws(
+    () => finance.update(row.id, { paid_at: null }),
+    (error) => error.status === 422,
+  );
+  const explicitUnknown = finance.update(
+    row.id,
+    { paid_at: null },
+    { legacyImport: true },
+  );
+  assert.equal(explicitUnknown.overrides.paid_at, null);
+  finance.update(row.id, { paid_at: "2026-10-01" }, { legacyImport: true });
+  const openHistorical = finance.update(
+    row.id,
+    { status: "open" },
+    { legacyImport: true },
+  );
+  assert.equal(openHistorical.paid_at, "2026-10-01");
+  assert.equal(finance.update(row.id, { status: "open" }).paid_at, null);
+  assert.equal(
+    finance.update(row.id, { status: "paid" }).paid_at,
+    "2026-10-13",
+  );
+  assert.throws(
+    () => finance.update(row.id, { status: "open", legacyImport: true }),
+    (error) => error.status === 422,
+  );
+});

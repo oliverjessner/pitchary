@@ -6,6 +6,7 @@ const readableTables = new Set([
   "customers",
   "customer_contacts",
   "settings",
+  "processing_logs",
 ]);
 const nonSecretSettingKeys = [
   "revenue_folder",
@@ -72,6 +73,33 @@ export function openBilllyRepository(filename) {
               )
               .all()
           : [];
+      },
+      processingLogs() {
+        if (!tables.has("processing_logs")) return [];
+        const available = columns("processing_logs");
+        if (
+          ["id", "process_type", "status", "created_at"].some(
+            (field) => !available.has(field),
+          )
+        )
+          throw new Error("Unsupported Billly processing log schema.");
+        const fields = [
+          "id",
+          "invoice_id",
+          "file_hash",
+          "process_type",
+          "status",
+          "message",
+          "created_at",
+        ];
+        const projection = fields
+          .map((field) => (available.has(field) ? field : `NULL AS ${field}`))
+          .join(",");
+        return db
+          .prepare(
+            `SELECT ${projection} FROM processing_logs ORDER BY created_at,id`,
+          )
+          .all();
       },
       nonSecretSettings() {
         const fields = columns("settings");

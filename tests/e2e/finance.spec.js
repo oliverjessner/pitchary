@@ -198,7 +198,7 @@ test("PDF import, corrections, payment status, category tags and deletion work i
   expect(errors).toEqual([]);
 });
 
-test("currency dashboard, invoice search and financial customer contacts stay usable at narrow widths", async ({
+test("dashboard combines CRM and finance, hides USD only in its overview and preserves financial customer data", async ({
   page,
   request,
 }, testInfo) => {
@@ -223,11 +223,48 @@ test("currency dashboard, invoice search and financial customer contacts stay us
     currency: "USD",
     total_amount_minor: 90000,
   });
-  for (const width of [1440, 390, 320]) {
+  for (const width of [2560, 1440, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto("/#/finance?year=2026&month=10");
-    await expect(page.locator(".finance-currency-group")).toHaveCount(2);
-    await expect(page.locator(".finance-kpis .oj-metric")).toHaveCount(12);
+    await page.goto("/#/finance?year=2026&month=10&currency=USD");
+    await expect(page).toHaveURL(
+      /#\/dashboard\?year=2026&month=10&currency=USD$/,
+    );
+    await expect(
+      page.getByRole("heading", { name: "Dashboard", level: 1, exact: true }),
+    ).toBeVisible();
+    await expect(page.locator("#main")).toHaveClass(/view-dashboard/);
+    await expect(page.locator(".dashboard-metrics .oj-metric")).toHaveCount(4);
+    await expect(
+      page.getByRole("heading", { name: "Letzte Kontakte", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Neueste Angebote", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".finance-currency-group")).toHaveCount(1);
+    await expect(page.locator(".finance-kpis .oj-metric")).toHaveCount(6);
+    const overview = page.getByRole("region", {
+      name: "Finanzen",
+      exact: true,
+    });
+    await expect(overview.getByText("USD", { exact: true })).toHaveCount(0);
+    await expect(
+      overview.getByRole("link", { name: dollar.invoice_number, exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByLabel("Diagramm-Währung", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("navigation", { name: "Finanzen" })
+        .getByRole("link", { name: "Übersicht", exact: true }),
+    ).toHaveAttribute("href", "#/dashboard");
+    await expect(page.getByLabel("Jahr", { exact: true })).toHaveValue("2026");
+    await expect(page.getByLabel("Monat", { exact: true })).toHaveValue("10");
+    const layout = await page.locator("#main").evaluate((main) => ({
+      main: main.getBoundingClientRect().width,
+      container: main.parentElement.getBoundingClientRect().width,
+    }));
+    expect(Math.abs(layout.main - layout.container)).toBeLessThanOrEqual(1);
     await expect(
       page.getByRole("img", { name: /Einnahmen, Ausgaben und Gewinn/ }),
     ).toBeVisible();
@@ -239,6 +276,11 @@ test("currency dashboard, invoice search and financial customer contacts stay us
     ).toHaveCount(12);
     await check(page);
     await screenshot(page, testInfo, "overview", width);
+    const storedDollar = await (
+      await request.get("/api/finance/invoices/" + dollar.id)
+    ).json();
+    expect(storedDollar.currency).toBe("USD");
+    expect(storedDollar.total_amount_minor).toBe(90000);
     await page.goto(
       "/#/invoices?category=revenue&sort=total_amount_minor&order=desc",
     );
@@ -255,6 +297,10 @@ test("currency dashboard, invoice search and financial customer contacts stay us
     await check(page);
     await screenshot(page, testInfo, "list", width);
   }
+  await page.getByLabel("Suchen", { exact: true }).fill(dollar.invoice_number);
+  await expect(
+    page.getByRole("link", { name: dollar.invoice_number, exact: true }),
+  ).toBeVisible();
   await page.goto("/#/finance-customers/" + customer.id);
   await expect(
     page.getByRole("heading", { name: customer.name, exact: true }),

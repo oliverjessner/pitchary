@@ -190,6 +190,218 @@ function fixture(t, { invalidDate = false } = {}) {
   return { databasePath, pdfPath, pdf, folder };
 }
 
+test("Billly processing log import is opt-in, sanitized, mapped and idempotent without copying mail events", (t) => {
+  const source = fixture(t);
+  const legacy = new DatabaseSync(source.databasePath);
+  legacy.exec(
+    "CREATE TABLE processing_logs(id TEXT PRIMARY KEY,invoice_id TEXT,file_hash TEXT,process_type TEXT,status TEXT,message TEXT,created_at TEXT)",
+  );
+  const insert = legacy.prepare(
+    "INSERT INTO processing_logs VALUES(?,?,?,?,?,?,?)",
+  );
+  const logId = "70000000-0000-4000-8000-000000000001";
+  const bearer = "fixture-bearer-do-not-copy";
+  insert.run(
+    logId,
+    revenueId,
+    "invoice-hash",
+    "process",
+    "success",
+    `Processed; ${secret}; Bearer ${bearer}; api_key=fixture-other-secret`,
+    "2026-10-01 10:00:00",
+  );
+  insert.run(
+    "legacy-processing-id",
+    payableId,
+    null,
+    "ocr",
+    "success",
+    "OCR completed",
+    time,
+  );
+  insert.run(
+    "70000000-0000-4000-8000-000000000003",
+    null,
+    null,
+    "scan",
+    "success",
+    null,
+    time,
+  );
+  insert.run(
+    "70000000-0000-4000-8000-000000000004",
+    "missing-source-invoice",
+    null,
+    "extract",
+    "failed",
+    "Source invoice unavailable",
+    time,
+  );
+  for (const type of ["email", "send_invoice", "gmail", "oauth_refresh"])
+    insert.run(
+      `excluded-${type}`,
+      revenueId,
+      null,
+      type,
+      "success",
+      mailCanary,
+      time,
+    );
+  legacy.close();
+  const before = digest(source.databasePath);
+  const target = openDatabase(":memory:");
+  t.after(() => target.close());
+  const finance = createFinance(target, { clock: () => time });
+  finance.record({
+    id: revenueId,
+    category: "payable",
+    counterparty_name: "Unrelated target invoice",
+  });
+  importBillly(source.databasePath, finance, { dryRun: false });
+  assert.equal(
+    target.prepare("SELECT count(*) AS n FROM finance_processing_logs").get().n,
+    0,
+  );
+  const dryRun = importBillly(source.databasePath, null, { includeLogs: true });
+  assert.equal(dryRun.processing_logs, 4);
+  assert.equal(dryRun.excluded_logs, 4);
+  const imported = importBillly(source.databasePath, finance, {
+    dryRun: false,
+    includeLogs: true,
+  });
+  assert.equal(imported.logs_imported, 4);
+  assert.equal(imported.logs_skipped, 0);
+  const rows = target
+    .prepare("SELECT * FROM finance_processing_logs ORDER BY id")
+    .all();
+  const linked = rows.find((row) => row.id === logId);
+  assert.equal(linked.invoice_id, finance.findBilllyInvoice(revenueId).id);
+  assert.notEqual(linked.invoice_id, revenueId);
+  assert.equal(linked.created_at, time);
+  const mapped = rows.find((row) => row.process_type === "ocr");
+  assert.match(
+    mapped.id,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
+  assert.equal(mapped.invoice_id, finance.findBilllyInvoice(payableId).id);
+  assert.equal(rows.filter((row) => row.invoice_id === null).length, 2);
+  const serialized = JSON.stringify(rows);
+  for (const canary of [secret, bearer, "fixture-other-secret", mailCanary])
+    assert.equal(serialized.includes(canary), false);
+  assert.equal(linked.message.includes("Zugangsdaten entfernt"), true);
+  const repeated = importBillly(source.databasePath, finance, {
+    dryRun: false,
+    includeLogs: true,
+  });
+  assert.equal(repeated.logs_imported, 0);
+  assert.equal(repeated.logs_skipped, 4);
+  assert.deepEqual(
+    target.prepare("SELECT * FROM finance_processing_logs ORDER BY id").all(),
+    rows,
+  );
+  assert.equal(digest(source.databasePath), before);
+});
+
+test("Billly historical paid invoices preserve unknown payment dates and absent or empty corrections", (t) => {
+  const source = fixture(t);
+  const legacy = new DatabaseSync(source.databasePath);
+  legacy.prepare("UPDATE invoices SET paid_at=NULL WHERE id=?").run(payableId);
+  legacy
+    .prepare(
+      "UPDATE invoice_overrides SET override_value='' WHERE invoice_id=? AND field_name='paid_at'",
+    )
+    .run(revenueId);
+  legacy.close();
+  const before = digest(source.databasePath);
+  const target = openDatabase(":memory:");
+  t.after(() => target.close());
+  const finance = createFinance(target, {
+    clock: () => "2026-10-20T09:00:00.000Z",
+  });
+  const imported = importBillly(source.databasePath, finance, {
+    dryRun: false,
+  });
+  assert.equal(imported.imported, 2);
+  const revenue = finance.findBilllyInvoice(revenueId),
+    payable = finance.findBilllyInvoice(payableId);
+  assert.equal(revenue.status, "paid");
+  assert.equal(revenue.paid_at, null);
+  assert.equal(Object.hasOwn(revenue.overrides, "paid_at"), true);
+  assert.equal(revenue.overrides.paid_at, null);
+  assert.equal(payable.status, "paid");
+  assert.equal(payable.paid_at, null);
+  assert.equal(Object.hasOwn(payable.overrides, "paid_at"), false);
+  assert.equal(revenue.updated_at, time);
+  assert.equal(payable.updated_at, time);
+  finance.update(payable.id, { total_amount_minor: 2000 });
+  assert.equal(finance.get(payable.id).paid_at, null);
+  finance.update(payable.id, { status: "open" });
+  assert.equal(
+    finance.update(payable.id, { status: "paid" }).paid_at,
+    "2026-10-20",
+  );
+  assert.equal(digest(source.databasePath), before);
+});
+
+test("Billly processing log collisions preserve target logs and invalid source logs roll back before writes", (t) => {
+  const source = fixture(t);
+  const legacy = new DatabaseSync(source.databasePath);
+  legacy.exec(
+    "CREATE TABLE processing_logs(id TEXT PRIMARY KEY,invoice_id TEXT,process_type TEXT,status TEXT,message TEXT,created_at TEXT)",
+  );
+  const logId = "70000000-0000-4000-8000-000000000005";
+  legacy
+    .prepare("INSERT INTO processing_logs VALUES(?,?,?,?,?,?)")
+    .run(logId, revenueId, "process", "success", "Legacy log", time);
+  legacy.close();
+  const target = openDatabase(":memory:");
+  t.after(() => target.close());
+  const finance = createFinance(target, { clock: () => time });
+  finance.importProcessingLog({
+    id: logId,
+    invoice_id: null,
+    process_type: "manual",
+    status: "success",
+    message: "Existing target log",
+    created_at: time,
+  });
+  const before = target
+    .prepare("SELECT * FROM finance_processing_logs WHERE id=?")
+    .get(logId);
+  const imported = importBillly(source.databasePath, finance, {
+    dryRun: false,
+    includeLogs: true,
+  });
+  assert.equal(imported.logs_imported, 0);
+  assert.equal(imported.logs_skipped, 1);
+  assert.deepEqual(
+    target
+      .prepare("SELECT * FROM finance_processing_logs WHERE id=?")
+      .get(logId),
+    before,
+  );
+  const broken = new DatabaseSync(source.databasePath);
+  broken
+    .prepare("UPDATE processing_logs SET created_at=? WHERE id=?")
+    .run("invalid-time", logId);
+  broken.close();
+  const fresh = openDatabase(":memory:");
+  t.after(() => fresh.close());
+  assert.throws(
+    () =>
+      importBillly(source.databasePath, createFinance(fresh), {
+        dryRun: false,
+        includeLogs: true,
+      }),
+    (error) => error.code === "billly_import_invalid",
+  );
+  assert.equal(
+    fresh.prepare("SELECT count(*) AS n FROM finance_invoices").get().n,
+    0,
+  );
+  assert.equal(fresh.prepare("SELECT count(*) AS n FROM customers").get().n, 0);
+});
+
 test("Billly inspection and default import are read-only, sanitized and do not need a target", (t) => {
   const source = fixture(t);
   const before = digest(source.databasePath);

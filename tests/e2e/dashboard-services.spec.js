@@ -36,10 +36,19 @@ test("dashboard metrics use a two-by-two block beside recent contacts", async ({
     };
   });
   mkdirSync("artifacts/screenshots", { recursive: true });
-  for (const width of [1440, 390]) {
+  for (const width of [2560, 1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto("http://127.0.0.1:3218/#/dashboard");
     await expect(page.locator("#main")).toHaveAttribute("aria-busy", "false");
+    await expect(page.locator("#main")).toHaveClass(/view-dashboard/);
+    const layout = await page.locator("#main").evaluate((main) => ({
+      main: main.getBoundingClientRect().width,
+      container: main.parentElement.getBoundingClientRect().width,
+    }));
+    expect(Math.abs(layout.main - layout.container)).toBeLessThanOrEqual(1);
+    await expect(
+      page.getByRole("heading", { name: "Finanzen", exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Aktuelle Pipeline", exact: true }),
     ).toHaveCount(0);
@@ -64,7 +73,7 @@ test("dashboard metrics use a two-by-two block beside recent contacts", async ({
     const contacts = await page
       .locator(".dashboard-grid > section")
       .boundingBox();
-    if (width === 1440) {
+    if (width >= 1440) {
       expect(contacts.x).toBeGreaterThan(boxes[1].x);
       expect(contacts.y).toBe(boxes[0].y);
     } else expect(contacts.y).toBeGreaterThan(boxes[2].y);
