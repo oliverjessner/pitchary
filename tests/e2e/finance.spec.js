@@ -607,10 +607,10 @@ test("Umsatz combines nominal yearly rankings and overall revenue while preservi
             cards[index - 1].y + cards[index - 1].height,
           );
       }
-      const customersHeading = await page
-        .getByRole("heading", { name: "Umsatz nach Kunden", exact: true })
+      const customersTable = await page
+        .getByRole("table", { name: "Umsatz", exact: true })
         .boundingBox();
-      expect(customersHeading.y).toBeGreaterThan(
+      expect(customersTable.y).toBeGreaterThan(
         Math.max(...cards.map((card) => card.y + card.height)),
       );
       await check(page);

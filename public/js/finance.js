@@ -830,13 +830,29 @@ export async function financeDashboard(
         "div",
         { class: "finance-kpis" },
         [
-          ["Einnahmen · " + monthNames[Number(month) - 1], row.month.revenue],
-          ["Ausgaben · " + monthNames[Number(month) - 1], row.month.payable],
-          ["Gewinn · " + monthNames[Number(month) - 1], row.month.profit],
-          ["Einnahmen · " + year, row.year.revenue],
-          ["Ausgaben · " + year, row.year.payable],
-          ["Gewinn · " + year, row.year.profit],
-        ].map(([label, value]) => metric(label, money(value, row.currency))),
+          [
+            "Einnahmen · " + monthNames[Number(month) - 1],
+            row.month.revenue,
+            "revenue",
+          ],
+          [
+            "Ausgaben · " + monthNames[Number(month) - 1],
+            row.month.payable,
+            "payable",
+          ],
+          [
+            "Gewinn · " + monthNames[Number(month) - 1],
+            row.month.profit,
+            "profit",
+          ],
+          ["Einnahmen · " + year, row.year.revenue, "revenue"],
+          ["Ausgaben · " + year, row.year.payable, "payable"],
+          ["Gewinn · " + year, row.year.profit, "profit"],
+        ].map(([label, value, kind]) => {
+          const card = metric(label, money(value, row.currency));
+          card.classList.add("finance-metric-" + kind);
+          return card;
+        }),
       ),
     ),
   );
@@ -1635,8 +1651,6 @@ export async function financeCustomers(
           field("Jahr", "year", {
             options: years.map((value) => [value, value]),
             value: year,
-            helper:
-              "Jahr für die Ranglisten. Originalbeträge werden ohne Währungsumrechnung verglichen.",
             onchange: (event) =>
               routeFilter("/finance-customers", params, {
                 year: event.target.value,
@@ -1666,7 +1680,6 @@ export async function financeCustomers(
           topList("Höchste Kosten · " + year, rankings.top_payable || []),
         ),
       ),
-      el("h2", { class: "oj-heading-3" }, "Umsatz nach Kunden"),
       el(
         "div",
         { class: "finance-filters" },

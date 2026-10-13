@@ -32,6 +32,13 @@
 .finance-kpis .oj-metric-value {
   font-size: clamp(1.15rem, 1.4vw, 1.65rem);
 }
+.finance-metric-revenue .oj-metric-value,
+.finance-metric-profit .oj-metric-value {
+  color: var(--oj-success);
+}
+.finance-metric-payable .oj-metric-value {
+  color: var(--oj-danger);
+}
 .finance-overdue,
 .finance-two-columns {
   display: grid;
@@ -61,6 +68,14 @@
 }
 .finance-overall-revenue {
   display: grid;
+  container-type: inline-size;
+}
+.finance-overall-revenue .oj-metric-value {
+  font-size: clamp(1.5rem, 12cqi, 3.5rem);
+  font-weight: var(--oj-weight-bold);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
 }
 .finance-invoice-table {
   max-inline-size: 100%;
