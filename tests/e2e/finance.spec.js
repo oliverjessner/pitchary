@@ -236,7 +236,7 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     await expect(page.locator(".dashboard-metrics .oj-metric")).toHaveCount(4);
     await expect(
       page.getByRole("heading", { name: "Letzte Kontakte", exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Neueste Angebote", exact: true }),
     ).toBeVisible();
@@ -247,7 +247,7 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
       exact: true,
     });
     const financeBox = await overview.boundingBox();
-    const crmBox = await page.locator(".dashboard-grid").boundingBox();
+    const crmBox = await page.locator(".dashboard-metrics").boundingBox();
     expect(crmBox.y).toBeGreaterThan(financeBox.y + financeBox.height);
     await expect(overview.locator("header")).toHaveCount(0);
     await expect(

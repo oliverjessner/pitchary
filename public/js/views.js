@@ -276,43 +276,29 @@ function entityState(row, type, actions) {
       ];
 }
 export async function dashboard(actions, params) {
-  const [analytics, rows, activities] = await Promise.all([
+  const [analytics, rows] = await Promise.all([
     api("/analytics"),
     api("/customer-services"),
-    api("/activities"),
   ]);
   const s = analytics.summary;
-  const contacts = activities
-    .filter((a) => a.type !== "price_change")
-    .slice(0, 4);
   const finances = await financeDashboard(actions, params);
   const content = [
     heading("Dashboard"),
     ...finances,
     el(
       "div",
-      { class: "dashboard-grid" },
-      el(
-        "div",
-        { class: "metrics-grid dashboard-metrics" },
-        metric(
-          "Angebote gesamt",
-          s.created,
-          "Alle Vorgänge, einschließlich Archiv",
-        ),
-        metric("Tatsächlich gepitcht", s.pitched),
-        metric("Gewonnene Angebote", s.won, "Angenommen und erledigt"),
-        metric(
-          "Abschlussquote",
-          percent(s.win_rate),
-          "Unter entschiedenen Angeboten",
-        ),
+      { class: "metrics-grid dashboard-metrics" },
+      metric(
+        "Angebote gesamt",
+        s.created,
+        "Alle Vorgänge, einschließlich Archiv",
       ),
-      panel(
-        "Letzte Kontakte",
-        contacts.length
-          ? activityList(contacts)
-          : el("p", { class: "oj-muted" }, "Noch keine Kontaktaktivitäten."),
+      metric("Tatsächlich gepitcht", s.pitched),
+      metric("Gewonnene Angebote", s.won, "Angenommen und erledigt"),
+      metric(
+        "Abschlussquote",
+        percent(s.win_rate),
+        "Unter entschiedenen Angeboten",
       ),
     ),
     rows.length

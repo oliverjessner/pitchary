@@ -147,14 +147,8 @@
 .metrics-grid > * {
   align-content: start;
 }
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--oj-space-4);
-  align-items: start;
-}
 .dashboard-metrics {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .service-identity {
   gap: var(--oj-space-2);
@@ -749,9 +743,11 @@ img.customer-logo {
   .app-shell {
     grid-template-columns: 190px minmax(0, 1fr);
   }
-  .detail-grid,
-  .dashboard-grid {
+  .detail-grid {
     grid-template-columns: 1fr;
+  }
+  .dashboard-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 700px) {
@@ -816,6 +812,9 @@ img.customer-logo {
   }
   .metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-metrics {
+    grid-template-columns: 1fr;
   }
   .facts {
     grid-template-columns: 1fr;

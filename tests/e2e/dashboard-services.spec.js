@@ -20,7 +20,7 @@ const services = (page) =>
     .getByRole("link", { name: "Dienstleistungen", exact: true })
     .click();
 
-test("dashboard metrics use a two-by-two block beside recent contacts", async ({
+test("dashboard offer metrics span a four-card row without recent contacts", async ({
   page,
 }, testInfo) => {
   await page.addInitScript(() => {
@@ -36,21 +36,31 @@ test("dashboard metrics use a two-by-two block beside recent contacts", async ({
     };
   });
   mkdirSync("artifacts/screenshots", { recursive: true });
-  for (const width of [2560, 1440, 390]) {
+  for (const width of [2560, 1440, 737, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto("http://127.0.0.1:3218/#/dashboard");
     await expect(page.locator("#main")).toHaveAttribute("aria-busy", "false");
     await expect(page.locator("#main")).toHaveClass(/view-dashboard/);
-    const layout = await page.locator("#main").evaluate((main) => ({
-      main: main.getBoundingClientRect().width,
-      container: main.parentElement.getBoundingClientRect().width,
-    }));
+    const layout = await page.locator("#main").evaluate((main) => {
+      const style = getComputedStyle(main);
+      return {
+        main: main.getBoundingClientRect().width,
+        content:
+          main.clientWidth -
+          parseFloat(style.paddingInlineStart) -
+          parseFloat(style.paddingInlineEnd),
+        container: main.parentElement.getBoundingClientRect().width,
+      };
+    });
     expect(Math.abs(layout.main - layout.container)).toBeLessThanOrEqual(1);
     await expect(
       page.getByRole("heading", { name: "Finanzen", exact: true }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Aktuelle Pipeline", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Letzte Kontakte", exact: true }),
     ).toHaveCount(0);
     const metrics = page.locator(".dashboard-metrics .oj-metric-card");
     await expect(metrics).toHaveCount(4);
@@ -66,17 +76,26 @@ test("dashboard metrics use a two-by-two block beside recent contacts", async ({
         return { x, y };
       }),
     );
-    expect(boxes[0].y).toBe(boxes[1].y);
-    expect(boxes[2].y).toBe(boxes[3].y);
-    expect(boxes[2].y).toBeGreaterThan(boxes[0].y);
-    expect(boxes[0].x).toBe(boxes[2].x);
-    const contacts = await page
-      .locator(".dashboard-grid > section")
-      .boundingBox();
     if (width >= 1440) {
-      expect(contacts.x).toBeGreaterThan(boxes[1].x);
-      expect(contacts.y).toBe(boxes[0].y);
-    } else expect(contacts.y).toBeGreaterThan(boxes[2].y);
+      for (let index = 1; index < boxes.length; index++) {
+        expect(boxes[index].y).toBe(boxes[0].y);
+        expect(boxes[index].x).toBeGreaterThan(boxes[index - 1].x);
+      }
+    } else if (width === 737) {
+      expect(boxes[0].y).toBe(boxes[1].y);
+      expect(boxes[2].y).toBe(boxes[3].y);
+      expect(boxes[2].y).toBeGreaterThan(boxes[0].y);
+      expect(boxes[0].x).toBe(boxes[2].x);
+    } else {
+      for (let index = 1; index < boxes.length; index++) {
+        expect(boxes[index].y).toBeGreaterThan(boxes[index - 1].y);
+        expect(boxes[index].x).toBe(boxes[0].x);
+      }
+    }
+    const metricsWidth = await page
+      .locator(".dashboard-metrics")
+      .evaluate((node) => node.getBoundingClientRect().width);
+    expect(Math.abs(metricsWidth - layout.content)).toBeLessThanOrEqual(1);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
