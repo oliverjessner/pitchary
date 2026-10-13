@@ -118,15 +118,22 @@ test("complete customer, contact and offer workflow with persistence", async ({
   await expect(
     page.getByRole("button", { name: "Als erledigt markieren" }),
   ).toBeVisible();
-  const acceptedBadge = page.getByRole("table", { name: "Statusphasen", exact: true }).getByText("Angenommen", { exact: true });
+  const acceptedBadge = page
+    .getByRole("table", { name: "Statusphasen", exact: true })
+    .getByText("Angenommen", { exact: true });
   for (const width of [1440, 737, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(acceptedBadge).toBeVisible();
     const layout = await acceptedBadge.evaluate((badge) => {
       const range = document.createRange();
       range.selectNodeContents(badge);
-      const bounds = badge.getBoundingClientRect(), cell = badge.closest("td").getBoundingClientRect();
-      return { lines: range.getClientRects().length, right: bounds.right, cellRight: cell.right };
+      const bounds = badge.getBoundingClientRect(),
+        cell = badge.closest("td").getBoundingClientRect();
+      return {
+        lines: range.getClientRects().length,
+        right: bounds.right,
+        cellRight: cell.right,
+      };
     });
     expect(layout.lines).toBe(1);
     expect(layout.right).toBeLessThanOrEqual(layout.cellRight);
@@ -263,6 +270,19 @@ test("seeded views: desktop/mobile screenshots, a11y, no runtime or asset errors
       await page.goto("http://127.0.0.1:3218/#/" + route);
       await expect(page.locator("#main")).toHaveAttribute("aria-busy", "false");
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      if (route === "analytics") {
+        await expect(
+          page.getByText("Pitch → Entscheidung", { exact: true }),
+        ).toHaveCount(0);
+        await expect(
+          page.getByText("Mittelwert · erste Entscheidung", { exact: true }),
+        ).toHaveCount(0);
+        await expect(
+          page
+            .locator(".oj-metric-label")
+            .filter({ hasText: /^Pitch → Zusage$/ }),
+        ).toBeVisible();
+      }
       await page.evaluate(() => document.fonts.ready);
       expect(
         await page.evaluate(

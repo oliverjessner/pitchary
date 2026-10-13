@@ -288,6 +288,7 @@ export async function dashboard(actions, params) {
   const finances = await financeDashboard(actions, params);
   const content = [
     heading("Dashboard", "Ein Blick auf deine Kunden und laufenden Angebote."),
+    ...finances,
     el(
       "div",
       { class: "dashboard-grid" },
@@ -323,7 +324,6 @@ export async function dashboard(actions, params) {
             primary: true,
           }),
         ),
-    ...finances,
   ];
   content.dispose = () => finances.dispose?.();
   return content;

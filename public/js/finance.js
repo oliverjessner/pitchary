@@ -1624,22 +1624,6 @@ export async function financeCustomers(
     [
       heading("Umsatz", "Jahresranglisten und Rechnungsumsatz deiner Kunden."),
       el(
-        "div",
-        { class: "finance-overall-revenue" },
-        metric(
-          "Gesamtumsatz",
-          combinedAmount(rankings.overall_revenue),
-          "Alle Einnahmenrechnungen, über alle Jahre" +
-            (rankings.overall_revenue.amounts.length > 1
-              ? " · " +
-                rankings.overall_revenue.amounts
-                  .map(({ currency }) => currency)
-                  .join(" + ") +
-                ", ohne Währungsumrechnung"
-              : ""),
-        ),
-      ),
-      el(
         "section",
         {
           class: "finance-rankings oj-stack",
@@ -1661,17 +1645,28 @@ export async function financeCustomers(
         ),
         el(
           "div",
-          { class: "finance-two-columns" },
+          { class: "finance-summary-grid" },
+          el(
+            "div",
+            { class: "finance-overall-revenue" },
+            metric(
+              "Gesamtumsatz",
+              combinedAmount(rankings.overall_revenue),
+              "Alle Einnahmenrechnungen, über alle Jahre" +
+                (rankings.overall_revenue.amounts.length > 1
+                  ? " · " +
+                    rankings.overall_revenue.amounts
+                      .map(({ currency }) => currency)
+                      .join(" + ") +
+                    ", ohne Währungsumrechnung"
+                  : ""),
+            ),
+          ),
           topList("Beste Kunden · " + year, rankings.top_revenue || []),
           topList("Höchste Kosten · " + year, rankings.top_payable || []),
         ),
       ),
       el("h2", { class: "oj-heading-3" }, "Umsatz nach Kunden"),
-      el(
-        "p",
-        { class: "oj-small oj-muted" },
-        "Gesamter Rechnungsumsatz über alle Jahre, je Währung.",
-      ),
       el(
         "div",
         { class: "finance-filters" },

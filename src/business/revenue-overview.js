@@ -44,7 +44,9 @@ export function revenueOverview(invoices, year) {
     if (!invoice.invoice_date?.startsWith(year + "-")) continue;
     const name =
       invoice.customer_name || invoice.counterparty_name || "Unbekannt";
-    const key = invoice.customer_id ? "customer:" + invoice.customer_id : "name:" + nameKey(name);
+    const key = invoice.customer_id
+      ? "customer:" + invoice.customer_id
+      : "name:" + nameKey(name);
     const category = groups[invoice.category];
     if (!category.has(key))
       category.set(key, {

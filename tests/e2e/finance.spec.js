@@ -246,6 +246,9 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
       name: "Finanzübersicht",
       exact: true,
     });
+    const financeBox = await overview.boundingBox();
+    const crmBox = await page.locator(".dashboard-grid").boundingBox();
+    expect(crmBox.y).toBeGreaterThan(financeBox.y + financeBox.height);
     await expect(overview.locator("header")).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Finanzen", exact: true }),
@@ -466,7 +469,9 @@ test("Umsatz combines nominal yearly rankings and overall revenue while preservi
   page,
   request,
 }, testInfo) => {
-  const baseline = await (await request.get("/api/finance/revenue-overview?year=2024")).json();
+  const baseline = await (
+    await request.get("/api/finance/revenue-overview?year=2024")
+  ).json();
   const totalBefore = baseline.overall_revenue.total_amount_minor;
   const customer = await (
     await request.post("/api/customers", {
@@ -544,30 +549,70 @@ test("Umsatz combines nominal yearly rankings and overall revenue while preservi
       await expect(best).toContainText(customer.name);
       await expect(best).toContainText("150,00");
       await expect(best.locator(".finance-ranking")).toHaveCount(1);
-      await expect(best.locator(".finance-ranking li").filter({ hasText: customer.name })).toHaveCount(1);
-      expect(await best.locator(".finance-ranking li").count()).toBeLessThanOrEqual(4);
-      expect(await costs.locator(".finance-ranking li").count()).toBeLessThanOrEqual(4);
-      await expect(best.getByRole("heading", { name: /^(EUR|USD)$/, exact: true })).toHaveCount(0);
+      await expect(
+        best.locator(".finance-ranking li").filter({ hasText: customer.name }),
+      ).toHaveCount(1);
+      expect(
+        await best.locator(".finance-ranking li").count(),
+      ).toBeLessThanOrEqual(4);
+      expect(
+        await costs.locator(".finance-ranking li").count(),
+      ).toBeLessThanOrEqual(4);
+      await expect(
+        best.getByRole("heading", { name: /^(EUR|USD)$/, exact: true }),
+      ).toHaveCount(0);
       await expect(best).not.toContainText("900,00");
       const overall = page.locator(".finance-overall-revenue");
-      const expectedOverall = new Intl.NumberFormat("de-AT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((totalBefore + 105000) / 100);
-      await expect(overall.locator(".oj-metric-value")).toHaveText(expectedOverall);
+      const expectedOverall = await page.evaluate(
+        (value) =>
+          new Intl.NumberFormat("de-AT", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }).format(value),
+        (totalBefore + 105000) / 100,
+      );
+      await expect(overall.locator(".oj-metric-value")).toHaveText(
+        expectedOverall,
+      );
       await expect(overall).toContainText("ohne Währungsumrechnung");
+      await expect(
+        page.getByText(
+          "Gesamter Rechnungsumsatz über alle Jahre, je Währung.",
+          { exact: true },
+        ),
+      ).toHaveCount(0);
       await expect(costs).toContainText(rows[2].counterparty_name);
       await expect(costs).toContainText("15,00");
       await expect(costs).not.toContainText(rows[3].counterparty_name);
       const cards = await rankings
-        .locator(".finance-two-columns > section")
+        .locator(".finance-summary-grid > *")
         .evaluateAll((nodes) =>
           nodes.map((node) => {
             const { x, y, width, height } = node.getBoundingClientRect();
             return { x, y, width, height };
           }),
         );
-      if (width === 1440) {
-        expect(Math.abs(cards[0].y - cards[1].y)).toBeLessThanOrEqual(1);
-        expect(cards[1].x).toBeGreaterThan(cards[0].x + cards[0].width);
-      } else expect(cards[1].y).toBeGreaterThan(cards[0].y + cards[0].height);
+      expect(cards).toHaveLength(3);
+      for (let index = 1; index < cards.length; index++) {
+        if (width === 1440) {
+          expect(Math.abs(cards[0].y - cards[index].y)).toBeLessThanOrEqual(1);
+          expect(cards[index].x).toBeGreaterThan(
+            cards[index - 1].x + cards[index - 1].width,
+          );
+          expect(
+            Math.abs(cards[0].height - cards[index].height),
+          ).toBeLessThanOrEqual(1);
+        } else
+          expect(cards[index].y).toBeGreaterThan(
+            cards[index - 1].y + cards[index - 1].height,
+          );
+      }
+      const customersHeading = await page
+        .getByRole("heading", { name: "Umsatz nach Kunden", exact: true })
+        .boundingBox();
+      expect(customersHeading.y).toBeGreaterThan(
+        Math.max(...cards.map((card) => card.y + card.height)),
+      );
       await check(page);
       await screenshot(page, testInfo, "rankings", width);
       await page.getByLabel("Jahr", { exact: true }).selectOption("2025");
@@ -581,7 +626,9 @@ test("Umsatz combines nominal yearly rankings and overall revenue while preservi
       await expect(rankings).toContainText("900,00");
       await expect(rankings).toContainText(rows[3].counterparty_name);
       await expect(rankings).not.toContainText(rows[2].counterparty_name);
-      await expect(overall.locator(".oj-metric-value")).toHaveText(expectedOverall);
+      await expect(overall.locator(".oj-metric-value")).toHaveText(
+        expectedOverall,
+      );
       const lifetime = page
         .getByRole("table", { name: "Umsatz", exact: true })
         .getByRole("row")
@@ -647,10 +694,24 @@ test("finance settings preserve company data and mask keys without a migration c
     await expect(address).toHaveJSProperty("tagName", "INPUT");
     await expect(address).toHaveAttribute("type", "text");
     await expect(address).toHaveValue("Originalgasse 7, 1010 Wien");
-    await expect(page.getByRole("heading", { name: "Ordnerüberwachung", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Daten in Pitchary übernehmen", exact: true })).toHaveCount(0);
-    await expect(page.getByLabel("Quelldatenbank", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Quelle prüfen und übernehmen", exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Ordnerüberwachung", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Daten in Pitchary übernehmen",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByLabel("Quelldatenbank", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", {
+        name: "Quelle prüfen und übernehmen",
+        exact: true,
+      }),
+    ).toHaveCount(0);
     const model = page.getByLabel("Erkennungsmodell", { exact: true });
     await expect(model).toHaveValue(initial.model);
     await expect(model.locator("option")).toHaveCount(initial.models.length);
@@ -718,7 +779,12 @@ test("finance settings preserve company data and mask keys without a migration c
     ).toBeVisible();
     await check(page);
     await screenshot(page, testInfo, "settings", 320);
-    await expect(page.getByRole("heading", { name: "Daten in Pitchary übernehmen", exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", {
+        name: "Daten in Pitchary übernehmen",
+        exact: true,
+      }),
+    ).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText(/billly/i);
   } finally {
     await request.delete("/api/finance/settings/key");
