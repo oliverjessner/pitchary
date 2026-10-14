@@ -361,6 +361,10 @@
 .finance-settings-form {
   max-inline-size: 60rem;
 }
+.finance-settings-tab-list {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
 @media (max-width: 1200px) {
   .finance-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));

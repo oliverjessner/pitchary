@@ -729,6 +729,15 @@ img.customer-logo {
   max-width: 360px;
   overflow-wrap: anywhere;
 }
+.customer-contacts-table .oj-table {
+  min-inline-size: 45rem;
+}
+.customer-contacts-table th {
+  white-space: nowrap;
+}
+.customer-contacts-table td:nth-child(3) .oj-link {
+  white-space: nowrap;
+}
 .performance-panel .oj-table {
   min-inline-size: 960px;
 }

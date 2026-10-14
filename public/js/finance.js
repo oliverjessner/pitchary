@@ -1774,7 +1774,7 @@ export function customerFinanceSections(row, actions) {
   ];
 }
 
-export async function financeSettings(actions) {
+export async function financeSettings(actions, params = new URLSearchParams()) {
   const row = await api(financePath + "/settings");
   const addressValue = String(row.company_address || "").replace(
     /\r?\n/g,
@@ -1822,6 +1822,9 @@ export async function financeSettings(actions) {
         } catch (err) {
           error.textContent = err.message;
           error.hidden = false;
+          revealSettingsField(
+            form.elements.namedItem(Object.keys(err.fields || {})[0] || ""),
+          );
           error.focus();
         } finally {
           save.disabled = false;
@@ -1965,38 +1968,115 @@ export async function financeSettings(actions) {
   });
   const tools = row.tools || {},
     watcher = row.watcher || {};
+  const watcherStatus = panel(
+    "Ordnerüberwachung",
+    facts([
+      ["Status", watcher.running ? "Aktiv" : "Keine Ordner aktiv"],
+      [
+        "Letzter Scan",
+        watcher.last_scan ? datetime(watcher.last_scan) : "Noch kein Scan",
+      ],
+      ["PDF-Text", tools.text ? "Verfügbar" : "Nicht verfügbar"],
+      ["OCR", tools.ocr ? "Verfügbar" : "Nicht verfügbar"],
+      [
+        "Erkennungsmodell",
+        models.find(({ id }) => id === row.model)?.label || "GPT-4o Mini",
+      ],
+    ]),
+    watcher.error
+      ? el(
+          "p",
+          { class: "oj-alert oj-alert-warning", role: "status" },
+          watcher.error,
+        )
+      : null,
+    button("Ordner jetzt einlesen", () => actions.financeScan(), {
+      iconName: "folder-open",
+    }),
+  );
+  const [folderFields, companyFields, recognitionFields] =
+    form.querySelectorAll(":scope > .oj-panel");
+  const sections = [
+    { id: "company", label: "Firma", content: [companyFields] },
+    { id: "recognition", label: "Erkennung", content: [recognitionFields] },
+    {
+      id: "watcher",
+      label: "Ordnerüberwachung",
+      content: [folderFields, watcherStatus],
+    },
+  ];
+  const active = sections.some((section) => section.id === params.get("tab"))
+    ? params.get("tab")
+    : "company";
+  const tabs = el(
+    "div",
+    { class: "oj-tabs finance-settings-tabs", "data-oj-tabs": true },
+    el(
+      "div",
+      {
+        class: "oj-tab-list finance-settings-tab-list",
+        role: "tablist",
+        "aria-label": "Einstellungen",
+      },
+      sections.map((section) =>
+        el(
+          "button",
+          {
+            type: "button",
+            class: "oj-tab",
+            role: "tab",
+            id: "settings-tab-" + section.id,
+            "aria-controls": "settings-panel-" + section.id,
+            "aria-selected": String(section.id === active),
+            "data-settings-tab": section.id,
+          },
+          section.label,
+        ),
+      ),
+    ),
+    sections.map((section) =>
+      el(
+        "section",
+        {
+          class: "oj-tab-panel oj-stack",
+          role: "tabpanel",
+          id: "settings-panel-" + section.id,
+          "aria-labelledby": "settings-tab-" + section.id,
+        },
+        section.content,
+      ),
+    ),
+  );
+  tabs.addEventListener("oj:change", (event) => {
+    const id = event.detail?.tab?.dataset.settingsTab;
+    if (!sections.some((section) => section.id === id)) return;
+    const next = new URLSearchParams(params);
+    if (id === "company") next.delete("tab");
+    else next.set("tab", id);
+    history.replaceState(
+      null,
+      "",
+      "#/finance-settings" + (next.size ? "?" + next : ""),
+    );
+  });
+  function revealSettingsField(control) {
+    const section = control?.closest('[role="tabpanel"]');
+    if (!section) return;
+    const id = section.getAttribute("aria-labelledby");
+    tabs.querySelector("#" + id)?.click();
+  }
+  form.addEventListener(
+    "invalid",
+    (event) => revealSettingsField(event.target),
+    true,
+  );
+  form.prepend(tabs);
   return [
     heading(
       "Einstellungen",
       "Rechnungsordner, Firmenangaben und automatische Erkennung.",
     ),
     form,
-    panel(
-      "Ordnerüberwachung",
-      facts([
-        ["Status", watcher.running ? "Aktiv" : "Keine Ordner aktiv"],
-        [
-          "Letzter Scan",
-          watcher.last_scan ? datetime(watcher.last_scan) : "Noch kein Scan",
-        ],
-        ["PDF-Text", tools.text ? "Verfügbar" : "Nicht verfügbar"],
-        ["OCR", tools.ocr ? "Verfügbar" : "Nicht verfügbar"],
-        [
-          "Erkennungsmodell",
-          models.find(({ id }) => id === row.model)?.label || "GPT-4o Mini",
-        ],
-      ]),
-      watcher.error
-        ? el(
-            "p",
-            { class: "oj-alert oj-alert-warning", role: "status" },
-            watcher.error,
-          )
-        : null,
-      button("Ordner jetzt einlesen", () => actions.financeScan(), {
-        iconName: "folder-open",
-      }),
-    ),
     el(
       "p",
       { class: "finance-app-version oj-small oj-muted" },

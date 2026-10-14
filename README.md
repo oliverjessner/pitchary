@@ -60,6 +60,8 @@ Pitchary verwendet Kobaltblau (`#4D8DFF`) als Produktakzent über `--oj-accent` 
 
 Beim Anlegen eines Kunden sucht Pitchary mit Fetchary anhand der **Haupt-E-Mail** oder der eingetragenen Firmenwebsite automatisch nach einem Icon und speichert es als Kundenlogo. Ein manuell hochgeladenes Logo hat Vorrang. Die Haupt-E-Mail wird mit dem Rechnungsprofil geteilt und ist durchsuchbar. Details: [Kundenlogos](docs/customer-logos.md).
 
+Die Mitarbeitertabelle in den Kundendetails zeigt E-Mail und LinkedIn in getrennten Spalten. Die Einstellungen sind in **Firma**, **Erkennung** und **Ordnerüberwachung** gegliedert. Ordnerpfade, Überwachungsstatus und manueller Scan stehen im eigenen Tab; Eingaben bleiben beim Tab-Wechsel erhalten.
+
 Die linke Navigation bleibt auf Desktop an ihrer Position und ist auf die Fensterhöhe begrenzt. In niedrigen Fenstern scrollt das Menü intern; auf Mobil wird es oberhalb des Inhalts angezeigt. Der obere Header bleibt beim Scrollen sichtbar. Das Menü enthält Dashboard, Kunden, Dienstleistungen, Pipeline, Analytics, Rechnungen, Umsatz und Einstellungen. Eine zusätzliche Finanz-Subnavigation entfällt. Die Kundentabelle zeigt Name, Logo und den gespeicherten Status „Lead“ oder „Kunde“; die Website bleibt in den Kundendetails und der Bearbeitung verfügbar und kann weiterhin gesucht werden.
 
 Jeder Kunde hat eine gemeinsame Detailansicht unter `#/customers/:id`: Logo, Website und Notizen, aktive/archivierte Ansprechpartner, Angebote mit Beziehungshistorie, Rechnungsprofil, Umsatzkennzahlen je Währung und Rechnungen mit Zahlungsstatus. Alte Finanzkunden-Links führen zu dieser Ansicht. **Umsatz** ist die separate Vergleichsübersicht im Hauptmenü; ihre Kundenlinks öffnen dieselbe Detailansicht. Gesamtumsatz, „Beste Kunden“ und „Höchste Kosten“ stehen auf Desktop in einer Dreierreihe, auf Mobil untereinander. Darunter folgt die Kundentabelle. Der Gesamtumsatz umfasst alle Einnahmenrechnungen über alle Jahre; die Ranglisten folgen dem Jahresfilter. Jede Rangliste enthält höchstens vier Einträge, gemeinsam über alle Währungen und nach Originalbeträgen ohne Umrechnung sortiert. Mehrere Währungen desselben Kunden/Lieferanten werden nominal addiert; gemischte Werte erhalten keinen einzelnen Währungscode, und die ursprüngliche Zusammensetzung bleibt als Tooltip bzw. Hinweis verfügbar.
@@ -168,6 +170,8 @@ npx playwright install chromium webkit
 npm run test:ui
 npm run format:check
 ```
+
+Die gemeinsame Prettier-Konfiguration behält für `package.json` vier Leerzeichen bei. `npm run format:check` prüft diese Datei ebenfalls; lokal und in GitHub Actions gelten dieselben Regeln.
 
 Die Node-Tests prüfen Mehrfachangebote, separate Historien, erzwungene Transaktionsfehler, Originalpreis, Ansprechpartner-Zuordnung (auch direkt in SQLite), Wiederaufnahme, ungültige Übergänge, Archive, Batch-Atomizität, Analytics, Filter, Persistenz nach Neustart, API-Schutz und Backup/Restore.
 

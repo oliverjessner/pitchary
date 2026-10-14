@@ -115,7 +115,7 @@ async function render(focus = true) {
     else if (section === "finance-customers")
       content = await financeViews.financeCustomers(guarded, params);
     else if (section === "finance-settings")
-      content = await financeViews.financeSettings(guarded);
+      content = await financeViews.financeSettings(guarded, params);
     else
       content = [
         heading("Seite nicht gefunden"),

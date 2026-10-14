@@ -453,6 +453,52 @@ export async function customerDetail(id, actions) {
     api("/finance/customers/" + id),
   ]);
   const employees = [...row.employees, ...row.archived_employees];
+  const contactsTable = table(
+    "Mitarbeiter",
+    ["Name", "E-Mail", "LinkedIn", "Position", "Aktionen"],
+    employees.map((e) => [
+      el(
+        "div",
+        {},
+        e.name,
+        e.archived_at ? el("span", { class: "oj-badge" }, "Archiviert") : null,
+      ),
+      e.email ? link(e.email, "mailto:" + e.email) : "–",
+      e.linkedin
+        ? el(
+            "a",
+            {
+              class: "oj-link",
+              href: e.linkedin,
+              target: "_blank",
+              rel: "noopener noreferrer",
+            },
+            "LinkedIn",
+            icon("arrow-up-right-from-square"),
+          )
+        : "–",
+      e.position || "–",
+      el(
+        "div",
+        { class: "section-actions" },
+        e.archived_at
+          ? button(
+              "Wiederherstellen",
+              () => actions.archive("employees", e, true),
+              { compact: true },
+            )
+          : [
+              button("Bearbeiten", () => actions.entity("employees", e), {
+                compact: true,
+              }),
+              button("Archivieren", () => actions.archive("employees", e), {
+                compact: true,
+              }),
+            ],
+      ),
+    ]),
+  );
+  contactsTable.classList.add("customer-contacts-table");
   const content = [
     heading(
       row.name,
@@ -481,61 +527,7 @@ export async function customerDetail(id, actions) {
             ),
           )
         : null,
-      table(
-        "Mitarbeiter",
-        ["Name", "Kontakt", "Position", "Aktionen"],
-        employees.map((e) => [
-          el(
-            "div",
-            {},
-            e.name,
-            e.archived_at
-              ? el("span", { class: "oj-badge" }, "Archiviert")
-              : null,
-          ),
-          el(
-            "div",
-            {},
-            e.email ? link(e.email, "mailto:" + e.email) : "–",
-            e.linkedin
-              ? el(
-                  "div",
-                  {},
-                  el(
-                    "a",
-                    {
-                      class: "oj-link",
-                      href: e.linkedin,
-                      target: "_blank",
-                      rel: "noopener noreferrer",
-                    },
-                    "LinkedIn",
-                    icon("arrow-up-right-from-square"),
-                  ),
-                )
-              : null,
-          ),
-          e.position || "–",
-          el(
-            "div",
-            { class: "section-actions" },
-            e.archived_at
-              ? button(
-                  "Wiederherstellen",
-                  () => actions.archive("employees", e, true),
-                  { compact: true },
-                )
-              : [
-                  button("Bearbeiten", () => actions.entity("employees", e), {
-                    compact: true,
-                  }),
-                  button("Archivieren", () => actions.archive("employees", e), {
-                    compact: true,
-                  }),
-                ],
-          ),
-        ]),
-      ),
+      contactsTable,
     ),
     panel(
       "Angebote & Beziehungshistorie",

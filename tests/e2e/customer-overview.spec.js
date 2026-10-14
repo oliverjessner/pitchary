@@ -69,6 +69,7 @@ test("customer overview combines branding, contacts, offer history and editable 
     customer_id: customer.id,
     name: "CRM Kontakt " + testInfo.project.name,
     email: "crm@example.test",
+    linkedin: "https://www.linkedin.com/in/crm-contact/",
     position: "Projektleitung",
   });
   const service = await create(request, "services", {
@@ -148,6 +149,30 @@ test("customer overview combines branding, contacts, offer history and editable 
       await expect(
         page.getByRole("table", { name: "Mitarbeiter", exact: true }),
       ).toHaveCount(1);
+      const contactsTable = page.getByRole("table", {
+        name: "Mitarbeiter",
+        exact: true,
+      });
+      await expect(contactsTable.getByRole("columnheader")).toHaveText([
+        "Name",
+        "E-Mail",
+        "LinkedIn",
+        "Position",
+        "Aktionen",
+      ]);
+      const contactRow = contactsTable
+        .getByRole("row")
+        .filter({ hasText: contact.name });
+      await expect(
+        contactRow.locator("td").nth(1).getByRole("link"),
+      ).toHaveAttribute("href", "mailto:" + contact.email);
+      const linkedin = contactRow
+        .locator("td")
+        .nth(2)
+        .getByRole("link", { name: "LinkedIn", exact: true });
+      await expect(linkedin).toHaveAttribute("href", contact.linkedin);
+      await expect(linkedin).toHaveAttribute("target", "_blank");
+      await expect(linkedin).toHaveAttribute("rel", "noopener noreferrer");
       await expect(
         page.getByRole("heading", { name: "Ansprechpartner", exact: true }),
       ).toHaveCount(0);

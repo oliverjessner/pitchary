@@ -718,6 +718,20 @@ test("finance settings preserve company data and mask keys without a migration c
     ).ok(),
   ).toBe(true);
   let sentKey = null;
+  let scans = 0;
+  await page.route("**/api/finance/scan", async (route) => {
+    scans++;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        imported: 0,
+        skipped: 0,
+        failed: 0,
+        missing: 0,
+        pending: 0,
+      }),
+    });
+  });
   await page.route("**/api/finance/settings/test-key", async (route) => {
     sentKey = route.request().postDataJSON();
     await route.fulfill({
@@ -740,9 +754,65 @@ test("finance settings preserve company data and mask keys without a migration c
     await expect(address).toHaveJSProperty("tagName", "INPUT");
     await expect(address).toHaveAttribute("type", "text");
     await expect(address).toHaveValue("Originalgasse 7, 1010 Wien");
+    const companyTab = page.getByRole("tab", { name: "Firma", exact: true });
+    const recognitionTab = page.getByRole("tab", {
+      name: "Erkennung",
+      exact: true,
+    });
+    const watcherTab = page.getByRole("tab", {
+      name: "Ordnerüberwachung",
+      exact: true,
+    });
+    await expect(page.getByRole("tab")).toHaveCount(3);
+    await expect(companyTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tabpanel")).toHaveCount(1);
+    await expect(
+      page.getByRole("heading", { name: "Ordnerüberwachung", exact: true }),
+    ).toBeHidden();
+    await companyTab.focus();
+    await companyTab.press("ArrowRight");
+    await expect(recognitionTab).toBeFocused();
+    await expect(recognitionTab).toHaveAttribute("aria-selected", "true");
+    await recognitionTab.press("Home");
+    await expect(companyTab).toBeFocused();
+    const companyEmail = page.getByLabel("Firmen-E-Mail", { exact: true });
+    await companyEmail.fill("not-an-email");
+    await companyTab.focus();
+    await companyTab.press("End");
+    await expect(watcherTab).toBeFocused();
+    await expect(watcherTab).toHaveAttribute("aria-selected", "true");
+    await expect(page).toHaveURL(/tab=watcher$/);
     await expect(
       page.getByRole("heading", { name: "Ordnerüberwachung", exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Einstellungen speichern", exact: true })
+      .click();
+    await expect(companyTab).toHaveAttribute("aria-selected", "true");
+    await expect(companyEmail).toBeFocused();
+    await companyEmail.fill(initial.company_email || "");
+    await watcherTab.click();
+    await page
+      .getByRole("button", { name: "Ordner jetzt einlesen", exact: true })
+      .click();
+    await expect.poll(() => scans).toBe(1);
+    await expect(watcherTab).toHaveAttribute("aria-selected", "true");
+    await check(page);
+    await screenshot(page, testInfo, "settings-watcher", 1440);
+    const revenueFolder = page.getByLabel("Einnahmen-Ordner", { exact: true });
+    await revenueFolder.fill("/pitchary-missing-fixture-folder");
+    await recognitionTab.click();
+    await page
+      .getByRole("button", { name: "Einstellungen speichern", exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "Dieser Ordner ist nicht erreichbar." }),
+    ).toBeVisible();
+    await expect(watcherTab).toHaveAttribute("aria-selected", "true");
+    await expect(revenueFolder).toHaveValue("/pitchary-missing-fixture-folder");
+    await revenueFolder.fill(initial.revenue_folder || "");
     await expect(
       page.getByRole("heading", {
         name: "Daten in Pitchary übernehmen",
@@ -759,6 +829,7 @@ test("finance settings preserve company data and mask keys without a migration c
       }),
     ).toHaveCount(0);
     const model = page.getByLabel("Erkennungsmodell", { exact: true });
+    await recognitionTab.click();
     await expect(model).toHaveValue(initial.model);
     await expect(model.locator("option")).toHaveCount(initial.models.length);
     expect(
@@ -771,6 +842,7 @@ test("finance settings preserve company data and mask keys without a migration c
       .getByRole("button", { name: "Einstellungen speichern", exact: true })
       .click();
     await expect(model).toHaveValue("gpt-4.1-mini");
+    await expect(recognitionTab).toHaveAttribute("aria-selected", "true");
     expect(
       (await (await request.get("/api/finance/settings")).json())
         .company_address,
@@ -778,6 +850,7 @@ test("finance settings preserve company data and mask keys without a migration c
     await check(page);
     await screenshot(page, testInfo, "settings", 1440);
     await page.setViewportSize({ width: 320, height: 900 });
+    await companyTab.click();
     await page
       .getByLabel("Firmenname", { exact: true })
       .fill("Finance Test " + testInfo.project.name);
@@ -788,6 +861,10 @@ test("finance settings preserve company data and mask keys without a migration c
       .getByLabel("Firmenadresse", { exact: true })
       .fill("Testgasse 42, 1010 Wien");
     const key = "sk-local-fixture-1234";
+    await recognitionTab.click();
+    await expect(page.getByLabel("Firmenname", { exact: true })).toHaveValue(
+      "Finance Test " + testInfo.project.name,
+    );
     await page.getByLabel("Neuer OpenAI-Schlüssel", { exact: true }).fill(key);
     await expect(
       page.getByRole("button", { name: "Schlüssel prüfen", exact: true }),
@@ -810,6 +887,7 @@ test("finance settings preserve company data and mask keys without a migration c
     expect(settings.company_address).toBe("Testgasse 42, 1010 Wien");
     await expect(model).toHaveValue("gpt-4.1-mini");
     await page.reload();
+    await expect(recognitionTab).toHaveAttribute("aria-selected", "true");
     await expect(model).toHaveValue("gpt-4.1-mini");
     expect(settings.openai_api_key_last4).toBe("1234");
     expect(JSON.stringify(settings)).not.toContain(key);
@@ -825,6 +903,9 @@ test("finance settings preserve company data and mask keys without a migration c
     ).toBeVisible();
     await check(page);
     await screenshot(page, testInfo, "settings", 320);
+    await watcherTab.click();
+    await check(page);
+    await screenshot(page, testInfo, "settings-watcher", 320);
     await expect(
       page.getByRole("heading", {
         name: "Daten in Pitchary übernehmen",
