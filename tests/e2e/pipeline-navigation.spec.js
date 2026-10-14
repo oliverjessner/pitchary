@@ -141,23 +141,25 @@ test("desktop navigation and header stay visible while content scrolls", async (
     navigation.getByRole("link", { name: "Aktivitäten", exact: true }),
   ).toHaveCount(0);
   let headerBounds = await header.boundingBox();
-  expect(headerBounds.y).toBe(0);
+  // WebKit on Linux can report subpixel offsets for sticky elements.
+  // Stay within half a CSS pixel while still detecting actual scrolling.
+  expect(headerBounds.y).toBeCloseTo(0, 0);
   const headerHeight = headerBounds.height;
   let bounds = await sidebar.boundingBox();
-  expect(bounds.y).toBe(0);
+  expect(bounds.y).toBeCloseTo(0, 0);
   expect(bounds.height).toBe(800);
   await page.evaluate(() =>
     window.scrollTo(0, document.documentElement.scrollHeight),
   );
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
   headerBounds = await header.boundingBox();
-  expect(headerBounds.y).toBe(0);
+  expect(headerBounds.y).toBeCloseTo(0, 0);
   expect(headerBounds.height).toBe(headerHeight);
   await expect(
     header.getByRole("link", { name: "Neues Angebot", exact: true }),
   ).toBeInViewport();
   bounds = await sidebar.boundingBox();
-  expect(bounds.y).toBe(0);
+  expect(bounds.y).toBeCloseTo(0, 0);
   expect(bounds.height).toBe(800);
   await expect(
     page.getByRole("navigation", { name: "Hauptnavigation" }),
@@ -169,7 +171,7 @@ test("desktop navigation and header stay visible while content scrolls", async (
   });
   await page.setViewportSize({ width: 1000, height: 360 });
   bounds = await sidebar.boundingBox();
-  expect(bounds.y).toBe(0);
+  expect(bounds.y).toBeCloseTo(0, 0);
   expect(bounds.height).toBe(360);
   const nav = page.getByRole("navigation", { name: "Hauptnavigation" });
   expect(
@@ -202,7 +204,9 @@ test("desktop navigation and header stay visible while content scrolls", async (
   await page.evaluate(() =>
     window.scrollTo(0, document.documentElement.scrollHeight),
   );
-  await expect.poll(async () => (await header.boundingBox()).y).toBe(0);
+  await expect
+    .poll(async () => (await header.boundingBox()).y)
+    .toBeCloseTo(0, 0);
   await expect(
     header.getByRole("link", { name: "Neues Angebot", exact: true }),
   ).toBeInViewport();
