@@ -680,14 +680,38 @@ export async function pipeline(actions, params) {
     api("/customer-services"),
     api("/service-tags"),
   ]);
+  const filterStorageKey = "pitchary.pipeline.filters";
+  let savedFilters = {};
+  try {
+    savedFilters = JSON.parse(localStorage.getItem(filterStorageKey)) ?? {};
+  } catch {
+    // Filtering also works when browser storage is unavailable or malformed.
+  }
+  const requestedStatus = params.has("status")
+    ? params.get("status")
+    : savedFilters.status;
+  const savedTagIds = new Set(
+    Array.isArray(savedFilters.tagIds) ? savedFilters.tagIds : [],
+  );
   let rows = initialRows;
-  const tagSelection = tagFilter(tags, () => render());
+  const tagSelection = tagFilter(
+    tags,
+    () => {
+      saveFilters();
+      render();
+    },
+    tags.filter((tag) => savedTagIds.has(tag.id)).map((tag) => tag.id),
+  );
   const search = field("Suchen", "search", {
       type: "search",
       placeholder: "Kunde oder Dienstleistung",
     }),
     status = field("Status", "status", {
-      value: params.get("status") ?? "",
+      value:
+        typeof requestedStatus === "string" &&
+        Object.hasOwn(labels.status, requestedStatus)
+          ? requestedStatus
+          : "",
       options: options(labels.status, "Alle Status"),
     }),
     archive = field("Ansicht", "archived", {
@@ -837,7 +861,27 @@ export async function pipeline(actions, params) {
     updateAfterRender();
   }
   search.querySelector("input").addEventListener("input", render);
-  status.querySelector("select").addEventListener("change", render);
+  function saveFilters() {
+    try {
+      localStorage.setItem(
+        filterStorageKey,
+        JSON.stringify({
+          status: status.querySelector("select").value,
+          tagIds: tagSelection.value(),
+        }),
+      );
+    } catch {
+      // The active selection remains usable without browser storage.
+    }
+  }
+  status.querySelector("select").addEventListener("change", () => {
+    if (params.has("status")) {
+      params.set("status", status.querySelector("select").value);
+      history.replaceState(null, "", "#/pipeline?" + params.toString());
+    }
+    saveFilters();
+    render();
+  });
   archive.querySelector("select").addEventListener("change", async () => {
     const token = ++generation;
     try {

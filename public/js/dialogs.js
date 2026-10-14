@@ -221,7 +221,6 @@ export function createActions(refresh, navigate) {
               value: row?.website ?? "",
               maxlength: 2048,
               placeholder: "https://example.com",
-              helper: "Vollständige Adresse mit http:// oder https://.",
             }),
             branding.node,
           ]

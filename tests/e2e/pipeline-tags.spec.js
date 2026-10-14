@@ -131,7 +131,36 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
   await search.fill(prefix);
   await expect(cards).toHaveCount(1);
   await expect(cards).toContainText(services[1].name);
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Kunden", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Pipeline", exact: true }).click();
+  await expect(page.getByLabel("Status", { exact: true })).toHaveValue(
+    "pitched",
+  );
+  await expect(trigger).toHaveAccessibleName("Tags 2 Tags ausgewählt");
+  await expect(cards).toHaveCount(1);
+  await trigger.click();
+  await expect(webChoice).toBeChecked();
+  await expect(supportChoice).toBeChecked();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await expect(page.getByLabel("Status", { exact: true })).toHaveValue(
+    "pitched",
+  );
+  await expect(trigger).toHaveAccessibleName("Tags 2 Tags ausgewählt");
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText(services[1].name);
+  await page.goto("/#/pipeline?status=open");
+  await expect(page.getByLabel("Status", { exact: true })).toHaveValue("open");
+  await expect(trigger).toHaveAccessibleName("Tags 2 Tags ausgewählt");
+  await expect(cards).toHaveCount(2);
   await page.getByLabel("Status", { exact: true }).selectOption("");
+  await expect(page).toHaveURL(/status=$/);
+  await page.reload();
+  await expect(page.getByLabel("Status", { exact: true })).toHaveValue("");
+  await search.fill(prefix);
   await page.getByLabel("Ansicht", { exact: true }).selectOption("true");
   await expect(cards).toHaveCount(1);
   await expect(cards).toContainText(services[2].name);
@@ -204,5 +233,71 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
   await expect(
     page.getByRole("heading", { name: "Kunden", exact: true }),
   ).toBeVisible();
+  await page.getByRole("link", { name: "Pipeline", exact: true }).click();
+  await expect(page.getByLabel("Status", { exact: true })).toHaveValue("");
+  await expect(trigger).toHaveAccessibleName("Tags Alle Tags");
+  await trigger.click();
+  await page.getByRole("checkbox", { name: unused.name, exact: true }).check();
+  await expect(cards).toHaveCount(0);
+  expect((await request.delete("/api/service-tags/" + unused.id)).ok()).toBe(
+    true,
+  );
+  await page.reload();
+  await expect(trigger).toHaveAccessibleName("Tags Alle Tags");
+  await trigger.click();
+  await expect(
+    page.getByRole("checkbox", { name: unused.name, exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Auswahl zurücksetzen", exact: true }),
+  ).toBeDisabled();
+  expect(errors).toEqual([]);
+});
+
+test("pipeline stays usable with malformed or unavailable browser storage", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/#/pipeline");
+  const status = page.getByLabel("Status", { exact: true });
+  await expect(page.locator(".pipeline-column")).toHaveCount(6);
+  await page.evaluate(() => {
+    localStorage.setItem("pitchary.pipeline.filters", "invalid JSON");
+  });
+  await page.reload();
+  await expect(status).toHaveValue("");
+  await expect(page.locator(".pipeline-column")).toHaveCount(6);
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "pitchary.pipeline.filters",
+      JSON.stringify({ status: "unknown", tagIds: [42, "deleted-tag"] }),
+    );
+  });
+  await page.reload();
+  await expect(status).toHaveValue("");
+  await expect(page.locator(".tag-filter-trigger")).toHaveAccessibleName(
+    "Tags Alle Tags",
+  );
+  await page.addInitScript(() => {
+    for (const method of ["getItem", "setItem"])
+      Object.defineProperty(Storage.prototype, method, {
+        value() {
+          throw new DOMException("Storage is unavailable", "SecurityError");
+        },
+      });
+  });
+  await page.reload();
+  await expect(status).toHaveValue("");
+  await status.selectOption("ghosted");
+  await expect(page.locator(".pipeline-column")).toHaveCount(1);
+  await expect(page.locator(".pipeline-column h2")).toContainText("Ghosted");
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Kunden", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Pipeline", exact: true }).click();
+  await expect(status).toHaveValue("");
+  await expect(page.locator(".pipeline-column")).toHaveCount(6);
   expect(errors).toEqual([]);
 });

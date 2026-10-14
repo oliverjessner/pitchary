@@ -1,6 +1,6 @@
 {
     "name": "pitchary",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "Local single-user CRM for customers, services and sales",
     "license": "MIT",
     "homepage": "https://github.com/oliverjessner/pitchary#readme",

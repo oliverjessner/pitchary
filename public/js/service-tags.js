@@ -56,9 +56,9 @@ export function tagPicker(tags, selected = []) {
       inputs.filter((input) => input.checked).map((input) => input.value),
   };
 }
-export function tagFilter(tags, onChange) {
+export function tagFilter(tags, onChange, selected = []) {
   const prefix = "tag-filter-" + ++pickerNumber;
-  const picker = tagPicker(tags);
+  const picker = tagPicker(tags, selected);
   picker.node.querySelector("legend").className = "oj-sr-only";
   const selection = el(
     "span",
@@ -154,7 +154,7 @@ export function tagFilter(tags, onChange) {
     positionPanel();
   });
   details.addEventListener("toggle", positionPanel);
-  function update() {
+  function update(notify = true) {
     const ids = picker.value();
     const names = tags
       .filter((tag) => ids.includes(tag.id))
@@ -167,10 +167,11 @@ export function tagFilter(tags, onChange) {
           : `${ids.length} Tags ausgewählt`;
     summary.title = names.join(", ");
     reset.disabled = !ids.length;
-    onChange(ids);
+    if (notify) onChange(ids);
     positionPanel();
   }
-  picker.node.addEventListener("change", update);
+  picker.node.addEventListener("change", () => update());
+  update(false);
   search.querySelector("input").addEventListener("input", (event) => {
     const term = event.target.value.trim().normalize("NFC").toLocaleLowerCase();
     const choices = [...picker.node.querySelectorAll(".service-tag-choice")];

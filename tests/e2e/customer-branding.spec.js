@@ -147,6 +147,7 @@ test("customer website and logo upload, replacement, removal and cancel", async 
     (await (await request.get("/api/customers/" + id)).json()).has_logo,
   ).toBe(true);
   await page.goto("/#/customers/" + id);
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Bearbeiten", exact: true }).click();
   await page.getByLabel("Logo hochladen").setInputFiles({
     name: "broken.png",
