@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { extractFavicon } from "fetchary";
-import { encodeIco } from "icojs";
+import { encodeIco } from "@oliverj/tinyico";
 import sharp from "sharp";
 import { buildApp } from "../src/server/app.js";
 import { createWebFetch } from "../src/business/web-fetch.js";
@@ -321,11 +321,19 @@ test("missing icons and broken websites still save the customer", async (t) => {
   }
 });
 
-test("SVG and ICO favicons are rasterized and a failed preferred icon falls back", async (t) => {
-  const ico = Buffer.from(
-    await encodeIco([
-      { buffer: Buffer.from(demoCustomerLogo.data_base64, "base64") },
-    ]),
+test("SVG and PNG/DIB ICO favicons are rasterized using the largest entry and a failed preferred icon falls back", async (t) => {
+  const small = await sharp({
+    create: { width: 16, height: 16, channels: 4, background: "#4d8dff" },
+  })
+    .png()
+    .toBuffer();
+  const ico = encodeIco([
+    { buffer: small },
+    { buffer: Buffer.from(demoCustomerLogo.data_base64, "base64") },
+  ]);
+  const dib = encodeIco(
+    [{ rgba: Buffer.alloc(32 * 32 * 4, 255), width: 32, height: 32 }],
+    { format: "dib" },
   );
   const svg =
     '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><defs><linearGradient id="brand"><stop stop-color="#4d8dff"/></linearGradient></defs><style>rect{fill:url("#brand")}</style><rect width="40" height="40"/></svg>';
@@ -344,13 +352,17 @@ test("SVG and ICO favicons are rasterized and a failed preferred icon falls back
           headers: { "content-type": "image/svg+xml" },
         });
       if (pathname === "/favicon.ico")
-        return new Response(ico, {
+        return new Response(hostname.startsWith("dib") ? dib : ico, {
           headers: { "content-type": "image/x-icon" },
         });
       return new Response("Not found", { status: 404 });
     },
   });
-  for (const domain of ["svg.example", "ico.example"]) {
+  for (const [domain, width] of [
+    ["svg.example", 40],
+    ["ico.example", 64],
+    ["dib.example", 32],
+  ]) {
     const response = await app.inject({
       method: "POST",
       url: "/api/customers",
@@ -360,11 +372,52 @@ test("SVG and ICO favicons are rasterized and a failed preferred icon falls back
     assert.equal(response.json().has_logo, true, domain);
     const image = app.crm.customerLogo(response.json().id);
     assert.equal(image.mime, "image/png");
-    assert.equal(
-      (await sharp(image.data).metadata()).width,
-      domain.startsWith("svg") ? 40 : 64,
-    );
+    assert.equal((await sharp(image.data).metadata()).width, width);
   }
+});
+
+test("a malformed ICO does not prevent using another valid icon", async (t) => {
+  const broken = encodeIco([
+    { buffer: Buffer.from(demoCustomerLogo.data_base64, "base64") },
+  ]);
+  broken.writeUInt32LE(6, 18);
+  const { app } = await setup(t, {
+    fetchImpl: async (url) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/")
+        return new Response(
+          '<link rel="icon" href="/broken.ico"><link rel="icon" href="/safe.png">',
+          { headers: { "content-type": "text/html" } },
+        );
+      if (pathname === "/broken.ico")
+        return new Response(broken, {
+          headers: { "content-type": "image/x-icon" },
+        });
+      if (pathname === "/safe.png")
+        return new Response(
+          Buffer.from(demoCustomerLogo.data_base64, "base64"),
+          {
+            headers: { "content-type": "image/png" },
+          },
+        );
+      return new Response("Not found", { status: 404 });
+    },
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/customers",
+    payload: {
+      name: "Malformed ICO",
+      general_email: "hello@broken-ico.example",
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().has_logo, true);
+  assert.equal(
+    (await sharp(app.crm.customerLogo(response.json().id).data).metadata())
+      .width,
+    64,
+  );
 });
 
 test("a logo lookup cannot overwrite a concurrent manual upload, email change or archived customer", async (t) => {

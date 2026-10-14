@@ -1,6 +1,6 @@
 import { extractFavicon } from "fetchary";
 import sharp from "sharp";
-import { decodeIco, isIco } from "icojs";
+import { extractIco, isIco, parseIco } from "@oliverj/tinyico";
 import { createWebFetch } from "./web-fetch.js";
 import { logo, maxLogoBytes } from "./customer-branding.js";
 
@@ -37,45 +37,11 @@ async function pngLogo(input) {
   let bytes = input;
   if (isIco(bytes)) {
     const count = bytes.readUInt16LE(4);
-    if (!count || count > 32 || bytes.length < 6 + count * 16)
-      throw new Error("Invalid ICO.");
-    for (let index = 0; index < count; index++) {
-      const entry = 6 + index * 16;
-      const length = bytes.readUInt32LE(entry + 8),
-        offset = bytes.readUInt32LE(entry + 12);
-      if (
-        offset < 6 + count * 16 ||
-        offset + length > bytes.length ||
-        length < 16
-      )
-        throw new Error("Invalid ICO.");
-      if (bytes.toString("hex", offset, offset + 8) === "89504e470d0a1a0a") {
-        if (
-          length < 24 ||
-          bytes.readUInt32BE(offset + 16) > 512 ||
-          bytes.readUInt32BE(offset + 20) > 512
-        )
-          throw new Error("Oversized ICO.");
-      } else if (
-        [12, 40, 52, 56, 108, 124].includes(bytes.readUInt32LE(offset))
-      ) {
-        const core = bytes.readUInt32LE(offset) === 12;
-        const width = core
-            ? bytes.readUInt16LE(offset + 4)
-            : bytes.readInt32LE(offset + 4),
-          height = core
-            ? bytes.readUInt16LE(offset + 6)
-            : Math.abs(bytes.readInt32LE(offset + 8));
-        if (width < 1 || width > 512 || height < 1 || height > 1024)
-          throw new Error("Oversized ICO.");
-      } else throw new Error("Unsupported ICO image.");
-    }
-    const images = await decodeIco(bytes, "image/png");
-    const image = images.sort(
+    if (count > 32) throw new Error("Invalid ICO.");
+    const image = [...parseIco(bytes).images].sort(
       (a, b) => b.width * b.height - a.width * a.height,
     )[0];
-    if (!image) throw new Error("Invalid ICO.");
-    bytes = Buffer.from(image.buffer);
+    bytes = extractIco(bytes, { index: image.index });
   }
   const text = bytes.toString("utf8");
   const resources = [

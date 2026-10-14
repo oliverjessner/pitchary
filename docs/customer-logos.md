@@ -16,6 +16,8 @@ Fetchary findet `apple-touch-icon`, `apple-touch-icon-precomposed`, `icon`/`shor
 
 Pitchary prüft und konvertiert die geladenen Bildbytes vor der Auswahl, damit unsichere SVGs oder nicht decodierbare Bilder keinen gültigen Kandidaten verdrängen. Die konvertierten Logos werden nur für die Dauer der Suche im Speicher gehalten; das ausgewählte Bild benötigt keinen zweiten Download. Rasterformate, SVG und ICO werden als PNG mit höchstens 256 × 256 Pixeln gespeichert. Die bestehenden Logo-Limits und lokalen Logo-URLs gelten auch für automatisch gefundene Bilder.
 
+ICO-Dateien werden mit `@oliverj/tinyico` 0.1.0 verarbeitet. `parseIco` liest den Container; `extractIco` extrahiert gezielt den Eintrag mit der größten Pixelfläche als PNG. PNG- und Windows-DIB-Einträge werden unterstützt. `icojs` ist entfernt.
+
 Die Suche hat ein Zeitbudget von zehn Sekunden und begrenzt Antworten auf 2 MiB. Öffentliche und lokale HTTP-/HTTPS-Websites werden unterstützt, auch mit eigenen Ports; die eigene IP-/DNS-Filterung entfällt. URL-Zugangsdaten werden abgewiesen; Cookies und Autorisierungsheader werden nicht weitergegeben. HTML wird nicht ausgeführt. SVG-Inhalte mit Skripten, externen Ressourcen oder XML-Entitäten werden nicht verwendet. Ein während der Suche manuell gesetztes Logo oder eine geänderte Website/E-Mail wird nicht überschrieben.
 
 ## API
