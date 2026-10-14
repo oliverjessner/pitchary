@@ -1,0 +1,1 @@
+ALTER TABLE services ADD COLUMN url TEXT NOT NULL DEFAULT '' CHECK(length(url)<=2048);

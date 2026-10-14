@@ -322,7 +322,7 @@ export async function entityList(type, actions) {
       type: "search",
       placeholder: isCustomer
         ? "Name, Website, E-Mail oder Notiz"
-        : "Dienstleistung, Notiz oder Tag",
+        : "Dienstleistung, URL, Notiz oder Tag",
     }),
     archived = field("Ansicht", "archived", {
       value: "false",
@@ -344,6 +344,8 @@ export async function entityList(type, actions) {
         r.note +
         " " +
         (r.website ?? "") +
+        " " +
+        (r.url ?? "") +
         " " +
         (r.general_email ?? "") +
         " " +
@@ -586,6 +588,23 @@ export async function serviceDetail(id, actions) {
       row.archived_at ? "Archivierte Dienstleistung" : "Dienstleistung",
       entityState(row, "services", actions),
     ),
+    row.url
+      ? panel(
+          "URL",
+          el(
+            "a",
+            {
+              class: "oj-link note-text",
+              href: row.url,
+              target: "_blank",
+              rel: "noopener noreferrer",
+            },
+            row.url,
+            icon("arrow-up-right-from-square"),
+            el("span", { class: "oj-sr-only" }, " (öffnet in neuem Tab)"),
+          ),
+        )
+      : null,
     panel(
       "Beschreibung",
       el("p", { class: "note-text" }, row.note || "Noch keine Notiz."),

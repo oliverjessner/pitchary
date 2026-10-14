@@ -69,6 +69,7 @@ export function createCRM(
             "name",
             "note",
             ...(table === "customers" ? ["website", "general_email"] : []),
+            ...(table === "services" ? ["url"] : []),
           ];
     allowedKeys(data, [
       ...keys,
@@ -86,7 +87,7 @@ export function createCRM(
               ? 10000
               : key === "name"
                 ? 200
-                : key === "website"
+                : key === "website" || key === "url"
                   ? 2048
                   : 500,
         });
@@ -99,6 +100,7 @@ export function createCRM(
         invalid("Ungültige E-Mail-Adresse.", "general_email");
       if ("logo" in data) Object.assign(out, logo(data.logo));
     }
+    if (table === "services" && "url" in out) out.url = website(out.url, "url");
     if (table === "employees") {
       if (out.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.email))
         invalid("Ungültige E-Mail-Adresse.", "email");

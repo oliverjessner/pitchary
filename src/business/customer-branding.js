@@ -1,7 +1,7 @@
 import { allowedKeys, invalid, text } from "./validation.js";
 export const maxLogoBytes = 1048576;
-export function website(value) {
-  const input = text(value, "website", { max: 2048 });
+export function website(value, field = "website") {
+  const input = text(value, field, { max: 2048 });
   if (!input) return "";
   let url;
   try {
@@ -9,7 +9,7 @@ export function website(value) {
   } catch {
     invalid(
       "Bitte eine vollständige Website-Adresse eingeben, z. B. https://example.com.",
-      "website",
+      field,
     );
   }
   if (
@@ -20,10 +20,10 @@ export function website(value) {
   )
     invalid(
       "Websites müssen HTTP oder HTTPS verwenden und dürfen keine Zugangsdaten enthalten.",
-      "website",
+      field,
     );
   if (url.href.length > 2048)
-    invalid("Die Website-Adresse ist zu lang.", "website");
+    invalid("Die Website-Adresse ist zu lang.", field);
   return url.href;
 }
 export function logo(input) {

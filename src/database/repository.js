@@ -69,6 +69,7 @@ export function createRepository(db) {
         const fields = [
           "name",
           name === "employees" ? "email" : "note",
+          ...(name === "services" ? ["url"] : []),
           ...(name === "customers"
             ? [
                 "website",

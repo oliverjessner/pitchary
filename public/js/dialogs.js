@@ -225,6 +225,16 @@ export function createActions(refresh, navigate) {
             branding.node,
           ]
         : []),
+      ...(type === "services"
+        ? [
+            field("URL (optional)", "url", {
+              type: "url",
+              value: row?.url ?? "",
+              maxlength: 2048,
+              placeholder: "https://example.com",
+            }),
+          ]
+        : []),
       ...(employee
         ? [
             field("E-Mail", "email", {

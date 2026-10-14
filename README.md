@@ -72,6 +72,8 @@ Die Pipeline nutzt die gesamte verfügbare Containerbreite und einen festen Bedi
 
 Die Pipeline merkt sich Status- und Tagfilter im jeweiligen Browser. Die Auswahl bleibt bei Menüwechseln und nach Neuladen erhalten; gelöschte Tags werden ignoriert. Ein Link mit explizitem Status öffnet weiterhin die angegebene Phase.
 
+Dienstleistungen können eine optionale HTTP-/HTTPS-URL erhalten. Sie lässt sich beim Anlegen oder Bearbeiten setzen und entfernen, erscheint als Link in den Details und wird bei der Suche berücksichtigt. Migration 010 ergänzt das Feld; bestehende Dienstleistungen erhalten eine leere URL.
+
 `npm install` synchronisiert über `postinstall` die unveränderten gebauten CSS-/ESM-/Font-/Icon-Assets und Lizenzen nach `public/vendor/oj-designsystem/`. Der reproduzierbare Sync kann mit `npm run sync:designsystem` erneut ausgeführt werden; `package-lock.json` fixiert die Paketversion. Bei Installation mit `--ignore-scripts` ist dieser Befehl vor dem Start erforderlich. Das Designsystem wird nicht verändert. Jede dynamische View und jeder Dialog besitzt einen `initOJ()`-Cleanup, der vor dem Entfernen der Oberfläche aufgerufen wird.
 
 ## Datenmodell und fachliche Regeln
