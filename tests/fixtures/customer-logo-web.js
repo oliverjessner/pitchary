@@ -1,8 +1,5 @@
 import { demoCustomerLogo } from "../../scripts/demo-assets.js";
 
-export const publicLogoLookup = async () => [
-  { address: "93.184.216.34", family: 4 },
-];
 export async function customerLogoWeb(url) {
   const parsed = new URL(url);
   if (parsed.hostname !== "auto-logo.example")

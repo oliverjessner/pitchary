@@ -1,26 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stat } from "node:fs/promises";
-import { createFetchary } from "fetchary";
+import { createServer } from "node:http";
+import { extractFavicon } from "fetchary";
 import { encodeIco } from "icojs";
 import sharp from "sharp";
 import { buildApp } from "../src/server/app.js";
-import {
-  createPublicFetch,
-  isPublicAddress,
-} from "../src/business/public-web-fetch.js";
+import { createWebFetch } from "../src/business/web-fetch.js";
 import { demoCustomerLogo } from "../scripts/demo-assets.js";
-import {
-  customerLogoWeb,
-  publicLogoLookup,
-} from "./fixtures/customer-logo-web.js";
+import { customerLogoWeb } from "./fixtures/customer-logo-web.js";
 
 async function setup(t, options = {}) {
   const requests = [];
   const app = await buildApp({
     databasePath: ":memory:",
     customerLogoOptions: {
-      lookup: publicLogoLookup,
       fetchImpl: async (url, init) => {
         requests.push({ url, init });
         return customerLogoWeb(url);
@@ -32,12 +25,15 @@ async function setup(t, options = {}) {
   return { app, requests };
 }
 
-test("customer creation discovers an HTML icon through Fetchary and persists the shared email and local PNG", async (t) => {
-  let archive;
+test("customer creation uses Fetchary's standalone icon extractor and persists the shared email and local PNG", async (t) => {
+  let extractions = 0;
   const { app, requests } = await setup(t, {
-    fetcharyFactory: async (options) => {
-      archive = options.dataDir;
-      return createFetchary(options);
+    extractIcon: async (url, options) => {
+      extractions++;
+      assert.equal(url, "https://auto-logo.example/");
+      assert.equal(options.mode, "http");
+      assert.equal("dataDir" in options, false);
+      return extractFavicon(url, options);
     },
   });
   const response = await app.inject({
@@ -54,19 +50,18 @@ test("customer creation discovers an HTML icon through Fetchary and persists the
   assert.equal(row.has_logo, true);
   assert.equal(row.website, "");
   assert.equal(app.finance.customer(row.id).general_email, row.general_email);
-  assert.deepEqual(
-    requests.map(({ url }) => url),
-    [
-      "https://auto-logo.example/",
-      "https://auto-logo.example/assets/brand.png",
-    ],
-  );
+  assert.equal(extractions, 1);
+  assert.equal(requests[0].url, "https://auto-logo.example/");
+  assert.deepEqual(requests.map(({ url }) => url).sort(), [
+    "https://auto-logo.example/",
+    "https://auto-logo.example/assets/brand.png",
+    "https://auto-logo.example/favicon.ico",
+  ]);
   assert.equal(requests[0].init.redirect, "manual");
   assert.equal(
     requests.some(({ url }) => url.includes("hello@")),
     false,
   );
-  await assert.rejects(stat(archive), { code: "ENOENT" });
   const image = await app.inject({ url: row.logo_url });
   assert.equal(image.statusCode, 200);
   assert.match(image.headers["content-type"], /^image\/png/);
@@ -120,6 +115,114 @@ test("customer email edits use the same finance profile and invalid emails roll 
   assert.equal(app.crm.listEntities("customers").length, before);
 });
 
+test("Fetchary chooses the largest real manifest icon after page and manifest redirects", async (t) => {
+  const image = async (size, color) =>
+    sharp({
+      create: { width: size, height: size, channels: 4, background: color },
+    })
+      .png()
+      .toBuffer();
+  const small = await image(24, "#4d8dff");
+  const large = await image(300, "#ff6b35");
+  const fetched = [];
+  const { app } = await setup(t, {
+    fetchImpl: async (url) => {
+      fetched.push(url);
+      const pathname = new URL(url).pathname;
+      if (pathname === "/")
+        return new Response(null, {
+          status: 302,
+          headers: { location: "/company/" },
+        });
+      if (pathname === "/company/")
+        return new Response(
+          '<base href="/assets/"><link rel="icon" href="small.png" sizes="4096x4096"><link rel="manifest" href="site.webmanifest">',
+          { headers: { "content-type": "text/html" } },
+        );
+      if (pathname === "/assets/site.webmanifest")
+        return new Response(null, {
+          status: 302,
+          headers: { location: "/manifests/app.webmanifest" },
+        });
+      if (pathname === "/manifests/app.webmanifest")
+        return new Response(
+          " ".repeat(256) +
+            JSON.stringify({ icons: [{ src: "brand.png", sizes: "1x1" }] }),
+          { headers: { "content-type": "application/manifest+json" } },
+        );
+      if (pathname === "/assets/small.png")
+        return new Response(small, {
+          headers: { "content-type": "image/png" },
+        });
+      if (pathname === "/manifests/brand.png")
+        return new Response(large, {
+          headers: { "content-type": "image/png" },
+        });
+      return new Response("Not found", { status: 404 });
+    },
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/customers",
+    payload: { name: "Manifest icon", general_email: "hello@manifest.example" },
+  });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().has_logo, true);
+  const metadata = await sharp(
+    app.crm.customerLogo(response.json().id).data,
+  ).metadata();
+  assert.equal(metadata.width, 256);
+  assert.equal(metadata.height, 256);
+  assert.equal(
+    fetched.filter(
+      (url) => url === "https://manifest.example/manifests/brand.png",
+    ).length,
+    1,
+  );
+  assert.ok(fetched.includes("https://manifest.example/assets/small.png"));
+});
+
+test("an undecodable large image cannot hide a valid icon in Fetchary's selection", async (t) => {
+  const broken = Buffer.from(demoCustomerLogo.data_base64, "base64");
+  broken.writeUInt32BE(1024, 16);
+  const { app } = await setup(t, {
+    fetchImpl: async (url) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/")
+        return new Response(
+          '<link rel="icon" href="/broken.png"><link rel="icon" href="/safe.png">',
+          { headers: { "content-type": "text/html" } },
+        );
+      if (pathname === "/broken.png")
+        return new Response(broken, {
+          headers: { "content-type": "image/png" },
+        });
+      if (pathname === "/safe.png")
+        return new Response(
+          Buffer.from(demoCustomerLogo.data_base64, "base64"),
+          {
+            headers: { "content-type": "image/png" },
+          },
+        );
+      return new Response("Not found", { status: 404 });
+    },
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/customers",
+    payload: {
+      name: "Broken icon fallback",
+      general_email: "hello@broken.example",
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().has_logo, true);
+  const metadata = await sharp(
+    app.crm.customerLogo(response.json().id).data,
+  ).metadata();
+  assert.equal(metadata.width, 64);
+});
+
 test("explicit website takes priority over a personal email and manual logos or removal opt out", async (t) => {
   const { app, requests } = await setup(t);
   const create = (payload) =>
@@ -158,7 +261,45 @@ test("explicit website takes priority over a personal email and manual logos or 
   assert.equal(requests.length, count);
 });
 
-test("missing icons, broken websites and blocked private domains still save the customer", async (t) => {
+test("Fetchary can load and save a logo from a local HTTP website", async (t) => {
+  const server = createServer((request, response) => {
+    if (request.url === "/") {
+      response.writeHead(302, { location: "/company/" });
+      response.end();
+    } else if (request.url === "/company/") {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end('<link rel="icon" href="/logo.png">');
+    } else if (request.url === "/logo.png") {
+      response.writeHead(200, { "content-type": "image/png" });
+      response.end(Buffer.from(demoCustomerLogo.data_base64, "base64"));
+    } else {
+      response.writeHead(404);
+      response.end();
+    }
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  });
+  const { app } = await setup(t, { fetchImpl: undefined });
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/customers",
+    payload: {
+      name: "Local company website",
+      website: `http://127.0.0.1:${server.address().port}/`,
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().has_logo, true);
+  const metadata = await sharp(
+    app.crm.customerLogo(response.json().id).data,
+  ).metadata();
+  assert.equal(metadata.width, 64);
+});
+
+test("missing icons and broken websites still save the customer", async (t) => {
   const { app } = await setup(t);
   for (const website of [
     "https://unavailable.example/",
@@ -312,6 +453,7 @@ test("SVG resources cannot load local files or remote fonts and safe fallback ic
       "https://svg.example/",
       "https://svg.example/unsafe.svg",
       "https://svg.example/safe.png",
+      "https://svg.example/favicon.ico",
     ]);
     assert.equal(
       (await sharp(app.crm.customerLogo(response.json().id).data).metadata())
@@ -321,47 +463,13 @@ test("SVG resources cannot load local files or remote fonts and safe fallback ic
   }
 });
 
-test("public fetching rejects private DNS, redirected private URLs and oversized responses", async () => {
-  for (const address of [
-    "127.0.0.1",
-    "10.0.0.1",
-    "169.254.169.254",
-    "100.64.0.1",
-    "::1",
-    "fc00::1",
-    "::ffff:127.0.0.1",
-  ])
-    assert.equal(isPublicAddress(address), false, address);
-  let calls = 0;
-  const blocked = createPublicFetch({
-    lookup: async () => [{ address: "10.0.0.1", family: 4 }],
-    fetchImpl: async () => {
-      calls++;
-      throw new Error("Should not fetch");
-    },
-  });
-  await assert.rejects(blocked("https://private.example/"), /Private/);
-  assert.equal(calls, 0);
-  const redirects = createPublicFetch({
-    lookup: publicLogoLookup,
-    fetchImpl: async () => {
-      calls++;
-      return new Response(null, {
-        status: 302,
-        headers: { location: "http://127.0.0.1/private" },
-      });
-    },
-  });
-  await assert.rejects(redirects("https://public.example/"), /Private/);
-  assert.equal(calls, 1);
-  const limited = createPublicFetch({
+test("website fetching limits response size and omits credentials", async () => {
+  const limited = createWebFetch({
     maxBytes: 16,
-    lookup: publicLogoLookup,
     fetchImpl: async () => new Response("a".repeat(17)),
   });
   await assert.rejects(limited("https://public.example/"), /size limit/);
-  const headers = createPublicFetch({
-    lookup: publicLogoLookup,
+  const headers = createWebFetch({
     fetchImpl: async (_url, options) => {
       assert.equal(options.headers.get("cookie"), null);
       assert.equal(options.headers.get("authorization"), null);

@@ -1,11 +1,7 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { createFetchary } from "fetchary";
-import { parseHTML } from "linkedom";
+import { extractFavicon } from "fetchary";
 import sharp from "sharp";
 import { decodeIco, isIco } from "icojs";
-import { createPublicFetch } from "./public-web-fetch.js";
+import { createWebFetch } from "./web-fetch.js";
 import { logo, maxLogoBytes } from "./customer-branding.js";
 
 const personalDomains = new Set([
@@ -35,55 +31,6 @@ function siteFor({ website, general_email }) {
   const domain = general_email?.split("@").at(-1)?.toLowerCase();
   if (!domain || personalDomains.has(domain)) return null;
   return new URL("https://" + domain + "/");
-}
-
-export function iconCandidates(html, finalUrl) {
-  const { document } = parseHTML(html);
-  let base = finalUrl;
-  try {
-    base = new URL(
-      document.querySelector("base[href]")?.getAttribute("href") || "",
-      finalUrl,
-    ).href;
-  } catch {
-    /* Use the final page URL when the base tag is invalid. */
-  }
-  const icons = [];
-  for (const node of document.querySelectorAll("link[rel][href]")) {
-    const rel = node.getAttribute("rel").toLowerCase().split(/\s+/);
-    const rank =
-      rel.includes("apple-touch-icon") ||
-      rel.includes("apple-touch-icon-precomposed")
-        ? 300
-        : rel.includes("icon")
-          ? 200
-          : rel.includes("mask-icon")
-            ? 100
-            : 0;
-    if (!rank) continue;
-    try {
-      const url = new URL(node.getAttribute("href"), base);
-      if (!["http:", "https:"].includes(url.protocol)) continue;
-      const size = Math.max(
-        0,
-        ...(node.getAttribute("sizes") || "")
-          .split(/\s+/)
-          .map((value) => Number(value.split("x")[0]) || 0),
-      );
-      icons.push({ url: url.href, rank: rank + Math.min(size, 512) / 1000 });
-    } catch {
-      /* Malformed icon links do not prevent trying the next icon. */
-    }
-  }
-  return [
-    ...new Set([
-      ...icons
-        .sort((a, b) => b.rank - a.rank)
-        .map((icon) => icon.url)
-        .slice(0, 5),
-      new URL("/favicon.ico", finalUrl).href,
-    ]),
-  ];
 }
 
 async function pngLogo(input) {
@@ -167,12 +114,7 @@ async function pngLogo(input) {
 
 export function createCustomerLogoDiscovery(
   crm,
-  {
-    fetchImpl,
-    lookup,
-    fetcharyFactory = createFetchary,
-    discover: suppliedDiscover,
-  } = {},
+  { fetchImpl, extractIcon = extractFavicon, discover: suppliedDiscover } = {},
 ) {
   const controller = new AbortController();
   async function discover(input) {
@@ -182,37 +124,32 @@ export function createCustomerLogoDiscovery(
       controller.signal,
       AbortSignal.timeout(10000),
     ]);
-    const publicFetch = createPublicFetch({ fetchImpl, lookup, signal });
-    const dataDir = await mkdtemp(path.join(tmpdir(), "pitchary-logo-"));
-    let client;
-    try {
-      client = await fetcharyFactory({
-        dataDir,
-        timeout: 8000,
-        fetch: publicFetch,
-        userAgent: "Pitchary/0.2 (customer logo lookup)",
-      });
-      const source = await client.add(site.href, {
-        mode: "http",
-        name: "Kundenlogo",
-      });
-      const version = await client.version(source.id);
-      const html = await client.read(source.id);
-      for (const url of iconCandidates(html, version.finalUrl || site.href)) {
-        if (signal.aborted) break;
-        try {
-          const response = await publicFetch(url);
-          if (!response.ok) continue;
-          return await pngLogo(Buffer.from(await response.arrayBuffer()));
-        } catch {
-          /* Try the next declared icon, then /favicon.ico. */
+    const fetchResource = createWebFetch({ fetchImpl, signal });
+    const images = new Map();
+    let pageRequested = false;
+    const result = await extractIcon(site.href, {
+      mode: "http",
+      timeout: 8000,
+      userAgent: "Pitchary (customer logo lookup)",
+      fetch: async (url, options) => {
+        const isPage = !pageRequested;
+        pageRequested = true;
+        const response = await fetchResource(url, options);
+        if (isPage || !response.ok) return response;
+        const bytes = Buffer.from(await response.clone().arrayBuffer());
+        if (/^\s*[\[{]/.test(bytes.toString("utf8"))) {
+          // Manifests are interpreted by Fetchary, not as image candidates.
+          response.headers.set("content-type", "application/json");
+          return response;
         }
-      }
-      return null;
-    } finally {
-      await client?.close();
-      await rm(dataDir, { recursive: true, force: true });
-    }
+        // Reject unsafe or undecodable images before Fetchary ranks them.
+        // Keep the converted logo so the chosen image needs no second download.
+        images.set(response.url, await pngLogo(bytes));
+        return response;
+      },
+    });
+    signal.throwIfAborted();
+    return images.get(result.image.url) ?? null;
   }
   return {
     discover: suppliedDiscover || discover,
