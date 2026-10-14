@@ -198,7 +198,7 @@ test("PDF import, corrections, payment status, category tags and deletion work i
   expect(errors).toEqual([]);
 });
 
-test("dashboard combines CRM and finance, hides USD only in its overview and preserves financial customer data", async ({
+test("dashboard combines CRM and finance, keeps EUR metrics and shows open invoices in every currency and period", async ({
   page,
   request,
 }, testInfo) => {
@@ -223,6 +223,17 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     currency: "USD",
     total_amount_minor: 90000,
   });
+  const dollarExpense = await invoice(
+    request,
+    "USD-Cost-" + testInfo.project.name,
+    {
+      category: "payable",
+      currency: "USD",
+      total_amount_minor: 10482,
+      invoice_date: "2025-09-17",
+      due_date: "2025-09-17",
+    },
+  );
   for (const width of [2560, 1440, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto("/#/finance?year=2026&month=10&currency=USD");
@@ -266,10 +277,39 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
     await expect(
       overview.getByRole("heading", { name: /^Beste Kunden|^Höchste Kosten/ }),
     ).toHaveCount(0);
-    await expect(overview.getByText("USD", { exact: true })).toHaveCount(0);
     await expect(
-      overview.getByRole("link", { name: dollar.invoice_number, exact: true }),
+      overview.getByRole("region", { name: "Kennzahlen in USD", exact: true }),
     ).toHaveCount(0);
+    const openIncome = overview
+      .locator(".finance-open-invoices > section")
+      .filter({
+        has: page.getByRole("heading", {
+          name: "Offene Einnahmen",
+          exact: true,
+        }),
+      });
+    const openExpenses = overview
+      .locator(".finance-open-invoices > section")
+      .filter({
+        has: page.getByRole("heading", {
+          name: "Offene Ausgaben",
+          exact: true,
+        }),
+      });
+    await expect(
+      openIncome.getByRole("link", {
+        name: dollar.invoice_number,
+        exact: true,
+      }),
+    ).toBeVisible();
+    const dollarExpenseRow = openExpenses.getByRole("row").filter({
+      has: page.getByRole("link", {
+        name: dollarExpense.invoice_number,
+        exact: true,
+      }),
+    });
+    await expect(dollarExpenseRow).toBeVisible();
+    await expect(dollarExpenseRow).toContainText("104,82");
     await expect(
       page.getByLabel("Diagramm-Währung", { exact: true }),
     ).toHaveCount(0);
@@ -461,7 +501,13 @@ test("dashboard combines CRM and finance, hides USD only in its overview and pre
   ).toBeVisible();
   await expect(page.getByLabel("Kunden suchen", { exact: true })).toBeFocused();
   await check(page);
-  for (const row of [revenue, expense, dollar])
+  const storedDollarExpense = await (
+    await request.get("/api/finance/invoices/" + dollarExpense.id)
+  ).json();
+  expect(storedDollarExpense.currency).toBe("USD");
+  expect(storedDollarExpense.total_amount_minor).toBe(10482);
+  expect(storedDollarExpense.invoice_date).toBe("2025-09-17");
+  for (const row of [revenue, expense, dollar, dollarExpense])
     await request.delete("/api/finance/invoices/" + row.id);
 });
 

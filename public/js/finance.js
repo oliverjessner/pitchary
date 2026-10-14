@@ -909,20 +909,8 @@ export async function financeDashboard(
     el(
       "div",
       { class: "finance-two-columns finance-open-invoices" },
-      panel(
-        "Offene Einnahmen",
-        invoiceTable(
-          (data.open_revenue || []).filter(visibleCurrency),
-          actions,
-        ),
-      ),
-      panel(
-        "Offene Ausgaben",
-        invoiceTable(
-          (data.open_payable || []).filter(visibleCurrency),
-          actions,
-        ),
-      ),
+      panel("Offene Einnahmen", invoiceTable(data.open_revenue || [], actions)),
+      panel("Offene Ausgaben", invoiceTable(data.open_payable || [], actions)),
     ),
   ];
   return disposable(
