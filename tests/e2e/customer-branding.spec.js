@@ -3,6 +3,83 @@ import AxeBuilder from "@axe-core/playwright";
 import { mkdirSync } from "node:fs";
 import { demoCustomerLogo } from "../../scripts/demo-assets.js";
 import { logoFormats } from "../fixtures/logo-formats.js";
+test("a customer email automatically supplies a persistent logo from the company HTML", async ({
+  page,
+  request,
+}, testInfo) => {
+  for (const width of [1440, 320]) {
+    const name = `Automatisches Logo ${testInfo.project.name} ${width}`;
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/#/customers");
+    await page
+      .getByRole("button", { name: "Kunde anlegen", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Kunde anlegen",
+      exact: true,
+    });
+    await dialog.getByLabel("Name", { exact: true }).fill(name);
+    await dialog
+      .getByLabel("Haupt-E-Mail", { exact: true })
+      .fill("hello@auto-logo.example");
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+    await dialog
+      .getByRole("button", { name: "Speichern", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+    const logo = page.getByAltText("Logo von " + name);
+    await expect(logo).toBeVisible();
+    await expect
+      .poll(() => logo.evaluate((node) => node.naturalWidth))
+      .toBe(64);
+    const id = page.url().split("/customers/")[1];
+    const stored = await (await request.get("/api/customers/" + id)).json();
+    expect(stored.general_email).toBe("hello@auto-logo.example");
+    expect(stored.has_logo).toBe(true);
+    expect(stored.website).toBe("");
+    await page.reload();
+    await expect(logo).toBeVisible();
+    await page.getByRole("button", { name: "Bearbeiten", exact: true }).click();
+    await expect(
+      page.getByRole("dialog").getByLabel("Haupt-E-Mail", { exact: true }),
+    ).toHaveValue("hello@auto-logo.example");
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Abbrechen", exact: true })
+      .click();
+    mkdirSync("artifacts/screenshots", { recursive: true });
+    await page.screenshot({
+      path: `artifacts/screenshots/${testInfo.project.name}-${width}-customer-auto-logo.png`,
+      fullPage: true,
+    });
+    await page.goto("/#/customers");
+    await page
+      .getByLabel("Suchen", { exact: true })
+      .fill("hello@auto-logo.example");
+    await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
+    await expect(logo).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+  }
+});
 test("customer website and logo upload, replacement, removal and cancel", async ({
   page,
   request,

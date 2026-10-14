@@ -12,16 +12,23 @@ import { registerFinanceAPI } from "../api/finance-routes.js";
 import { registerFinanceProcessingAPI } from "../api/finance-processing-routes.js";
 import { createCustomerMerge } from "../business/customer-merge.js";
 import { registerCustomerAliases } from "../api/customer-aliases.js";
+import { createCustomerLogoDiscovery } from "../business/customer-logo-discovery.js";
 export async function buildApp({
   databasePath,
   db,
   logger = false,
   clock,
   financeOptions = {},
+  customerLogoOptions = {},
 } = {}) {
   const database = db ?? openDatabase(databasePath);
   const app = Fastify({ logger, bodyLimit: 131072 });
   app.decorate("crm", createCRM(database, { clock }));
+  const customerLogos = createCustomerLogoDiscovery(
+    app.crm,
+    customerLogoOptions,
+  );
+  app.decorate("customerLogoDiscovery", customerLogos);
   app.decorate("database", database);
   const customerMerge = createCustomerMerge(database);
   app.decorate("customerMerge", customerMerge);
@@ -40,6 +47,7 @@ export async function buildApp({
   app.decorate("invoiceProcessor", processor);
   app.addHook("onReady", async () => processor.start());
   app.addHook("onClose", async () => {
+    customerLogos.close();
     await processor.close();
     if (!db) database.close();
   });

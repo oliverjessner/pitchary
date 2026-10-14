@@ -65,7 +65,11 @@ export function createCRM(
     const keys =
       table === "employees"
         ? ["name", "email", "position", "linkedin"]
-        : ["name", "note", ...(table === "customers" ? ["website"] : [])];
+        : [
+            "name",
+            "note",
+            ...(table === "customers" ? ["website", "general_email"] : []),
+          ];
     allowedKeys(data, [
       ...keys,
       ...(table === "customers" ? ["logo"] : []),
@@ -88,6 +92,11 @@ export function createCRM(
         });
     if (table === "customers") {
       if ("website" in out) out.website = website(out.website);
+      if (
+        out.general_email &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.general_email)
+      )
+        invalid("Ungültige E-Mail-Adresse.", "general_email");
       if ("logo" in data) Object.assign(out, logo(data.logo));
     }
     if (table === "employees") {
@@ -201,7 +210,7 @@ export function createCRM(
     },
     createEntity(table, data) {
       const save = () => {
-        const values = entityData(table, data, true),
+        const { general_email, ...values } = entityData(table, data, true),
           at = now();
         const tagIds =
           table === "services"
@@ -215,6 +224,8 @@ export function createCRM(
           updated_at: at,
           archived_at: null,
         });
+        if (table === "customers" && general_email)
+          repo.saveCustomerEmail(id, general_email, at);
         if (tagIds) repo.replaceServiceTags(id, tagIds);
         const result = repo.get(table, id);
         if (table === "services")
@@ -224,7 +235,9 @@ export function createCRM(
           };
         return table === "customers" ? customerRecord(result) : result;
       };
-      return table === "services" ? transaction(db, save) : save();
+      return table === "services" || table === "customers"
+        ? transaction(db, save)
+        : save();
     },
     updateEntity(table, id, data) {
       const save = () => {
@@ -233,10 +246,15 @@ export function createCRM(
           table === "services" && data.tag_ids !== undefined
             ? serviceTags.validateTagIds(data.tag_ids)
             : null;
-        const result = repo.update(table, id, {
-          ...entityData(table, data),
-          updated_at: now(),
+        const { general_email, ...values } = entityData(table, data);
+        const at = now();
+        repo.update(table, id, {
+          ...values,
+          updated_at: at,
         });
+        if (table === "customers" && general_email !== undefined)
+          repo.saveCustomerEmail(id, general_email, at);
+        const result = repo.get(table, id);
         if (tagIds) repo.replaceServiceTags(id, tagIds);
         if (table === "services")
           return {
@@ -245,7 +263,9 @@ export function createCRM(
           };
         return table === "customers" ? customerRecord(result) : result;
       };
-      return table === "services" ? transaction(db, save) : save();
+      return table === "services" || table === "customers"
+        ? transaction(db, save)
+        : save();
     },
     archive(table, id, archived = true) {
       requireRecord(table, id);

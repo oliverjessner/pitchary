@@ -208,6 +208,14 @@ export function createActions(refresh, navigate) {
       }),
       ...(customer
         ? [
+            field("Haupt-E-Mail", "general_email", {
+              type: "email",
+              value: row?.general_email ?? "",
+              maxlength: 500,
+              helper: !row?.id
+                ? "Das Logo wird anhand der Website oder E-Mail-Domain automatisch gesucht."
+                : undefined,
+            }),
             field("Website", "website", {
               type: "url",
               value: row?.website ?? "",

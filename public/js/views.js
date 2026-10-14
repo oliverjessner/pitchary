@@ -321,7 +321,7 @@ export async function entityList(type, actions) {
   const search = field("Suchen", "search", {
       type: "search",
       placeholder: isCustomer
-        ? "Name, Website oder Notiz"
+        ? "Name, Website, E-Mail oder Notiz"
         : "Dienstleistung, Notiz oder Tag",
     }),
     archived = field("Ansicht", "archived", {
@@ -344,6 +344,8 @@ export async function entityList(type, actions) {
         r.note +
         " " +
         (r.website ?? "") +
+        " " +
+        (r.general_email ?? "") +
         " " +
         (r.tags ?? []).map((tag) => tag.name).join(" ")
       )

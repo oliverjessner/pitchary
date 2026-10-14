@@ -41,8 +41,17 @@ export async function registerAPI(app, crm) {
         schema: { body: object },
         ...(name === "customers" ? { bodyLimit: 1500000 } : {}),
       },
-      (request, reply) =>
-        reply.code(201).send(crm.createEntity(name, request.body)),
+      async (request, reply) => {
+        let result = crm.createEntity(name, request.body);
+        if (
+          name === "customers" &&
+          request.body.logo !== null &&
+          !result.has_logo &&
+          (result.general_email || result.website)
+        )
+          result = await app.customerLogoDiscovery.enrich(result.id);
+        return reply.code(201).send(result);
+      },
     );
     app.patch(
       `/api/${name}/:id`,
