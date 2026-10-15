@@ -61,7 +61,8 @@ test("release metadata rejects stale, modified and mismatched desktop artifacts"
     cask,
     /github\.com\/oliverjessner\/pitchary\/releases\/download\/v#\{version\}/,
   );
-  assert.match(cask, /depends_on macos: ">= 26\.4"/);
+  assert.match(cask, /depends_on macos: :tahoe/);
+  assert.doesNotMatch(cask, /depends_on macos: "/);
   assert.match(cask, /app "Pitchary\.app"/);
   assert.throws(
     () => renderCask({ ...manifest, version: '1.0.0"\nmalicious' }),
@@ -70,6 +71,34 @@ test("release metadata rejects stale, modified and mismatched desktop artifacts"
   assert.throws(
     () => renderCask({ ...manifest, file: "other.dmg" }),
     /filename/,
+  );
+});
+
+test("casks use Homebrew release symbols for exact app minimum versions and reject unknown releases", () => {
+  const manifest = {
+    version,
+    target,
+    file: dmgName,
+    sha256: "a".repeat(64),
+  };
+  for (const [minimumSystemVersion, release] of [
+    ["13.5", "ventura"],
+    ["14.7.1", "sonoma"],
+    ["15", "sequoia"],
+    ["26.4", "tahoe"],
+    ["26.4.1", "tahoe"],
+    ["27.0", "golden_gate"],
+  ]) {
+    const cask = renderCask({ ...manifest, minimumSystemVersion });
+    assert.ok(cask.includes(`depends_on macos: :${release}`));
+  }
+  assert.throws(
+    () => renderCask({ ...manifest, minimumSystemVersion: "99.1" }),
+    /Unsupported Homebrew macOS release/,
+  );
+  assert.throws(
+    () => renderCask({ ...manifest, minimumSystemVersion: '26.4"; abort' }),
+    /Invalid cask metadata/,
   );
 });
 

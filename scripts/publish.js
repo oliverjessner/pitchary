@@ -62,6 +62,21 @@ export function renderCask(manifest) {
     manifest.file !== `Pitchary_${manifest.version}_aarch64.dmg`
   )
     throw new Error("Unexpected release architecture or filename.");
+  const macosRelease = {
+    11: "big_sur",
+    12: "monterey",
+    13: "ventura",
+    14: "sonoma",
+    15: "sequoia",
+    26: "tahoe",
+    27: "golden_gate",
+  }[Number(manifest.minimumSystemVersion.split(".")[0])];
+  if (!macosRelease)
+    throw new Error(
+      `Unsupported Homebrew macOS release: ${manifest.minimumSystemVersion}. Update the cask release mapping before publishing.`,
+    );
+  // Homebrew accepts major release symbols. The app's Info.plist retains
+  // the exact minimum (including minor/patch versions) from the build.
   return `cask "pitchary" do
   version "${manifest.version}"
   sha256 "${manifest.sha256}"
@@ -72,7 +87,7 @@ export function renderCask(manifest) {
   homepage "https://github.com/${releaseRepo}"
 
   depends_on arch: :arm64
-  depends_on macos: ">= ${manifest.minimumSystemVersion}"
+  depends_on macos: :${macosRelease}
 
   app "Pitchary.app"
 
@@ -84,6 +99,25 @@ export function renderCask(manifest) {
   ]
 end
 `;
+}
+export function validateCask(filename) {
+  const options = {
+    env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: "1" },
+  };
+  run("brew", ["style", filename], options);
+  // Style checks alone do not evaluate the DSL and accept invalid OS values.
+  // Load the generated content without installing or changing a tap.
+  run(
+    "brew",
+    [
+      "ruby",
+      "-e",
+      'require "cask/cask_loader"; Cask::CaskLoader.load(File.read(ARGV.fetch(0)))',
+      "--",
+      filename,
+    ],
+    options,
+  );
 }
 export function verifyManifest(manifest, bytes, inputsHash) {
   if (
@@ -328,9 +362,7 @@ async function publish(options) {
   mkdirSync(caskDirectory, { recursive: true });
   const cask = path.join(caskDirectory, "pitchary.rb");
   writeFileSync(cask, renderCask(manifest));
-  run("brew", ["style", cask], {
-    env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: "1" },
-  });
+  validateCask(cask);
   const notes = path.join(releaseDirectory, "release-notes.md");
   writeFileSync(notes, release.body);
   if (options.dryRun) {
@@ -355,9 +387,7 @@ async function publish(options) {
       const destination = path.join(options.tapPath, "Casks/pitchary.rb");
       mkdirSync(path.dirname(destination), { recursive: true });
       copyFileSync(cask, destination);
-      run("brew", ["style", destination], {
-        env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: "1" },
-      });
+      validateCask(destination);
       run("git", ["add", "--", "Casks/pitchary.rb"], { cwd: options.tapPath });
       if (
         capture("git", ["diff", "--cached", "--name-only"], {
