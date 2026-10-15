@@ -10,7 +10,7 @@ Die Haupt-E-Mail ist dieselbe Adresse wie unter **Rechnungsdaten des Kunden**; s
 
 Fetchary **1.3.0** wird über die öffentliche Funktion [`extractFavicon`](https://github.com/oliverjessner/fetchary/blob/main/docs/LIBRARY.md#extractfaviconurl-options) im HTTP-Modus verwendet. Sie liefert die ausgewählte Icon-Adresse und Bildmetadaten. Es werden weder eine Fetchary-Datenbank noch Quellen oder Archive angelegt. Chromium wird für diese Funktion nicht gestartet oder heruntergeladen (`.puppeteerrc.cjs`).
 
-Die Netzwerkverbindungen verwenden die eingebauten Module `node:http` und `node:https`. gzip, deflate und Brotli werden beim Lesen dekomprimiert; die Größenbegrenzung gilt auch für den dekomprimierten Inhalt. Weiterleitungen werden bis zur endgültigen Adresse verfolgt.
+Die Netzwerkverbindungen verwenden die eingebauten Module `node:http` und `node:https` mit deren Keep-Alive-Verbindungspool. Seite, Manifeste und Icons derselben Website können dadurch bestehende Verbindungen wiederverwenden, statt für jede Datei erneut eine Verbindung aufzubauen. gzip, deflate und Brotli werden beim Lesen dekomprimiert; die Größenbegrenzung gilt auch für den dekomprimierten Inhalt. Weiterleitungen werden bis zur endgültigen Adresse verfolgt.
 
 Fetchary findet `apple-touch-icon`, `apple-touch-icon-precomposed`, `icon`/`shortcut icon`, Icons aus Web-Manifests und `/favicon.ico`. Relative URLs, HTML-`base`-Tags und Weiterleitungen werden berücksichtigt. Die Auswahl folgt den tatsächlichen Bildabmessungen statt ausschließlich den HTML-Größenangaben; SVGs werden als skalierbare Bilder bevorzugt.
 

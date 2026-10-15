@@ -52,6 +52,23 @@ test("native HTTP connects using the supplied lookup and leaves redirects to the
   assert.equal(requests[0].host, new URL(origin).host);
 });
 
+test("website fetching reuses the connection for the page, manifest and icon", async (t) => {
+  const connections = new Set();
+  const origin = await fixture(t, (request, response) => {
+    connections.add(request.socket);
+    response.end(request.url);
+  });
+  const fetch = createWebFetch({
+    fetchImpl: (url, options) =>
+      nodeHttpFetch(url, { ...options, lookup: loopbackLookup }),
+  });
+  for (const pathname of ["/", "/manifest.json", "/icon.png"]) {
+    const response = await fetch(origin + pathname);
+    assert.equal(await response.text(), pathname);
+  }
+  assert.equal(connections.size, 1);
+});
+
 test("native HTTP decodes gzip, deflate and Brotli responses and preserves empty responses", async (t) => {
   const content = Buffer.from('<link rel="icon" href="/logo.png"> Grüß dich');
   const encoders = {

@@ -331,28 +331,40 @@ export async function entityList(type, actions) {
         ["true", "Archiviert"],
       ],
     }),
+    customerType = isCustomer
+      ? field("Status", "customer_type", {
+          options: [
+            ["", "Alle"],
+            ["customer", "Kunden"],
+            ["lead", "Leads"],
+          ],
+        })
+      : null,
     content = el("div", {}),
     count = el("p", { class: "oj-small oj-muted", role: "status" });
   let rows = await api("/" + type);
   let generation = 0;
   function render() {
     const term = search.querySelector("input").value.toLocaleLowerCase();
-    const filtered = rows.filter((r) =>
-      (
-        r.name +
-        " " +
-        r.note +
-        " " +
-        (r.website ?? "") +
-        " " +
-        (r.url ?? "") +
-        " " +
-        (r.general_email ?? "") +
-        " " +
-        (r.tags ?? []).map((tag) => tag.name).join(" ")
-      )
-        .toLocaleLowerCase()
-        .includes(term),
+    const selectedType = customerType?.querySelector("select").value;
+    const filtered = rows.filter(
+      (r) =>
+        (!selectedType || r.customer_type === selectedType) &&
+        (
+          r.name +
+          " " +
+          r.note +
+          " " +
+          (r.website ?? "") +
+          " " +
+          (r.url ?? "") +
+          " " +
+          (r.general_email ?? "") +
+          " " +
+          (r.tags ?? []).map((tag) => tag.name).join(" ")
+        )
+          .toLocaleLowerCase()
+          .includes(term),
     );
     count.textContent = `${filtered.length} ${title}`;
     content.replaceChildren(
@@ -405,6 +417,7 @@ export async function entityList(type, actions) {
     );
   }
   search.querySelector("input").addEventListener("input", render);
+  customerType?.querySelector("select").addEventListener("change", render);
   archived.querySelector("select").addEventListener("change", async () => {
     archiveMode = archived.querySelector("select").value === "true";
     const token = ++generation;
@@ -444,7 +457,7 @@ export async function entityList(type, actions) {
         ),
       ],
     ),
-    el("div", { class: "filters" }, search, archived),
+    el("div", { class: "filters" }, search, customerType, archived),
     count,
     content,
   ];

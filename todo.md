@@ -1,0 +1,2 @@
+- [] tauri app daraus machen
+- [] ein publish script das automatisch auf brew ../homebrew-tap und eine dmg auf erstellt https://github.com/oliverjessner/pitchary/releases

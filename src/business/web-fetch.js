@@ -16,7 +16,6 @@ export function nodeHttpFetch(input, { headers, signal, lookup } = {}) {
         headers: Object.fromEntries(requestHeaders),
         lookup,
         signal,
-        agent: false,
       },
       (response) => {
         try {
