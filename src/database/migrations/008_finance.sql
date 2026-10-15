@@ -1,6 +1,6 @@
 CREATE TABLE finance_invoices (
  id TEXT PRIMARY KEY CHECK(length(id)=36),
- source_billly_id TEXT UNIQUE,
+ source_import_id TEXT UNIQUE,
  category TEXT NOT NULL CHECK(category IN ('revenue','payable')),
  file_path TEXT,
  file_name TEXT NOT NULL DEFAULT '',

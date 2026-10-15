@@ -53,7 +53,7 @@ export async function generateScreenshots() {
       if (
         url.origin !== origin ||
         !["GET", "HEAD"].includes(request.method()) ||
-        url.pathname.startsWith("/api/finance/billly")
+        url.pathname.startsWith("/api/finance/legacy")
       ) {
         errors.push(
           `Unerlaubte Screenshot-Anfrage: ${request.method()} ${url.pathname}`,

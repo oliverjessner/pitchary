@@ -10,7 +10,7 @@ import {
 import path from "node:path";
 import { AppError } from "./validation.js";
 import { redactFinanceLogMessage } from "./finance.js";
-import { openBilllyRepository } from "../database/billly-repository.js";
+import { openLegacyRepository } from "../database/legacy-repository.js";
 
 const maximumPdfSize = 20 * 1024 * 1024;
 const maximumTextSize = 2000000;
@@ -47,12 +47,12 @@ const overrideFields = new Map([
 ]);
 
 function importError(message) {
-  throw new AppError(422, "billly_import_invalid", message);
+  throw new AppError(422, "legacy_import_invalid", message);
 }
 
 function openSource(databasePath) {
   if (typeof databasePath !== "string" || !databasePath.trim())
-    importError("Bitte den Pfad zur Billly-Datenbank angeben.");
+    importError("Bitte den Pfad zur Quelldatenbank angeben.");
   const resolved = path.resolve(databasePath);
   if (!/\.(?:sqlite|sqlite3|db)$/i.test(resolved))
     importError("Als Quelle wird eine SQLite-Datei erwartet.");
@@ -62,12 +62,12 @@ function openSource(databasePath) {
     if (!statSync(canonical).isFile()) throw new Error("Not a regular file");
   } catch {
     importError(
-      "Die Billly-Datenbank wurde nicht gefunden oder ist nicht lesbar.",
+      "Die Quelldatenbank wurde nicht gefunden oder ist nicht lesbar.",
     );
   }
   let source;
   try {
-    source = openBilllyRepository(canonical);
+    source = openLegacyRepository(canonical);
     if (!source.tables.has("invoices")) throw new Error("Missing invoices");
     const invoiceColumns = source.columns("invoices");
     if (!requiredInvoiceColumns.every((column) => invoiceColumns.has(column)))
@@ -75,7 +75,7 @@ function openSource(databasePath) {
     return source;
   } catch {
     source?.close();
-    importError("Die Datei enthält keine unterstützte Billly-Datenbank.");
+    importError("Die Datei enthält keine unterstützte Quelldatenbank.");
   }
 }
 
@@ -86,7 +86,9 @@ function closeSource(source) {
 function optionalText(value, field, maximum = 10000) {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value !== "string" || value.length > maximum)
-    importError(`Billly enthält einen ungültigen Wert im Feld ${field}.`);
+    importError(
+      `Die Quelldatenbank enthält einen ungültigen Wert im Feld ${field}.`,
+    );
   return value;
 }
 
@@ -104,7 +106,9 @@ function calendarDate(value, field) {
     new Date(normalized + "T00:00:00.000Z").toISOString().slice(0, 10) !==
       normalized
   )
-    importError(`Billly enthält ein ungültiges Datum im Feld ${field}.`);
+    importError(
+      `Die Quelldatenbank enthält ein ungültiges Datum im Feld ${field}.`,
+    );
   return normalized;
 }
 
@@ -112,7 +116,7 @@ function contactEmail(value, field) {
   const email = optionalText(value, field, 254)?.trim() ?? "";
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     importError(
-      `Billly enthält eine ungültige Kontaktadresse im Feld ${field}.`,
+      `Die Quelldatenbank enthält eine ungültige Kontaktadresse im Feld ${field}.`,
     );
   return email;
 }
@@ -126,11 +130,15 @@ function timestamp(value, field) {
     ) ||
     !Number.isFinite(Date.parse(raw))
   )
-    importError(`Billly enthält einen ungültigen Zeitpunkt im Feld ${field}.`);
+    importError(
+      `Die Quelldatenbank enthält einen ungültigen Zeitpunkt im Feld ${field}.`,
+    );
   const date = calendarDate(raw.slice(0, 10), field);
   if (!date)
-    importError(`Billly enthält einen ungültigen Zeitpunkt im Feld ${field}.`);
-  // Older Billly versions also used SQLite's UTC datetime('now') format.
+    importError(
+      `Die Quelldatenbank enthält einen ungültigen Zeitpunkt im Feld ${field}.`,
+    );
+  // Older source versions also used SQLite's UTC datetime('now') format.
   const utc = /(?:Z|[+-]\d{2}:\d{2})$/.test(raw)
     ? raw
     : raw.replace(" ", "T") + "Z";
@@ -147,27 +155,33 @@ function decimalCents(
   // Legacy invoice money is stored as decimal TEXT. Do not pass it through
   // floating point before converting to minor units, including credit notes.
   if (typeof value !== "string")
-    importError(`Billly enthält einen ungültigen Betrag im Feld ${field}.`);
+    importError(
+      `Die Quelldatenbank enthält einen ungültigen Betrag im Feld ${field}.`,
+    );
   const match = /^([+-]?)(\d+)(?:[.,](\d{1,2}))?$/.exec(value.trim());
   if (!match)
-    importError(`Billly enthält einen ungültigen Betrag im Feld ${field}.`);
+    importError(
+      `Die Quelldatenbank enthält einen ungültigen Betrag im Feld ${field}.`,
+    );
   const cents =
     BigInt(match[2]) * 100n + BigInt((match[3] ?? "").padEnd(2, "0"));
   const signed = match[1] === "-" && !payable ? -cents : cents;
   if (signed < -1000000000000n || signed > 1000000000000n)
-    importError(`Billly enthält einen zu großen Betrag im Feld ${field}.`);
+    importError(
+      `Die Quelldatenbank enthält einen zu großen Betrag im Feld ${field}.`,
+    );
   return Number(signed);
 }
 
 function currency(value) {
   if (typeof value !== "string" || !/^[A-Z]{3}$/.test(value.trim()))
-    importError("Billly enthält eine ungültige Währung.");
+    importError("Die Quelldatenbank enthält eine ungültige Währung.");
   return value.trim();
 }
 
 function status(value) {
   if (!["open", "paid"].includes(value))
-    importError("Billly enthält einen ungültigen Zahlungsstatus.");
+    importError("Die Quelldatenbank enthält einen ungültigen Zahlungsstatus.");
   return value;
 }
 
@@ -178,7 +192,7 @@ function jsonText(value, field) {
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
       throw new Error("Expected object");
   } catch {
-    importError(`Billly enthält ungültiges JSON im Feld ${field}.`);
+    importError(`Die Quelldatenbank enthält ungültiges JSON im Feld ${field}.`);
   }
   return raw;
 }
@@ -189,7 +203,7 @@ function tags(value) {
   try {
     parsed = JSON.parse(value);
   } catch {
-    importError("Billly enthält ungültige Rechnungs-Tags.");
+    importError("Die Quelldatenbank enthält ungültige Rechnungs-Tags.");
   }
   if (
     !Array.isArray(parsed) ||
@@ -202,28 +216,30 @@ function tags(value) {
         ),
     )
   )
-    importError("Billly enthält ungültige Rechnungs-Tags.");
+    importError("Die Quelldatenbank enthält ungültige Rechnungs-Tags.");
   return [...new Set(parsed)];
 }
 
 function legacyId(value) {
   if (typeof value !== "string" || !value.trim() || value.length > 500)
-    importError("Billly enthält eine ungültige Datensatz-ID.");
+    importError("Die Quelldatenbank enthält eine ungültige Datensatz-ID.");
   return value;
 }
 
-function targetId(value, type) {
+function targetId(value, type, namespace) {
   if (
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       value,
     )
   )
     return value;
-  return mappedId(value, type);
+  return mappedId(value, type, namespace);
 }
 
-function mappedId(value, type) {
-  const bytes = createHash("sha256").update(`billly:${type}:${value}`).digest();
+function mappedId(value, type, namespace) {
+  const bytes = createHash("sha256")
+    .update(`${namespace}:${type}:${value}`)
+    .digest();
   bytes[6] = (bytes[6] & 15) | 80;
   bytes[8] = (bytes[8] & 63) | 128;
   const hex = bytes.subarray(0, 16).toString("hex");
@@ -240,7 +256,7 @@ function targetInvoice(finance, id) {
 }
 
 function mergeCustomer(finance, customer, extra = {}) {
-  const { source_billly_id, enrichment_source_invoice_id, ...payload } =
+  const { source_legacy_id, enrichment_source_invoice_id, ...payload } =
     customer;
   try {
     return finance.importCustomer({ ...payload, ...extra });
@@ -252,7 +268,11 @@ function mergeCustomer(finance, customer, extra = {}) {
     return finance.importCustomer({
       ...payload,
       ...extra,
-      id: mappedId(source_billly_id, "customer-collision"),
+      id: mappedId(
+        source_legacy_id,
+        "customer-collision",
+        finance.importNamespace?.() ?? "legacy",
+      ),
     });
   }
 }
@@ -317,23 +337,27 @@ function fileDigest(filePath) {
   }
 }
 
-function prepareInvoice(row, includeBytes) {
+function prepareInvoice(row, includeBytes, namespace) {
   const id = legacyId(row.id);
   if (!["revenue", "payable"].includes(row.category))
-    importError("Billly enthält eine ungültige Rechnungskategorie.");
+    importError(
+      "Die Quelldatenbank enthält eine ungültige Rechnungskategorie.",
+    );
   const file = fileInfo(row.file_path, includeBytes);
   const confidence = Number(row.confidence_score ?? 0);
   if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1)
-    importError("Billly enthält einen ungültigen Erkennungswert.");
+    importError("Die Quelldatenbank enthält einen ungültigen Erkennungswert.");
   const createdAt = timestamp(row.created_at, "created_at");
   const ingestionStatus =
     optionalText(row.ingestion_status, "ingestion_status", 100) ?? "pending";
   if (!["pending", "processed", "failed", "missing"].includes(ingestionStatus))
-    importError("Billly enthält einen ungültigen Verarbeitungsstatus.");
+    importError(
+      "Die Quelldatenbank enthält einen ungültigen Verarbeitungsstatus.",
+    );
   return {
     ...file,
-    id: targetId(id, "invoice"),
-    source_billly_id: id,
+    id: targetId(id, "invoice", namespace),
+    source_legacy_id: id,
     category: row.category,
     file_hash:
       optionalText(row.file_hash, "file_hash", 128) ||
@@ -342,7 +366,7 @@ function prepareInvoice(row, includeBytes) {
         : file.file_state === "available"
           ? fileDigest(file.file_path)
           : null) ||
-      createHash("sha256").update(`billly:missing:${id}`).digest("hex"),
+      createHash("sha256").update(`${namespace}:missing:${id}`).digest("hex"),
     file_modified_at: row.file_modified_at
       ? timestamp(row.file_modified_at, "file_modified_at")
       : createdAt,
@@ -410,11 +434,11 @@ function readSettings(source) {
   return result;
 }
 
-function readCustomers(source) {
+function readCustomers(source, namespace) {
   if (!source.tables.has("customers")) return [];
   const columns = source.columns("customers");
   if (!columns.has("id") || !columns.has("name"))
-    importError("Billly enthält eine ungültige Kundentabelle.");
+    importError("Die Quelldatenbank enthält eine ungültige Kundentabelle.");
   const contacts = new Map();
   if (source.tables.has("customer_contacts")) {
     for (const row of source.contacts()) {
@@ -422,9 +446,11 @@ function readCustomers(source) {
       const email = contactEmail(row.email, "contact_email");
       if (!name.trim() && !email.trim()) continue;
       if (!contacts.has(row.customer_id)) contacts.set(row.customer_id, []);
-      contacts
-        .get(row.customer_id)
-        .push({ id: targetId(legacyId(row.id), "contact"), name, email });
+      contacts.get(row.customer_id).push({
+        id: targetId(legacyId(row.id), "contact", namespace),
+        name,
+        email,
+      });
     }
   }
   return source.customers().map((row) => {
@@ -432,10 +458,10 @@ function readCustomers(source) {
     const sourceName =
       optionalText(row.source_name, "source_name", 200) || name;
     if (!name?.trim() || !sourceName?.trim())
-      importError("Billly enthält einen ungültigen Kundennamen.");
+      importError("Die Quelldatenbank enthält einen ungültigen Kundennamen.");
     return {
-      id: targetId(legacyId(row.id), "customer"),
-      source_billly_id: row.id,
+      id: targetId(legacyId(row.id), "customer", namespace),
+      source_legacy_id: row.id,
       name,
       source_name: sourceName,
       normalized_name: sourceName
@@ -469,12 +495,16 @@ function readCustomers(source) {
   });
 }
 
-function prepareImport(source, includeBytes, { includeLogs = false } = {}) {
+function prepareImport(
+  source,
+  includeBytes,
+  { includeLogs = false, namespace = "legacy" } = {},
+) {
   const invoices = source
     .invoices()
-    .map((row) => prepareInvoice(row, includeBytes));
+    .map((row) => prepareInvoice(row, includeBytes, namespace));
   const invoiceMap = new Map(
-    invoices.map((invoice) => [invoice.source_billly_id, invoice]),
+    invoices.map((invoice) => [invoice.source_legacy_id, invoice]),
   );
   const overrides = new Map();
   let ignoredOverrides = 0;
@@ -491,7 +521,7 @@ function prepareImport(source, includeBytes, { includeLogs = false } = {}) {
       overrides.get(row.invoice_id)[override.field] = override.value;
     }
   }
-  const customers = readCustomers(source);
+  const customers = readCustomers(source, namespace);
   const logs = [];
   let excludedLogs = 0;
   if (includeLogs)
@@ -503,10 +533,12 @@ function prepareImport(source, includeBytes, { includeLogs = false } = {}) {
       }
       const status = optionalText(row.status, "log_status", 100);
       if (!type?.trim() || !status?.trim())
-        importError("Billly enthält ein ungültiges Verarbeitungsprotokoll.");
+        importError(
+          "Die Quelldatenbank enthält ein ungültiges Verarbeitungsprotokoll.",
+        );
       const id = legacyId(row.id);
       logs.push({
-        id: targetId(id, "processing-log"),
+        id: targetId(id, "processing-log", namespace),
         source_invoice_id:
           row.invoice_id === null || row.invoice_id === undefined
             ? null
@@ -564,8 +596,8 @@ function summary(source, prepared) {
   };
 }
 
-/** Validate a Billly source and return counts only, never records or credentials. */
-export function inspectBillly(databasePath) {
+/** Validate an import source and return counts only, never records or credentials. */
+export function inspectLegacy(databasePath) {
   const source = openSource(databasePath);
   try {
     return summary(source, prepareImport(source, false));
@@ -579,7 +611,7 @@ export function inspectBillly(databasePath) {
  * imported invoices untouched, including corrections made later in Pitchary.
  * The finance adapter owns the target transaction and CRM merge rules.
  */
-export function importBillly(
+export function importLegacy(
   sourcePath,
   finance,
   { dryRun = true, includeLogs = false } = {},
@@ -593,7 +625,8 @@ export function importBillly(
     )
       importError("Quell- und Zieldatenbank müssen verschieden sein.");
     // Validate every record before writes, but retain only one PDF at a time.
-    const prepared = prepareImport(source, false, { includeLogs });
+    const namespace = finance?.importNamespace?.() ?? "legacy";
+    const prepared = prepareImport(source, false, { includeLogs, namespace });
     const result = {
       ...summary(source, prepared),
       dry_run: dryRun,
@@ -605,7 +638,7 @@ export function importBillly(
     if (
       typeof finance?.record !== "function" ||
       typeof finance?.update !== "function" ||
-      typeof finance?.findBilllyInvoice !== "function" ||
+      typeof finance?.findLegacyInvoice !== "function" ||
       typeof finance?.importCustomer !== "function" ||
       typeof finance?.importTransaction !== "function"
     )
@@ -619,7 +652,7 @@ export function importBillly(
         customerMap.set(customer.normalized_name, imported.id);
       }
       for (const invoice of prepared.invoices) {
-        if (finance.findBilllyInvoice(invoice.source_billly_id)) {
+        if (finance.findLegacyInvoice(invoice.source_legacy_id)) {
           result.skipped++;
           continue;
         }
@@ -631,7 +664,7 @@ export function importBillly(
           result.files[currentFile.file_state]++;
         }
         const corrections =
-          prepared.overrides.get(invoice.source_billly_id) ?? {};
+          prepared.overrides.get(invoice.source_legacy_id) ?? {};
         const name = corrections.counterparty_name ?? invoice.counterparty_name;
         const normalized = name
           ?.normalize("NFC")
@@ -642,16 +675,20 @@ export function importBillly(
           payload.customer_id = customerMap.get(normalized);
         // A UUID shared with an unrelated target record must never overwrite it.
         if (targetInvoice(finance, payload.id)) {
-          payload.id = mappedId(invoice.source_billly_id, "invoice-collision");
+          payload.id = mappedId(
+            invoice.source_legacy_id,
+            "invoice-collision",
+            namespace,
+          );
           if (targetInvoice(finance, payload.id))
             importError(
-              "Eine Billly-Rechnungs-ID kollidiert mit einer vorhandenen Rechnung.",
+              "Eine importierte Rechnungs-ID kollidiert mit einer vorhandenen Rechnung.",
             );
         }
         const imported = finance.record(payload);
         if (Object.keys(corrections).length) {
           finance.update(imported.id, corrections, { legacyImport: true });
-          // Applying historical corrections must not replace Billly's last
+          // Applying historical corrections must not replace the source's last
           // invoice modification timestamp with today's import time.
           finance.record({ id: imported.id, updated_at: invoice.updated_at });
         }
@@ -659,7 +696,7 @@ export function importBillly(
       }
       for (const customer of prepared.customers) {
         if (!customer.enrichment_source_invoice_id) continue;
-        const invoice = finance.findBilllyInvoice(
+        const invoice = finance.findLegacyInvoice(
           customer.enrichment_source_invoice_id,
         );
         if (!invoice) continue;
@@ -667,7 +704,7 @@ export function importBillly(
       }
       for (const { source_invoice_id, ...log } of prepared.logs) {
         const invoice = source_invoice_id
-          ? finance.findBilllyInvoice(source_invoice_id)
+          ? finance.findLegacyInvoice(source_invoice_id)
           : null;
         const imported = finance.importProcessingLog({
           ...log,

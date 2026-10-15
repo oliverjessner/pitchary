@@ -671,7 +671,7 @@ test("deleting a watched invoice after a category correction retains its ingesti
   );
 });
 
-test("Billly import helpers match customers, fill empty data and contacts, and roll back nested imports", (t) => {
+test("Legacy import helpers match customers, fill empty data and contacts, and roll back nested imports", (t) => {
   const { finance, crm, db } = fixture(t);
   const existing = crm.createEntity("customers", {
     name: "Renamed customer",
@@ -701,11 +701,11 @@ test("Billly import helpers match customers, fill empty data and contacts, and r
     name: "Unrelated source customer",
   });
   assert.notEqual(collision.id, existing.id);
-  const row = invoice(finance, { source_billly_id: "legacy-source-123" });
-  assert.equal(finance.findBilllyInvoice("legacy-source-123").id, row.id);
+  const row = invoice(finance, { source_legacy_id: "legacy-source-123" });
+  assert.equal(finance.findLegacyInvoice("legacy-source-123").id, row.id);
   assert.equal(
     finance.record({
-      source_billly_id: "legacy-source-123",
+      source_legacy_id: "legacy-source-123",
       invoice_number: "Updated",
     }).id,
     row.id,
@@ -720,7 +720,7 @@ test("Billly import helpers match customers, fill empty data and contacts, and r
           name: "Rolled back",
           contacts: [{ name: "Added" }],
         });
-        invoice(finance, { source_billly_id: "rollback-source" });
+        invoice(finance, { source_legacy_id: "rollback-source" });
         throw new Error("import failure");
       }),
     /import failure/,
@@ -731,7 +731,7 @@ test("Billly import helpers match customers, fill empty data and contacts, and r
     ),
     counts,
   );
-  assert.equal(finance.findBilllyInvoice("rollback-source"), null);
+  assert.equal(finance.findLegacyInvoice("rollback-source"), null);
 });
 
 test("finance API exposes effective records and scoped PDF bytes with structured errors", async (t) => {
@@ -907,7 +907,7 @@ test("migration 008 preserves every populated schema 7 CRM row and immutable his
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 10);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 11);
     for (const [index, table] of tables.entries())
       assert.deepEqual(
         db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),

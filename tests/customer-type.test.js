@@ -201,13 +201,13 @@ test("late revenue matching, effective nullable overrides, reset and reimport cl
     category: "revenue",
     customer_id: null,
     counterparty_name: null,
-    source_billly_id: "late-source",
+    source_legacy_id: "late-source",
   });
   assert.equal(crm.entity("customers", a.id).customer_type, "lead");
   finance.record({ id: invoice.id, counterparty_name: a.name });
   assert.equal(crm.entity("customers", a.id).customer_type, "customer");
   finance.update(invoice.id, { category: "payable", customer_id: b.id });
-  finance.record({ source_billly_id: "late-source", total_amount_minor: 1000 });
+  finance.record({ source_legacy_id: "late-source", total_amount_minor: 1000 });
   assert.equal(crm.entity("customers", b.id).customer_type, "lead");
   finance.reset(invoice.id, "category");
   assert.equal(crm.entity("customers", b.id).customer_type, "lead");
@@ -362,7 +362,7 @@ test("migration 009 backfills effective revenue assignments and preserves every 
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 10);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 11);
     for (const table of tables) {
       const actual = db
         .prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`)
@@ -371,6 +371,10 @@ test("migration 009 backfills effective revenue assignments and preserves every 
           const value = { ...row };
           if (table === "customers") delete value.customer_type;
           if (table === "services") delete value.url;
+          if (table === "finance_invoices") {
+            value.source_import_id = value.source_legacy_id;
+            delete value.source_legacy_id;
+          }
           return value;
         });
       assert.deepEqual(actual, before.get(table));

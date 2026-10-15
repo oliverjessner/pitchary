@@ -14,9 +14,9 @@ import { createHash } from "node:crypto";
 import { buildApp } from "../src/server/app.js";
 import { invoicePDF } from "./fixtures/finance-pdf.js";
 
-test("Billly API inspection is read-only and applying imports keeps source untouched with a restorable snapshot", async (t) => {
+test("Legacy API inspection is read-only and applying imports keeps source untouched with a restorable snapshot", async (t) => {
   const folder = mkdtempSync(path.join(os.tmpdir(), "pitchary-import-api-"));
-  const source = path.join(folder, "billly.sqlite"),
+  const source = path.join(folder, "legacy.sqlite"),
     target = path.join(folder, "pitchary.sqlite");
   const pdfPath = path.join(folder, "invoice.pdf"),
     pdf = invoicePDF();
@@ -62,8 +62,20 @@ test("Billly API inspection is read-only and applying imports keeps source untou
     name: "Existing Customer",
     note: "Preserve me",
   });
+  const missingSource = await app.inject({
+    url: "/api/finance/legacy/inspect",
+  });
+  assert.equal(missingSource.statusCode, 422);
+  assert.equal(missingSource.json().error.code, "invalid_source");
+  const missingImportSource = await app.inject({
+    method: "POST",
+    url: "/api/finance/legacy/import",
+    payload: {},
+  });
+  assert.equal(missingImportSource.statusCode, 422);
+  assert.equal(app.finance.list().length, 0);
   const inspect = await app.inject({
-    url: "/api/finance/billly/inspect?source=" + encodeURIComponent(source),
+    url: "/api/finance/legacy/inspect?source=" + encodeURIComponent(source),
   });
   assert.equal(inspect.statusCode, 200, inspect.body);
   assert.equal(inspect.json().invoices, 1);
@@ -71,7 +83,7 @@ test("Billly API inspection is read-only and applying imports keeps source untou
   assert.ok(!inspect.body.includes("Existing Customer"));
   const applied = await app.inject({
     method: "POST",
-    url: "/api/finance/billly/import",
+    url: "/api/finance/legacy/import",
     payload: { source },
   });
   assert.equal(applied.statusCode, 200, applied.body);
@@ -98,7 +110,7 @@ test("Billly API inspection is read-only and applying imports keeps source untou
   snapshot.close();
   const repeat = await app.inject({
     method: "POST",
-    url: "/api/finance/billly/import",
+    url: "/api/finance/legacy/import",
     payload: { source },
   });
   assert.equal(repeat.json().skipped, 1);
@@ -107,7 +119,7 @@ test("Billly API inspection is read-only and applying imports keeps source untou
   symlinkSync(target, alias);
   const invalid = await app.inject({
     method: "POST",
-    url: "/api/finance/billly/import",
+    url: "/api/finance/legacy/import",
     payload: { source: alias },
   });
   assert.equal(invalid.statusCode, 422);

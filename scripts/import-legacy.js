@@ -7,12 +7,12 @@ import {
   projectRoot,
 } from "../src/database/database.js";
 import { createFinance } from "../src/business/finance.js";
-import { inspectBillly, importBillly } from "../src/business/billly-import.js";
-import { defaultBilllySource } from "../src/config/billly-source.js";
+import { inspectLegacy, importLegacy } from "../src/business/legacy-import.js";
+import { resolveImportSource } from "../src/config/import-source.js";
 
 function argumentsFrom(argv) {
   const result = {
-    source: defaultBilllySource(),
+    source: null,
     database: defaultDatabasePath,
     apply: false,
     help: false,
@@ -25,7 +25,9 @@ function argumentsFrom(argv) {
       const value = argv[++index];
       if (!value || value.startsWith("--"))
         throw new Error(`${argument} benötigt einen Dateipfad.`);
-      result[argument.slice(2)] = path.resolve(value);
+      result[argument.slice(2)] = value.startsWith("~/")
+        ? resolveImportSource(value)
+        : path.resolve(value);
     } else throw new Error(`Unbekanntes Argument: ${argument}`);
   }
   return result;
@@ -35,12 +37,13 @@ async function run() {
   const options = argumentsFrom(process.argv.slice(2));
   if (options.help) {
     console.log(
-      "Billly-Import (standardmäßig nur Prüfung)\n\nnode scripts/import-billly.js [--source /pfad/billly.sqlite] [--database /pfad/pitchary.sqlite] [--apply]\n\n--apply erstellt zuerst ein Backup der vorhandenen Pitchary-Datenbank. Die Quelle bleibt unverändert. E-Mail-Funktionen und Zugangsdaten werden nicht übernommen.",
+      "Datenimport (standardmäßig nur Prüfung)\n\nnpm run import:legacy -- --source /pfad/quelle.sqlite [--database /pfad/pitchary.sqlite] [--apply]\n\n--source ist erforderlich. --apply erstellt zuerst ein Backup der vorhandenen Pitchary-Datenbank. Die Quelle bleibt unverändert. E-Mail-Funktionen und Zugangsdaten werden nicht übernommen.",
     );
     return;
   }
-  const inspected = inspectBillly(options.source);
-  const source = realpathSync(options.source);
+  const requestedSource = resolveImportSource(options.source);
+  const inspected = inspectLegacy(requestedSource);
+  const source = realpathSync(requestedSource);
   const target = path.resolve(options.database);
   if ((existsSync(target) ? realpathSync(target) : target) === source)
     throw new Error("Quell- und Zieldatenbank müssen verschieden sein.");
@@ -64,7 +67,7 @@ async function run() {
     mkdirSync(backupFolder, { recursive: true, mode: 0o700 });
     backupPath = path.join(
       backupFolder,
-      `pitchary-before-billly-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`,
+      `pitchary-before-legacy-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`,
     );
     if (existsSync(backupPath))
       throw new Error("Die Backup-Datei existiert bereits.");
@@ -78,7 +81,7 @@ async function run() {
   }
   const db = openDatabase(target);
   try {
-    const result = importBillly(source, createFinance(db), { dryRun: false });
+    const result = importLegacy(source, createFinance(db), { dryRun: false });
     console.log(
       JSON.stringify({ ...result, backup_path: backupPath }, null, 2),
     );

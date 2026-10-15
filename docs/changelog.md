@@ -1,7 +1,7 @@
-# 0.4.3
+# 0.4.4
 
 - automatic publish
 
 # 0.1.0
 
-- init merge of https://github.com/oliverjessner/Billly
+- Integration der Rechnungsverwaltung.

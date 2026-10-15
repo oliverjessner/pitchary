@@ -1,13 +1,12 @@
 import { backup } from "node:sqlite";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { homedir } from "node:os";
 import { defaultDatabasePath, projectRoot } from "../database/database.js";
 import { AppError, allowedKeys, choice, text } from "../business/validation.js";
 import { MAX_PDF_BYTES } from "../business/finance-extraction.js";
 import { normalizeKey } from "../business/finance-settings.js";
-import { inspectBillly, importBillly } from "../business/billly-import.js";
-import { defaultBilllySource } from "../config/billly-source.js";
+import { inspectLegacy, importLegacy } from "../business/legacy-import.js";
+import { resolveImportSource } from "../config/import-source.js";
 import { applicationVersion } from "../config/application.js";
 
 export async function registerFinanceProcessingAPI(
@@ -76,27 +75,13 @@ export async function registerFinanceProcessingAPI(
   app.post("/api/finance/customers/:id/enrich", async (request) =>
     processor.enrich(request.params.id),
   );
-  const sourcePath = (value) => {
-    if (value === undefined || value === "") return defaultBilllySource();
-    const filename = text(value, "source", { required: true, max: 4000 });
-    const resolved = filename.startsWith("~/")
-      ? path.join(homedir(), filename.slice(2))
-      : filename;
-    if (!path.isAbsolute(resolved))
-      throw new AppError(
-        422,
-        "invalid_source",
-        "Bitte einen absoluten Pfad zur Billly-Datenbank eingeben.",
-      );
-    return resolved;
-  };
-  app.get("/api/finance/billly/inspect", async (request) =>
-    inspectBillly(sourcePath(request.query.source)),
+  app.get("/api/finance/legacy/inspect", async (request) =>
+    inspectLegacy(resolveImportSource(request.query.source)),
   );
-  app.post("/api/finance/billly/import", objectBody, async (request) => {
+  app.post("/api/finance/legacy/import", objectBody, async (request) => {
     allowedKeys(request.body ?? {}, ["source"]);
-    const source = sourcePath(request.body?.source);
-    inspectBillly(source);
+    const source = resolveImportSource(request.body?.source);
+    inspectLegacy(source);
     const filename =
       finance.databasePath === ":memory:" ? null : finance.databasePath;
     if (filename && path.resolve(source) === path.resolve(filename))
@@ -114,11 +99,11 @@ export async function registerFinanceProcessingAPI(
       await mkdir(directory, { recursive: true, mode: 0o700 });
       snapshot = path.join(
         directory,
-        `pitchary-before-billly-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`,
+        `pitchary-before-legacy-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`,
       );
       await backup(app.database, snapshot);
     }
-    const result = await importBillly(source, finance, { dryRun: false });
+    const result = await importLegacy(source, finance, { dryRun: false });
     return { ...result, backup: snapshot };
   });
 }

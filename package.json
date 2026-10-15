@@ -1,6 +1,6 @@
 {
     "name": "pitchary",
-    "version": "0.4.3",
+    "version": "0.4.4",
     "description": "Local single-user CRM for customers, services and sales",
     "license": "MIT",
     "homepage": "https://github.com/oliverjessner/pitchary#readme",
@@ -25,7 +25,7 @@
         "seed": "node scripts/seed.js",
         "backup": "node scripts/backup.js",
         "restore": "node scripts/restore.js",
-        "import:billly": "node scripts/import-billly.js",
+        "import:legacy": "node scripts/import-legacy.js",
         "test": "node --test tests/*.test.js",
         "test:ui": "playwright test",
         "screenshots": "node scripts/screenshots.js",

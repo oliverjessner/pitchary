@@ -746,7 +746,7 @@ test("finance settings preserve company data and mask keys without a migration c
       page.getByRole("heading", { name: "Einstellungen", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".finance-tabs")).toHaveCount(0);
-    await expect(page.locator("body")).not.toContainText(/billly/i);
+    await expect(page.locator("body")).not.toContainText(/legacy/i);
     await expect(page.locator(".finance-app-version")).toHaveText(
       "Version " + version,
     );
@@ -912,7 +912,7 @@ test("finance settings preserve company data and mask keys without a migration c
         exact: true,
       }),
     ).toHaveCount(0);
-    await expect(page.locator("body")).not.toContainText(/billly/i);
+    await expect(page.locator("body")).not.toContainText(/legacy/i);
   } finally {
     await request.delete("/api/finance/settings/key");
     await request.patch("/api/finance/settings", {

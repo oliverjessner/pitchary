@@ -43,7 +43,7 @@ const editable = [
 ];
 const writable = editable.filter((field) => field !== "send_date");
 const metadata = [
-  "source_billly_id",
+  "source_legacy_id",
   "file_path",
   "file_name",
   "pdf_data",
@@ -530,12 +530,13 @@ export function createFinance(
   }
   const finance = {
     databasePath: repo.databasePath,
+    importNamespace: () => repo.importNamespace.get()?.value ?? "legacy",
     importTransaction(callback) {
       return atomic(callback);
     },
-    findBilllyInvoice(sourceId) {
-      const id = repo.billlyInvoice.get(
-        text(sourceId, "source_billly_id", { required: true, max: 1000 }),
+    findLegacyInvoice(sourceId) {
+      const id = repo.legacyInvoice.get(
+        text(sourceId, "source_legacy_id", { required: true, max: 1000 }),
       )?.id;
       return id ? finance.get(id) : null;
     },
@@ -634,15 +635,15 @@ export function createFinance(
       return atomic(() => {
         const existingId =
           values.id ??
-          (values.source_billly_id
-            ? repo.billlyInvoice.get(values.source_billly_id)?.id
+          (values.source_legacy_id
+            ? repo.legacyInvoice.get(values.source_legacy_id)?.id
             : undefined);
         const existing = existingId ? repo.invoice.get(existingId) : null;
         const at = now(),
           id = existingId ?? idFactory();
         const row = {
           id,
-          source_billly_id: null,
+          source_legacy_id: null,
           category: "revenue",
           file_path: null,
           file_name: "",

@@ -16,8 +16,8 @@ const nonSecretSettingKeys = [
   "company_email",
 ];
 
-/** A consistent, read-only view of one legacy Billly database. */
-export function openBilllyRepository(filename) {
+/** A consistent, read-only view of one legacy invoice database. */
+export function openLegacyRepository(filename) {
   const db = new DatabaseSync(filename, { readOnly: true });
   try {
     db.exec("PRAGMA query_only = ON; PRAGMA busy_timeout = 5000; BEGIN;");
@@ -29,7 +29,7 @@ export function openBilllyRepository(filename) {
     );
     const columns = (table) => {
       if (!readableTables.has(table))
-        throw new Error("Unsupported Billly table.");
+        throw new Error("Unsupported source table.");
       return new Set(
         tables.has(table)
           ? db
@@ -82,7 +82,7 @@ export function openBilllyRepository(filename) {
             (field) => !available.has(field),
           )
         )
-          throw new Error("Unsupported Billly processing log schema.");
+          throw new Error("Unsupported source processing log schema.");
         const fields = [
           "id",
           "invoice_id",

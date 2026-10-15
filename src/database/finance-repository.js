@@ -3,7 +3,7 @@ import { transaction } from "./database.js";
 export const financeInvoiceColumns = [
   "id",
   ...[
-    "source_billly_id",
+    "source_legacy_id",
     "file_path",
     "file_name",
     "pdf_data",
@@ -107,8 +107,11 @@ export function createFinanceRepository(db) {
     profile: db.prepare(
       "SELECT billing_address,general_email,enrichment_status,enriched_at,enrichment_invoice_id,created_at AS profile_created_at,updated_at AS profile_updated_at FROM finance_customer_profiles WHERE customer_id=?",
     ),
-    billlyInvoice: db.prepare(
-      "SELECT id FROM finance_invoices WHERE source_billly_id=?",
+    legacyInvoice: db.prepare(
+      "SELECT id FROM finance_invoices WHERE source_legacy_id=?",
+    ),
+    importNamespace: db.prepare(
+      "SELECT value FROM finance_settings WHERE key='legacy_import_namespace'",
     ),
     touchInvoice: invoiceStatement(
       "UPDATE finance_invoices SET updated_at=? WHERE id=?",
@@ -177,7 +180,7 @@ export function createFinanceRepository(db) {
         operationDepth++;
         try {
           const value = callback();
-          // Classify only final effective invoice values. A Billly import or
+          // Classify only final effective invoice values. An import or
           // batch reassignment can stage several corrections in nested calls.
           if (operationDepth === 1) flushClassification();
           return value;

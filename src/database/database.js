@@ -42,7 +42,32 @@ export function openDatabase(
     if (rebuild) db.exec("PRAGMA foreign_keys = OFF");
     try {
       transaction(db, () => {
-        db.exec(sql);
+        let migration = sql;
+        if (file === "011_import_source_id.sql") {
+          const columns = db
+            .prepare("PRAGMA table_info(finance_invoices)")
+            .all();
+          if (columns.some(({ name }) => name === "source_legacy_id"))
+            migration = "SELECT 1;";
+          else {
+            // Existing schemas used a product-specific source ID column.
+            // Keep its import UUID namespace so repeated imports retain IDs.
+            const sources = columns.filter(({ name }) =>
+              /^source_[a-z_]+_id$/i.test(name),
+            );
+            if (sources.length !== 1)
+              throw new Error(
+                "Cannot identify the invoice import source column.",
+              );
+            const name = sources[0].name;
+            if (name !== "source_import_id")
+              db.prepare(
+                "INSERT INTO finance_settings(key,value,updated_at) VALUES('legacy_import_namespace',?,?) ON CONFLICT(key) DO NOTHING",
+              ).run(name.slice(7, -3), new Date().toISOString());
+            migration = sql.replace("source_import_id", `"${name}"`);
+          }
+        }
+        db.exec(migration);
         if (db.prepare("PRAGMA foreign_key_check").all().length)
           throw new Error(`Foreign key violation after migration ${file}.`);
         db.exec(`PRAGMA user_version = ${version}`);

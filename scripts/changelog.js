@@ -53,5 +53,8 @@ export function changelogRelease(markdown, version) {
     throw new Error(
       `The changelog section for ${version} has no release notes.`,
     );
-  return { title: heading.title, body: body + "\n" };
+  return {
+    title: heading.title,
+    body: `${"#".repeat(heading.level)} ${heading.title}\n\n${body}\n`,
+  };
 }

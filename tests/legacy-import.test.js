@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   mkdtempSync,
   readFileSync,
@@ -15,14 +15,14 @@ import path from "node:path";
 import { openDatabase, projectRoot } from "../src/database/database.js";
 import { createCRM } from "../src/business/crm.js";
 import { createFinance } from "../src/business/finance.js";
-import { inspectBillly, importBillly } from "../src/business/billly-import.js";
+import { inspectLegacy, importLegacy } from "../src/business/legacy-import.js";
 import { invoicePDF } from "./fixtures/finance-pdf.js";
 
 const revenueId = "50000000-0000-4000-8000-000000000001";
 const payableId = "50000000-0000-4000-8000-000000000002";
 const customerId = "60000000-0000-4000-8000-000000000001";
 const time = "2026-10-01T10:00:00.000Z";
-const secret = "sk-test-billly-import-secret-never-copy";
+const secret = "sk-test-legacy-import-secret-never-copy";
 const mailCanary = "EMAIL-TEMPLATE-DO-NOT-IMPORT";
 
 function digest(filename) {
@@ -30,9 +30,9 @@ function digest(filename) {
 }
 
 function fixture(t, { invalidDate = false } = {}) {
-  const folder = mkdtempSync(path.join(os.tmpdir(), "pitchary-billly-import-"));
+  const folder = mkdtempSync(path.join(os.tmpdir(), "pitchary-legacy-import-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
-  const databasePath = path.join(folder, "billly.sqlite");
+  const databasePath = path.join(folder, "legacy.sqlite");
   const pdfPath = path.join(folder, "credit-note.pdf");
   const pdf = invoicePDF("CREDIT-1");
   writeFileSync(pdfPath, pdf);
@@ -190,7 +190,7 @@ function fixture(t, { invalidDate = false } = {}) {
   return { databasePath, pdfPath, pdf, folder };
 }
 
-test("Billly processing log import is opt-in, sanitized, mapped and idempotent without copying mail events", (t) => {
+test("Legacy processing log import is opt-in, sanitized, mapped and idempotent without copying mail events", (t) => {
   const source = fixture(t);
   const legacy = new DatabaseSync(source.databasePath);
   legacy.exec(
@@ -257,15 +257,15 @@ test("Billly processing log import is opt-in, sanitized, mapped and idempotent w
     category: "payable",
     counterparty_name: "Unrelated target invoice",
   });
-  importBillly(source.databasePath, finance, { dryRun: false });
+  importLegacy(source.databasePath, finance, { dryRun: false });
   assert.equal(
     target.prepare("SELECT count(*) AS n FROM finance_processing_logs").get().n,
     0,
   );
-  const dryRun = importBillly(source.databasePath, null, { includeLogs: true });
+  const dryRun = importLegacy(source.databasePath, null, { includeLogs: true });
   assert.equal(dryRun.processing_logs, 4);
   assert.equal(dryRun.excluded_logs, 4);
-  const imported = importBillly(source.databasePath, finance, {
+  const imported = importLegacy(source.databasePath, finance, {
     dryRun: false,
     includeLogs: true,
   });
@@ -275,7 +275,7 @@ test("Billly processing log import is opt-in, sanitized, mapped and idempotent w
     .prepare("SELECT * FROM finance_processing_logs ORDER BY id")
     .all();
   const linked = rows.find((row) => row.id === logId);
-  assert.equal(linked.invoice_id, finance.findBilllyInvoice(revenueId).id);
+  assert.equal(linked.invoice_id, finance.findLegacyInvoice(revenueId).id);
   assert.notEqual(linked.invoice_id, revenueId);
   assert.equal(linked.created_at, time);
   const mapped = rows.find((row) => row.process_type === "ocr");
@@ -283,13 +283,13 @@ test("Billly processing log import is opt-in, sanitized, mapped and idempotent w
     mapped.id,
     /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
   );
-  assert.equal(mapped.invoice_id, finance.findBilllyInvoice(payableId).id);
+  assert.equal(mapped.invoice_id, finance.findLegacyInvoice(payableId).id);
   assert.equal(rows.filter((row) => row.invoice_id === null).length, 2);
   const serialized = JSON.stringify(rows);
   for (const canary of [secret, bearer, "fixture-other-secret", mailCanary])
     assert.equal(serialized.includes(canary), false);
   assert.equal(linked.message.includes("Zugangsdaten entfernt"), true);
-  const repeated = importBillly(source.databasePath, finance, {
+  const repeated = importLegacy(source.databasePath, finance, {
     dryRun: false,
     includeLogs: true,
   });
@@ -302,7 +302,7 @@ test("Billly processing log import is opt-in, sanitized, mapped and idempotent w
   assert.equal(digest(source.databasePath), before);
 });
 
-test("Billly historical paid invoices preserve unknown payment dates and absent or empty corrections", (t) => {
+test("Legacy historical paid invoices preserve unknown payment dates and absent or empty corrections", (t) => {
   const source = fixture(t);
   const legacy = new DatabaseSync(source.databasePath);
   legacy.prepare("UPDATE invoices SET paid_at=NULL WHERE id=?").run(payableId);
@@ -318,12 +318,12 @@ test("Billly historical paid invoices preserve unknown payment dates and absent 
   const finance = createFinance(target, {
     clock: () => "2026-10-20T09:00:00.000Z",
   });
-  const imported = importBillly(source.databasePath, finance, {
+  const imported = importLegacy(source.databasePath, finance, {
     dryRun: false,
   });
   assert.equal(imported.imported, 2);
-  const revenue = finance.findBilllyInvoice(revenueId),
-    payable = finance.findBilllyInvoice(payableId);
+  const revenue = finance.findLegacyInvoice(revenueId),
+    payable = finance.findLegacyInvoice(payableId);
   assert.equal(revenue.status, "paid");
   assert.equal(revenue.paid_at, null);
   assert.equal(Object.hasOwn(revenue.overrides, "paid_at"), true);
@@ -343,7 +343,7 @@ test("Billly historical paid invoices preserve unknown payment dates and absent 
   assert.equal(digest(source.databasePath), before);
 });
 
-test("Billly processing log collisions preserve target logs and invalid source logs roll back before writes", (t) => {
+test("Legacy processing log collisions preserve target logs and invalid source logs roll back before writes", (t) => {
   const source = fixture(t);
   const legacy = new DatabaseSync(source.databasePath);
   legacy.exec(
@@ -368,7 +368,7 @@ test("Billly processing log collisions preserve target logs and invalid source l
   const before = target
     .prepare("SELECT * FROM finance_processing_logs WHERE id=?")
     .get(logId);
-  const imported = importBillly(source.databasePath, finance, {
+  const imported = importLegacy(source.databasePath, finance, {
     dryRun: false,
     includeLogs: true,
   });
@@ -389,11 +389,11 @@ test("Billly processing log collisions preserve target logs and invalid source l
   t.after(() => fresh.close());
   assert.throws(
     () =>
-      importBillly(source.databasePath, createFinance(fresh), {
+      importLegacy(source.databasePath, createFinance(fresh), {
         dryRun: false,
         includeLogs: true,
       }),
-    (error) => error.code === "billly_import_invalid",
+    (error) => error.code === "legacy_import_invalid",
   );
   assert.equal(
     fresh.prepare("SELECT count(*) AS n FROM finance_invoices").get().n,
@@ -402,10 +402,10 @@ test("Billly processing log collisions preserve target logs and invalid source l
   assert.equal(fresh.prepare("SELECT count(*) AS n FROM customers").get().n, 0);
 });
 
-test("Billly inspection and default import are read-only, sanitized and do not need a target", (t) => {
+test("Legacy inspection and default import are read-only, sanitized and do not need a target", (t) => {
   const source = fixture(t);
   const before = digest(source.databasePath);
-  const inspected = inspectBillly(source.databasePath);
+  const inspected = inspectLegacy(source.databasePath);
   assert.equal(inspected.schema_version, 3);
   assert.equal(inspected.invoices, 2);
   assert.equal(inspected.revenue, 1);
@@ -421,7 +421,7 @@ test("Billly inspection and default import are read-only, sanitized and do not n
     "revenue_folder",
     "company_name",
   ]);
-  const result = importBillly(source.databasePath);
+  const result = importLegacy(source.databasePath);
   assert.equal(result.dry_run, true);
   assert.equal(result.imported, 0);
   const serialized = JSON.stringify(result);
@@ -442,7 +442,7 @@ test("Billly inspection and default import are read-only, sanitized and do not n
   );
 });
 
-test("Billly import preserves original extraction, corrections, credits, PDFs and existing CRM data", (t) => {
+test("Legacy import preserves original extraction, corrections, credits, PDFs and existing CRM data", (t) => {
   const source = fixture(t);
   const before = digest(source.databasePath);
   const db = openDatabase(":memory:");
@@ -467,10 +467,10 @@ test("Billly import preserves original extraction, corrections, credits, PDFs an
   finance.updateCustomer(existing.id, {
     general_email: "existing@example.com",
   });
-  const result = importBillly(source.databasePath, finance, { dryRun: false });
+  const result = importLegacy(source.databasePath, finance, { dryRun: false });
   assert.equal(result.imported, 2);
   assert.equal(result.skipped, 0);
-  const revenue = finance.findBilllyInvoice(revenueId);
+  const revenue = finance.findLegacyInvoice(revenueId);
   assert.equal(revenue.id, revenueId);
   const detail = finance.get(revenue.id);
   assert.equal(detail.total_amount_minor, -10001);
@@ -522,7 +522,7 @@ test("Billly import preserves original extraction, corrections, credits, PDFs an
     "Keep position",
   );
   finance.update(revenue.id, { total_amount_minor: -9000 });
-  const repeated = importBillly(source.databasePath, finance, {
+  const repeated = importLegacy(source.databasePath, finance, {
     dryRun: false,
   });
   assert.equal(repeated.imported, 0);
@@ -550,14 +550,14 @@ test("Billly import preserves original extraction, corrections, credits, PDFs an
   assert.equal(digest(source.databasePath), before);
 });
 
-test("Billly import validates all financial values before writes and rolls back target failures", (t) => {
+test("Legacy import validates all financial values before writes and rolls back target failures", (t) => {
   const invalid = fixture(t, { invalidDate: true });
-  assert.throws(() => inspectBillly(invalid.databasePath), /ungültiges Datum/);
+  assert.throws(() => inspectLegacy(invalid.databasePath), /ungültiges Datum/);
   const db = openDatabase(":memory:");
   t.after(() => db.close());
   const finance = createFinance(db);
   assert.throws(
-    () => importBillly(invalid.databasePath, finance, { dryRun: false }),
+    () => importLegacy(invalid.databasePath, finance, { dryRun: false }),
     /ungültiges Datum/,
   );
   assert.equal(
@@ -581,7 +581,7 @@ test("Billly import validates all financial values before writes and rolls back 
     },
   });
   assert.throws(
-    () => importBillly(valid.databasePath, failing, { dryRun: false }),
+    () => importLegacy(valid.databasePath, failing, { dryRun: false }),
     /Target write failed/,
   );
   assert.equal(
@@ -594,7 +594,7 @@ test("Billly import validates all financial values before writes and rolls back 
   );
 });
 
-test("Billly invoice ID collisions preserve existing target invoices", (t) => {
+test("Legacy invoice ID collisions preserve existing target invoices", (t) => {
   const source = fixture(t);
   const db = openDatabase(":memory:");
   t.after(() => db.close());
@@ -609,24 +609,24 @@ test("Billly invoice ID collisions preserve existing target invoices", (t) => {
     extracted_json: "{}",
     ingestion_status: "processed",
   });
-  const result = importBillly(source.databasePath, finance, { dryRun: false });
+  const result = importLegacy(source.databasePath, finance, { dryRun: false });
   assert.equal(result.imported, 2);
   assert.equal(finance.get(revenueId).total_amount_minor, 42);
   assert.equal(finance.get(revenueId).counterparty_name, "Existing invoice");
-  const imported = finance.findBilllyInvoice(revenueId);
+  const imported = finance.findLegacyInvoice(revenueId);
   assert.notEqual(imported.id, revenueId);
   assert.match(imported.id, /^[0-9a-f-]{36}$/);
   assert.equal(finance.get(imported.id).total_amount_minor, -10001);
   assert.equal(
-    importBillly(source.databasePath, finance, { dryRun: false }).skipped,
+    importLegacy(source.databasePath, finance, { dryRun: false }).skipped,
     2,
   );
 });
 
-test("Billly legacy IDs and customer ID collisions map safely without duplicate customers", (t) => {
+test("Legacy IDs and customer ID collisions map safely without duplicate customers", (t) => {
   const source = fixture(t);
   const legacy = new DatabaseSync(source.databasePath);
-  const legacyId = "billly-legacy-invoice-id";
+  const legacyId = "legacy-legacy-invoice-id";
   legacy
     .prepare("UPDATE invoices SET id = ? WHERE id = ?")
     .run(legacyId, revenueId);
@@ -643,8 +643,8 @@ test("Billly legacy IDs and customer ID collisions map safely without duplicate 
     "INSERT INTO customers(id,name,note,website,created_at,updated_at,archived_at) VALUES(?,?,'Keep existing','',?,?,NULL)",
   ).run(customerId, "Unrelated customer with same UUID", time, time);
   const finance = createFinance(db);
-  importBillly(source.databasePath, finance, { dryRun: false });
-  const imported = finance.findBilllyInvoice(legacyId);
+  importLegacy(source.databasePath, finance, { dryRun: false });
+  const imported = finance.findLegacyInvoice(legacyId);
   assert.match(
     imported.id,
     /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
@@ -660,22 +660,91 @@ test("Billly legacy IDs and customer ID collisions map safely without duplicate 
     2,
   );
   assert.equal(
-    importBillly(source.databasePath, finance, { dryRun: false }).skipped,
+    importLegacy(source.databasePath, finance, { dryRun: false }).skipped,
     2,
   );
   assert.equal(
     db.prepare("SELECT count(*) AS count FROM customers").get().count,
     2,
   );
-  assert.equal(finance.findBilllyInvoice(legacyId).id, imported.id);
+  assert.equal(finance.findLegacyInvoice(legacyId).id, imported.id);
 });
 
-test("Billly source cannot be used as the writable target", (t) => {
+test("schema 10 import mappings remain idempotent after source identifiers are renamed", (t) => {
+  const source = fixture(t);
+  const legacy = new DatabaseSync(source.databasePath);
+  legacy.exec(
+    "CREATE TABLE processing_logs(id TEXT PRIMARY KEY,invoice_id TEXT,process_type TEXT,status TEXT,message TEXT,created_at TEXT)",
+  );
+  legacy
+    .prepare("INSERT INTO processing_logs VALUES(?,?,?,?,?,?)")
+    .run(
+      "original-processing-log",
+      revenueId,
+      "process",
+      "success",
+      "Original log",
+      time,
+    );
+  legacy.close();
+  const filename = path.join(source.folder, "existing.sqlite");
+  let db = openDatabase(filename);
+  db.prepare(
+    "INSERT INTO finance_settings(key,value,updated_at) VALUES('legacy_import_namespace','previous',?)",
+  ).run(time);
+  let finance = createFinance(db);
+  finance.record({
+    id: revenueId,
+    category: "payable",
+    counterparty_name: "Unrelated invoice",
+  });
+  const first = importLegacy(source.databasePath, finance, {
+    dryRun: false,
+    includeLogs: true,
+  });
+  assert.equal(first.imported, 2);
+  assert.equal(first.logs_imported, 1);
+  const tables = [
+    "finance_invoices",
+    "finance_processing_logs",
+    "customers",
+    "employees",
+  ];
+  const before = new Map(
+    tables.map((table) => [
+      table,
+      db.prepare(`SELECT * FROM ${table} ORDER BY id`).all(),
+    ]),
+  );
+  db.exec(
+    "ALTER TABLE finance_invoices RENAME COLUMN source_legacy_id TO source_previous_id; DELETE FROM finance_settings WHERE key='legacy_import_namespace'; PRAGMA user_version=10;",
+  );
+  db.close();
+  db = openDatabase(filename);
+  t.after(() => db.close());
+  finance = createFinance(db);
+  assert.equal(finance.importNamespace(), "previous");
+  const repeated = importLegacy(source.databasePath, finance, {
+    dryRun: false,
+    includeLogs: true,
+  });
+  assert.equal(repeated.imported, 0);
+  assert.equal(repeated.skipped, 2);
+  assert.equal(repeated.logs_imported, 0);
+  assert.equal(repeated.logs_skipped, 1);
+  for (const table of tables)
+    assert.deepEqual(
+      db.prepare(`SELECT * FROM ${table} ORDER BY id`).all(),
+      before.get(table),
+    );
+});
+
+test("Legacy source cannot be used as the writable target", (t) => {
   const source = fixture(t);
   const before = digest(source.databasePath);
   assert.throws(
     () =>
-      importBillly(
+      importLegacy(
         source.databasePath,
         { databasePath: source.databasePath },
         { dryRun: false },
@@ -685,10 +754,18 @@ test("Billly source cannot be used as the writable target", (t) => {
   assert.equal(digest(source.databasePath), before);
 });
 
-test("Billly CLI dry-run leaves target unopened; apply backs up before migration and preserves source", (t) => {
+test("Legacy CLI dry-run leaves target unopened; apply backs up before migration and preserves source", (t) => {
   const source = fixture(t);
   const target = path.join(source.folder, "pitchary.sqlite");
-  const script = path.join(projectRoot, "scripts/import-billly.js");
+  const script = path.join(projectRoot, "scripts/import-legacy.js");
+  const missingSource = spawnSync(
+    process.execPath,
+    [script, "--database", target, "--apply"],
+    { cwd: projectRoot, encoding: "utf8" },
+  );
+  assert.equal(missingSource.status, 1);
+  assert.match(missingSource.stderr, /Quelldatenbank/);
+  assert.equal(readdirSync(source.folder).includes("pitchary.sqlite"), false);
   const run = (...args) =>
     JSON.parse(
       execFileSync(
