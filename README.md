@@ -30,13 +30,24 @@ Die App ist derzeit nicht notarisiert. Falls macOS den ersten Start blockiert, u
 
 `npm run screenshots` erzeugt alle Menüansichten mit Demodaten neu (1920 px breit).
 
-![Pipeline mit Angeboten und Vertriebsphasen](src-tauri/screenshots/pipeline.png)
-
-<details>
-<summary>Kunden und Dashboard ansehen</summary>
-
-![Kundenübersicht mit Logos und Status](src-tauri/screenshots/customers.png)
-
 ![Dashboard mit Einnahmen, Ausgaben und Angebotskennzahlen](src-tauri/screenshots/dashboard.png)
 
-</details>
+| Kunden                                                                       | Dienstleistungen                                        |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------- |
+| ![Kundenübersicht mit Logos und Status](src-tauri/screenshots/customers.png) | ![Dienstleistungen](src-tauri/screenshots/services.png) |
+
+| Pipeline                                                                          | Analytics                                                                                |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| ![Pipeline mit Angeboten und Vertriebsphasen](src-tauri/screenshots/pipeline.png) | ![Analytics mit Abschlussquoten und Auftragswerten](src-tauri/screenshots/analytics.png) |
+
+| Rechnungen: Einnahmen                                                         | Rechnungen: Ausgaben                                                                 |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| ![Einnahmenrechnungen mit Zahlungsstatus](src-tauri/screenshots/invoices.png) | ![Ausgabenrechnungen mit Zahlungsstatus](src-tauri/screenshots/invoices-payable.png) |
+
+| Umsatz                                                                      | Einstellungen: Firma                                               |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| ![Umsatzübersicht nach Kunden](src-tauri/screenshots/finance-customers.png) | ![Firmeneinstellungen](src-tauri/screenshots/finance-settings.png) |
+
+| Einstellungen: Erkennung                                                                        | Einstellungen: Ordnerüberwachung                                                           |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| ![Einstellungen zur Rechnungserkennung](src-tauri/screenshots/finance-settings-recognition.png) | ![Einstellungen zur Ordnerüberwachung](src-tauri/screenshots/finance-settings-watcher.png) |
