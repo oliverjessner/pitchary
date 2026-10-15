@@ -41,7 +41,9 @@ Der Backend-Port wird vom Betriebssystem vergeben und nur an `127.0.0.1` gebunde
 
 ## Release und Homebrew
 
-`package.json` ist die Versionsquelle. Nach einer Versionsänderung `npm run version:sync` ausführen und die Versionsdateien einschließlich `src-tauri/Cargo.lock` mit den gewünschten Änderungen selbst committen und pushen.
+`package.json` ist die Versionsquelle. Publish, Desktop-Build und Laufzeitvorbereitung übernehmen diese Version automatisch in `[package].version` von `src-tauri/Cargo.toml`, die Tauri-Konfiguration und die Anwendungs-Einträge in Cargo-/npm-Lockdateien. Abhängigkeiten behalten ihre Versionen. Mit `npm run version:sync` lässt sich die Synchronisierung auch separat ausführen. Für eine echte Veröffentlichung müssen die synchronisierten Dateien anschließend mit den gewünschten Änderungen selbst committet und gepusht sein; das Skript erstellt dafür keine automatischen Quellcode-Commits.
+
+Release-Titel und Release-Text kommen aus `docs/changelog.md`: Verwendet wird die oberste Versionsüberschrift, die exakt zur Version aus `package.json` passt, und ihr zugehöriger Inhalt. Beispielsweise wird bei Version `0.4.2` die Überschrift `# 0.4.2` zum GitHub-Titel und der Inhalt bis zur nächsten Release-Überschrift zum Text. Unterüberschriften und Codeblöcke bleiben erhalten; ältere Versionen werden nicht angehängt. Fehlt der passende Abschnitt oder enthält er keinen Text, bricht Publish vor dem Build und vor GitHub-Änderungen mit einer Fehlermeldung ab.
 
 ```sh
 npm run publish -- --dry-run
@@ -53,7 +55,7 @@ Der Dry-Run führt Formatprüfung, Backend- und native Tests aus, baut App/DMG u
 npm run publish
 ```
 
-Dieser ausdrücklich gestartete Publish-Aufruf prüft einen sauberen, bereits auf GitHub vorhandenen Quellstand, Versionsgleichheit, GitHub-Schreibrechte und den sauberen Tap mit korrektem `origin`. Er baut und prüft das Paket, lädt es zuerst in einen Entwurf unter `https://github.com/oliverjessner/pitchary/releases`, lädt die DMG zur Prüfsummenverifikation wieder herunter und veröffentlicht anschließend den Release. Danach schreibt er `Casks/pitchary.rb` nach **`../homebrew-tap`**, führt `brew style` aus, committet ausschließlich diesen Cask und pusht den Tap. Der Pitchary-Checkout wird vom Skript weder committet noch gepusht.
+Dieser ausdrücklich gestartete Publish-Aufruf prüft einen sauberen, bereits auf GitHub vorhandenen Quellstand, Versionsgleichheit, GitHub-Schreibrechte und den sauberen Tap mit korrektem `origin`. Er baut und prüft das Paket, erstellt einen Release-Entwurf unter `https://github.com/oliverjessner/pitchary/releases` und lädt die DMG sowie `SHA256SUMS` dort hoch. Nach erneutem Herunterladen zur Prüfsummenverifikation veröffentlicht er den Release. Ein Tag muss nicht vorher von Hand angelegt werden; ein fehlender Tag wird beim ersten Release akzeptiert. Danach schreibt er `Casks/pitchary.rb` nach **`../homebrew-tap`**, führt `brew style` aus, committet ausschließlich diesen Cask und pusht den Tap. Der Pitchary-Checkout wird vom Skript weder committet noch gepusht.
 
 `--tap-path /absoluter/pfad` wählt einen anderen Checkout von `oliverjessner/homebrew-tap`; `--skip-brew` veröffentlicht nur den GitHub-Release. Bereits veröffentlichte Assets oder Tags werden nie ersetzt. Bei einem Teilfehler lässt sich mit `npm run publish -- --skip-build` fortsetzen, sofern das Paket unverändert ist. Falls ein Tap-Commit bereits angelegt, sein Push aber fehlgeschlagen ist, diesen Commit zuerst selbst pushen; der Preflight verweigert das Mitsenden unbekannter lokaler Commits.
 
@@ -65,6 +67,6 @@ brew install --cask oliverjessner/tap/pitchary
 
 ## Durchgeführte Prüfungen
 
-153 Backend-Tests sowie der native Test für Start, Datenordner und Prozessende bestehen. Das App-Bundle wurde mit temporären Testdaten nativ gestartet; ohne Sitzung ist sein Backend gesperrt und nach Beenden des Elternprozesses nicht mehr erreichbar. PDF-Textextraktion und echte Bild-OCR wurden ausschließlich mit den gebündelten Werkzeugen und einem PATH ohne Homebrew geprüft. Chromium und WebKit prüfen gegen das fertige Bundle Sitzungsstart, Kundenanlage und Reload sowie PDF-Upload und unveränderten Abruf. Signaturprüfung, DMG-Verifikation, Publish-Dry-Run und `brew style` für den erzeugten Cask bestehen.
+Die Backend-/Release-Tests sowie der native Test für Start, Datenordner und Prozessende bestehen. Das App-Bundle wurde mit temporären Testdaten nativ gestartet; ohne Sitzung ist sein Backend gesperrt und nach Beenden des Elternprozesses nicht mehr erreichbar. PDF-Textextraktion und echte Bild-OCR wurden ausschließlich mit den gebündelten Werkzeugen und einem PATH ohne Homebrew geprüft. Chromium und WebKit prüfen gegen das fertige Bundle Sitzungsstart, Kundenanlage und Reload sowie PDF-Upload und unveränderten Abruf. Signaturprüfung, DMG-Verifikation, Publish-Dry-Run und `brew style` für den erzeugten Cask bestehen. Die Release-Tests prüfen zusätzlich die Reihenfolge von Erstellung, DMG-Upload, Verifikation und Veröffentlichung, den Abbruch bei falscher Prüfsumme, die Auswahl des passenden Changelog-Abschnitts und die automatische Versionsübernahme einschließlich unveränderter Abhängigkeitsversionen.
 
 Die native Fensterautomation war in dieser Umgebung nicht verfügbar. Die direkte Bedienung der nativen Fenster, externe Links und die Anzeige zusätzlicher PDF-Fenster bleiben manuell zu prüfen. Es wurde kein Release veröffentlicht und kein Tap-Commit oder Push durchgeführt.

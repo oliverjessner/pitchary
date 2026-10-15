@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { synchronizeVersions } from "./version-sync.js";
 
 export const root = fileURLToPath(new URL("../", import.meta.url));
 export const metadata = JSON.parse(
@@ -46,16 +47,11 @@ export function assertPlatform() {
       "Desktop packaging currently supports Apple Silicon macOS (darwin/arm64).",
     );
 }
-export function assertVersions() {
-  const config = JSON.parse(
-    readFileSync(path.join(root, "src-tauri/tauri.conf.json")),
-  );
-  const cargo = readFileSync(path.join(root, "src-tauri/Cargo.toml"), "utf8");
-  if (
-    config.version !== version ||
-    cargo.match(/^version = "([^"]+)"/m)?.[1] !== version
-  )
-    throw new Error("Version mismatch. Run npm run version:sync first.");
+export function syncVersions() {
+  const changed = synchronizeVersions(root);
+  if (changed.length)
+    console.log(`Versions synchronized to ${version}: ${changed.join(", ")}`);
+  return changed;
 }
 export function nativeFiles(directory) {
   const files = [];

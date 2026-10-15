@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   assertPlatform,
-  assertVersions,
+  syncVersions,
   capture,
   dmgName,
   releaseDirectory,
@@ -23,8 +23,8 @@ import {
   tapRepo,
   target,
   version,
-  nodeVersion,
 } from "./desktop-common.js";
+import { changelogRelease } from "./changelog.js";
 
 export function parseArgs(args) {
   const options = {
@@ -135,6 +135,13 @@ function githubGet(endpoint) {
     result.stderr || result.error?.message || "GitHub request failed.",
   );
 }
+export function releaseTagCommit(tag, get = githubGet) {
+  // Missing tag refs return 404; /commits/:tag returns 422 instead.
+  if (!get(`repos/${releaseRepo}/git/ref/tags/${tag}`)) return null;
+  const commit = get(`repos/${releaseRepo}/commits/${tag}`);
+  if (!commit?.sha) throw new Error(`Cannot resolve existing tag ${tag}.`);
+  return commit.sha;
+}
 function verifyRemoteAsset(directory, manifest) {
   run("gh", [
     "release",
@@ -151,6 +158,56 @@ function verifyRemoteAsset(directory, manifest) {
   if (sha256(readFileSync(path.join(directory, dmgName))) !== manifest.sha256)
     throw new Error("The GitHub release asset has a different checksum.");
 }
+export function publishGitHubRelease(
+  { existing, commit, manifest, notes, title, downloadDirectory },
+  { runCommand = run, verifyAsset = verifyRemoteAsset } = {},
+) {
+  if (!title?.trim())
+    throw new Error("The GitHub release needs a changelog title.");
+  const tag = `v${version}`;
+  if (!existing) {
+    runCommand("gh", [
+      "release",
+      "create",
+      tag,
+      "--repo",
+      releaseRepo,
+      "--target",
+      commit,
+      "--title",
+      title,
+      "--notes-file",
+      notes,
+      "--draft",
+    ]);
+    existing = { draft: true };
+  }
+  if (existing.draft) {
+    runCommand("gh", [
+      "release",
+      "upload",
+      tag,
+      path.join(releaseDirectory, dmgName),
+      path.join(releaseDirectory, "SHA256SUMS"),
+      "--repo",
+      releaseRepo,
+      "--clobber",
+    ]);
+    verifyAsset(downloadDirectory, manifest);
+    runCommand("gh", [
+      "release",
+      "edit",
+      tag,
+      "--repo",
+      releaseRepo,
+      "--title",
+      title,
+      "--notes-file",
+      notes,
+      "--draft=false",
+    ]);
+  } else verifyAsset(downloadDirectory, manifest);
+}
 export async function main(args = process.argv.slice(2)) {
   const options = parseArgs(args);
   if (options.help) {
@@ -160,7 +217,11 @@ export async function main(args = process.argv.slice(2)) {
     return;
   }
   assertPlatform();
-  assertVersions();
+  syncVersions();
+  const release = changelogRelease(
+    readFileSync(path.join(root, "docs/changelog.md"), "utf8"),
+    version,
+  );
   const tag = `v${version}`;
   let existing = null;
   const commit = capture("git", ["rev-parse", "HEAD"]);
@@ -185,8 +246,8 @@ export async function main(args = process.argv.slice(2)) {
       );
     if (githubGet(`repos/${releaseRepo}/commits/${commit}`)?.sha !== commit)
       throw new Error("Push the source commit to GitHub before publishing.");
-    const remoteTag = githubGet(`repos/${releaseRepo}/commits/${tag}`);
-    if (remoteTag && remoteTag.sha !== commit)
+    const remoteTag = releaseTagCommit(tag);
+    if (remoteTag && remoteTag !== commit)
       throw new Error(
         `${tag} points at another commit. Existing tags are never replaced.`,
       );
@@ -236,59 +297,24 @@ export async function main(args = process.argv.slice(2)) {
     env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: "1" },
   });
   const notes = path.join(releaseDirectory, "release-notes.md");
-  writeFileSync(
-    notes,
-    `# Pitchary ${version}\n\nLocal CRM, sales and invoice management for Apple Silicon Macs (macOS ${manifest.minimumSystemVersion}+).\n\nThe app includes Node ${nodeVersion}, PDF tools and English/German OCR. Data stays in ~/Library/Application Support/com.pitchary.app.\n\nInstall the DMG or use:\n\n\`\`\`sh\nbrew install --cask oliverjessner/tap/pitchary\n\`\`\`\n\nThis build is ad-hoc signed, without Apple notarization.\n\n[Changelog](https://github.com/${releaseRepo}/blob/${tag}/docs/changelog.md)\n\nSHA-256: \`${manifest.sha256}\`\n`,
-  );
+  writeFileSync(notes, release.body);
   if (options.dryRun) {
     console.log(
-      `Dry run complete. Review ${releaseDirectory}\nWould publish: https://github.com/${releaseRepo}/releases/tag/${tag}\nWould update: ${path.join(options.tapPath, "Casks/pitchary.rb")}\nNo tags, releases, tap files, commits or pushes were created.`,
+      `Dry run complete. Review ${releaseDirectory}\nRelease title: ${release.title}\nRelease notes: ${notes}\nWould publish: https://github.com/${releaseRepo}/releases/tag/${tag}\nWould update: ${path.join(options.tapPath, "Casks/pitchary.rb")}\nNo tags, releases, tap files, commits or pushes were created.`,
     );
     return;
   }
   clean(root);
   const temporary = mkdtempSync(path.join(tmpdir(), "pitchary-publish-"));
   try {
-    if (!existing) {
-      run("gh", [
-        "release",
-        "create",
-        tag,
-        "--repo",
-        releaseRepo,
-        "--target",
-        commit,
-        "--title",
-        `Pitchary ${version}`,
-        "--notes-file",
-        notes,
-        "--draft",
-      ]);
-      existing = { draft: true };
-    }
-    if (existing.draft) {
-      run("gh", [
-        "release",
-        "upload",
-        tag,
-        path.join(releaseDirectory, dmgName),
-        path.join(releaseDirectory, "SHA256SUMS"),
-        "--repo",
-        releaseRepo,
-        "--clobber",
-      ]);
-      verifyRemoteAsset(temporary, manifest);
-      run("gh", [
-        "release",
-        "edit",
-        tag,
-        "--repo",
-        releaseRepo,
-        "--notes-file",
-        notes,
-        "--draft=false",
-      ]);
-    } else verifyRemoteAsset(temporary, manifest);
+    publishGitHubRelease({
+      existing,
+      commit,
+      manifest,
+      notes,
+      title: release.title,
+      downloadDirectory: temporary,
+    });
     if (!options.skipBrew) {
       clean(options.tapPath);
       const destination = path.join(options.tapPath, "Casks/pitchary.rb");

@@ -12,7 +12,7 @@ import {
 import path from "node:path";
 import {
   assertPlatform,
-  assertVersions,
+  syncVersions,
   capture,
   nodeVersion,
   root,
@@ -22,7 +22,7 @@ import {
 import { bundleTools } from "./bundle-desktop-tools.js";
 
 assertPlatform();
-assertVersions();
+syncVersions();
 const runtime = path.join(root, "src-tauri/runtime");
 const cache = path.join(root, "artifacts/desktop-cache");
 mkdirSync(cache, { recursive: true });

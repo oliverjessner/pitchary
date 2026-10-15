@@ -1,5 +1,7 @@
-# Changelog
+# 0.4.2
 
-## 0.1.0
+- automatic publish
 
-Lokales CRM mit SQLite-Persistenz, archivierten Stammdaten, unabhängigen Angeboten, transaktionaler Statushistorie, Preisereignissen, manuellen Aktivitäten und definierten Analytics. Vanilla-ESM-Oberfläche mit lokalen oj-designsystem-Assets; automatisierte Geschäftsregel-/API-/Browserprüfungen und Backup-/Restore-Werkzeuge.
+# 0.1.0
+
+- init merge of https://github.com/oliverjessner/Billly

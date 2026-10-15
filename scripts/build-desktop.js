@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import {
   appPath,
   assertPlatform,
-  assertVersions,
+  syncVersions,
   capture,
   dmgName,
   releaseDirectory,
@@ -27,7 +27,7 @@ import {
 } from "./desktop-common.js";
 
 assertPlatform();
-assertVersions();
+syncVersions();
 run(process.execPath, ["scripts/prepare-desktop.js"]);
 const inputsHash = sourceHash();
 const minimumSystemVersion = minimumMacOS(path.join(root, "src-tauri/runtime"));
