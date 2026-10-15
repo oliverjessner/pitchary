@@ -1,6 +1,9 @@
 node_modules
 tests/tmp
 screenshots/
+!src-tauri/screenshots/
+src-tauri/screenshots/*
+!src-tauri/screenshots/*.png
 .DS_Store
 .env
 .env.*

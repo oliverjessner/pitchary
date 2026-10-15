@@ -5,6 +5,7 @@ import {
   renderCask,
   verifyManifest,
   releaseTagCommit,
+  findGitHubRelease,
   publishGitHubRelease,
 } from "../scripts/publish.js";
 import {
@@ -108,6 +109,51 @@ test("first releases check tag refs without querying a nonexistent commit", () =
       "resolved-commit",
     );
   }
+});
+
+test("publishing finds and resumes drafts before their tag exists", () => {
+  const draft = { id: 123, tag_name: "v0.4.2", draft: true };
+  const calls = [];
+  const result = findGitHubRelease("v0.4.2", (endpoint) => {
+    calls.push(endpoint);
+    assert.match(endpoint, /\/releases\?per_page=100&page=1$/);
+    return [draft, { id: 122, tag_name: "v0.4.1", draft: false }];
+  });
+  assert.equal(result, draft);
+  assert.equal(calls.length, 1);
+  assert.equal(
+    findGitHubRelease("v0.4.2", () => []),
+    null,
+  );
+  assert.throws(() => findGitHubRelease("v0.4.2", () => null), /Cannot list/);
+});
+
+test("draft discovery paginates and refuses ambiguous duplicate drafts", () => {
+  const draft = { id: 123, tag_name: "v0.4.2", draft: true };
+  const calls = [];
+  assert.equal(
+    findGitHubRelease("v0.4.2", (endpoint) => {
+      calls.push(endpoint);
+      return endpoint.endsWith("page=1")
+        ? Array.from({ length: 100 }, (_, id) => ({
+            id,
+            tag_name: `other-${id}`,
+            draft: false,
+          }))
+        : [draft];
+    }),
+    draft,
+  );
+  assert.equal(calls.length, 2);
+  assert.throws(
+    () => findGitHubRelease("v0.4.2", () => [draft, { ...draft, id: 124 }]),
+    /Multiple GitHub drafts.*123, 124/,
+  );
+  const published = { ...draft, id: 125, draft: false };
+  assert.equal(
+    findGitHubRelease("v0.4.2", () => [draft, published]),
+    published,
+  );
 });
 
 test("GitHub publishing creates a draft, uploads the DMG and checksums, verifies it, then publishes", () => {

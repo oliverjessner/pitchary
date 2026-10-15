@@ -25,6 +25,7 @@ import {
   version,
 } from "./desktop-common.js";
 import { changelogRelease } from "./changelog.js";
+import { acquirePublishLock } from "./publish-lock.js";
 
 export function parseArgs(args) {
   const options = {
@@ -142,6 +143,27 @@ export function releaseTagCommit(tag, get = githubGet) {
   if (!commit?.sha) throw new Error(`Cannot resolve existing tag ${tag}.`);
   return commit.sha;
 }
+export function findGitHubRelease(tag, get = githubGet) {
+  const matches = [];
+  // The release-by-tag endpoint returns 404 for an unpublished draft.
+  // The authenticated releases list includes drafts, even before a tag exists.
+  for (let page = 1; ; page++) {
+    const releases = get(
+      `repos/${releaseRepo}/releases?per_page=100&page=${page}`,
+    );
+    if (!Array.isArray(releases))
+      throw new Error("Cannot list GitHub releases, including drafts.");
+    matches.push(...releases.filter((release) => release.tag_name === tag));
+    if (releases.length < 100) break;
+  }
+  const published = matches.filter((release) => !release.draft);
+  if (published.length === 1) return published[0];
+  if (matches.length > 1)
+    throw new Error(
+      `Multiple GitHub drafts exist for ${tag} (release IDs: ${matches.map((release) => release.id).join(", ")}). Keep one intended draft before resuming; no new draft was created.`,
+    );
+  return matches[0] ?? null;
+}
 function verifyRemoteAsset(directory, manifest) {
   run("gh", [
     "release",
@@ -166,6 +188,7 @@ export function publishGitHubRelease(
     throw new Error("The GitHub release needs a changelog title.");
   const tag = `v${version}`;
   if (!existing) {
+    console.log(`Creating GitHub release draft ${tag}...`);
     runCommand("gh", [
       "release",
       "create",
@@ -183,6 +206,7 @@ export function publishGitHubRelease(
     existing = { draft: true };
   }
   if (existing.draft) {
+    console.log(`Uploading ${dmgName} and SHA256SUMS to GitHub...`);
     runCommand("gh", [
       "release",
       "upload",
@@ -193,7 +217,9 @@ export function publishGitHubRelease(
       releaseRepo,
       "--clobber",
     ]);
+    console.log("Downloading the uploaded DMG to verify its SHA-256...");
     verifyAsset(downloadDirectory, manifest);
+    console.log(`Publishing GitHub release ${tag}...`);
     runCommand("gh", [
       "release",
       "edit",
@@ -217,6 +243,14 @@ export async function main(args = process.argv.slice(2)) {
     return;
   }
   assertPlatform();
+  const unlock = acquirePublishLock(path.join(root, "artifacts/.publish-lock"));
+  try {
+    await publish(options);
+  } finally {
+    unlock();
+  }
+}
+async function publish(options) {
   syncVersions();
   const release = changelogRelease(
     readFileSync(path.join(root, "docs/changelog.md"), "utf8"),
@@ -226,6 +260,7 @@ export async function main(args = process.argv.slice(2)) {
   let existing = null;
   const commit = capture("git", ["rev-parse", "HEAD"]);
   if (!options.dryRun) {
+    console.log(`Checking GitHub and Homebrew prerequisites for ${tag}...`);
     clean(root);
     repositoryMatches(root, releaseRepo);
     const repository = JSON.parse(
@@ -251,7 +286,7 @@ export async function main(args = process.argv.slice(2)) {
       throw new Error(
         `${tag} points at another commit. Existing tags are never replaced.`,
       );
-    existing = githubGet(`repos/${releaseRepo}/releases/tags/${tag}`);
+    existing = findGitHubRelease(tag);
     if (existing?.draft && existing.target_commitish !== commit)
       throw new Error("The existing draft targets a different commit.");
     if (!options.skipBrew) {

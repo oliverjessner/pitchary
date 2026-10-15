@@ -28,6 +28,7 @@
         "import:billly": "node scripts/import-billly.js",
         "test": "node --test tests/*.test.js",
         "test:ui": "playwright test",
+        "screenshots": "node scripts/screenshots.js",
         "format": "prettier --write src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js",
         "format:check": "prettier --check src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js",
         "tauri": "tauri",
