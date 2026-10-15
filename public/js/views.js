@@ -1374,6 +1374,11 @@ export async function analytics() {
         ...analyticsContent(await api("/analytics", { query })),
       ),
     );
+  for (const select of filters.querySelectorAll("select")) {
+    const wrapper = el("div", { class: "analytics-select-control" });
+    select.replaceWith(wrapper);
+    wrapper.append(select, icon("chevron-down"));
+  }
   return [
     heading(
       "Analytics",
