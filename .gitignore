@@ -26,3 +26,6 @@ artifacts/
 *.sqlite-shm
 *.db-wal
 *.db-shm
+src-tauri/target/
+src-tauri/runtime/
+src-tauri/gen/

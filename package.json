@@ -29,7 +29,13 @@
         "test": "node --test tests/*.test.js",
         "test:ui": "playwright test",
         "format": "prettier --write src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js",
-        "format:check": "prettier --check src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js"
+        "format:check": "prettier --check src public/js public/config public/index.html public/app.css public/finance.css scripts tests README.md docs/*.md package.json playwright.config.js",
+        "tauri": "tauri",
+        "desktop:prepare": "node scripts/prepare-desktop.js",
+        "desktop:dev": "tauri dev",
+        "desktop:build": "node scripts/build-desktop.js",
+        "version:sync": "node scripts/sync-versions.js",
+        "publish": "node scripts/publish.js"
     },
     "dependencies": {
         "@fastify/static": "10.1.6",
@@ -42,6 +48,7 @@
     "devDependencies": {
         "@axe-core/playwright": "4.13.0",
         "@playwright/test": "1.64.0",
+        "@tauri-apps/cli": "2.12.3",
         "prettier": "3.9.10"
     },
     "engines": {

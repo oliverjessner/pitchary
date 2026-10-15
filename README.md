@@ -15,6 +15,10 @@ npm run dev
 
 Beim ersten Start entsteht eine **leere** Datenbank in `data/pitchary.sqlite`. Migrationen laufen automatisch und transaktional. Ein expliziter Lauf ist mit `npm run migrate` möglich. `DATABASE_PATH=/absoluter/pfad/crm.sqlite` wählt eine separate Datenbank. Datenbanken, WAL/SHM-Dateien, Backups und Testartefakte sind in Git ausgeschlossen.
 
+## Desktop-App
+
+Die Tauri-App für Apple-Silicon-Macs enthält Node, PDF-Werkzeuge und deutsche/englische OCR. `npm run desktop:dev` startet die Desktop-Entwicklung, `npm run desktop:build` erstellt App und DMG. `npm run publish -- --dry-run` bereitet einen Release lokal vor; `npm run publish` veröffentlicht die DMG auf GitHub und aktualisiert den Cask in `../homebrew-tap`. Voraussetzungen, Datenübernahme, macOS-Mindestversion und Signierung: [Desktop und Releases](docs/desktop.md).
+
 ## Erste Schritte
 
 1. Unter **Kunden** einen Kunden mit optionaler Website und Logo sowie dessen Mitarbeiter anlegen.

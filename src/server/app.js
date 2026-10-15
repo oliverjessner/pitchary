@@ -20,6 +20,7 @@ export async function buildApp({
   clock,
   financeOptions = {},
   customerLogoOptions = {},
+  desktopToken,
 } = {}) {
   const database = db ?? openDatabase(databasePath);
   const app = Fastify({ logger, bodyLimit: 131072 });
@@ -81,6 +82,22 @@ export async function buildApp({
     );
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("Referrer-Policy", "no-referrer");
+    if (desktopToken) {
+      if (
+        request.method === "GET" &&
+        request.url.startsWith("/?desktop_token=") &&
+        request.query.desktop_token === desktopToken
+      ) {
+        reply.header(
+          "Set-Cookie",
+          `pitchary_desktop=${desktopToken}; HttpOnly; SameSite=Strict; Path=/`,
+        );
+        return reply.redirect("/");
+      }
+      const cookies = (request.headers.cookie ?? "").split(/;\s*/);
+      if (!cookies.includes(`pitchary_desktop=${desktopToken}`))
+        throw new AppError(403, "desktop_session", "Ungültige App-Sitzung.");
+    }
     if (request.url.startsWith("/api"))
       reply.header("Cache-Control", "no-store");
   });
