@@ -342,6 +342,12 @@ export async function entityList(type, actions) {
       : null,
     content = el("div", {}),
     count = el("p", { class: "oj-small oj-muted", role: "status" });
+  if (!isCustomer) {
+    const select = archived.querySelector("select");
+    const wrapper = el("div", { class: "service-select-control" });
+    select.replaceWith(wrapper);
+    wrapper.append(select, icon("chevron-down"));
+  }
   let rows = await api("/" + type);
   let generation = 0;
   function render() {
