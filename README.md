@@ -9,6 +9,7 @@ Pitchary ist ein lokales CRM für Kunden, Angebote und Rechnungen.
 - Angebote vom ersten Pitch bis zum Abschluss verfolgen, Kontakte und Preisverhandlungen protokollieren.
 - PDF-Rechnungen importieren, per OCR oder optional mit KI auslesen und den Zahlungsstatus verwalten.
 - Umsatz, Ausgaben und Abschlussquoten auswerten.
+- Alle Hauptansichten direkt über das Dock-Kontextmenü öffnen.
 
 ## Installation
 

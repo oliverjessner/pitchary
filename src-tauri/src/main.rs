@@ -1,5 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(target_os = "macos")]
+mod dock_menu;
+
 use std::{
     fs::{self, OpenOptions},
     io::{BufRead, BufReader, Write},
@@ -174,6 +177,15 @@ fn main() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .on_menu_event(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let Err(error) = dock_menu::handle_event(app, event.id().as_ref()) {
+                app.dialog()
+                    .message(error.to_string())
+                    .title("Ansicht konnte nicht geöffnet werden")
+                    .show(|_| {});
+            }
+        })
         .setup(|app| {
             let data = std::env::var_os("PITCHARY_DATA_DIR")
                 .map(std::path::PathBuf::from)
@@ -183,6 +195,8 @@ fn main() {
                 Ok((backend, url)) => {
                     app.manage(backend);
                     window(app.handle(), "main", url)?;
+                    #[cfg(target_os = "macos")]
+                    dock_menu::install()?;
                     Ok(())
                 }
                 Err(error) => {

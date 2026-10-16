@@ -2498,8 +2498,10 @@ dependencies = [
 
 [[package]]
 name = "pitchary"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
+ "muda",
+ "objc2",
  "serde_json",
  "tauri",
  "tauri-build",

@@ -16,6 +16,15 @@ tauri-plugin-opener = "=2.7.1"
 tauri-plugin-single-instance = "=2.5.3"
 serde_json = "1"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+muda = { version = "=0.20.0", default-features = false }
+objc2 = "=0.6.5"
+
+[[test]]
+name = "dock_menu"
+path = "tests/dock_menu.rs"
+harness = false
+
 [profile.release]
 strip = true
 lto = "thin"
