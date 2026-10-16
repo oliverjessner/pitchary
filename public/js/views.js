@@ -18,6 +18,7 @@ import {
   labels,
   options,
   field,
+  selectField,
   table,
   panel,
   heading,
@@ -343,7 +344,7 @@ export async function entityList(type, actions) {
         ? "Name, Website, E-Mail oder Notiz"
         : "Dienstleistung, URL, Notiz oder Tag",
     }),
-    archived = field("Ansicht", "archived", {
+    archived = selectField("Ansicht", "archived", {
       value: "false",
       options: [
         ["false", "Aktiv"],
@@ -351,7 +352,7 @@ export async function entityList(type, actions) {
       ],
     }),
     customerType = isCustomer
-      ? field("Status", "customer_type", {
+      ? selectField("Status", "customer_type", {
           options: [
             ["", "Alle"],
             ["customer", "Kunden"],
@@ -361,12 +362,6 @@ export async function entityList(type, actions) {
       : null,
     content = el("div", {}),
     count = el("p", { class: "oj-small oj-muted", role: "status" });
-  if (!isCustomer) {
-    const select = archived.querySelector("select");
-    const wrapper = el("div", { class: "service-select-control" });
-    select.replaceWith(wrapper);
-    wrapper.append(select, icon("chevron-down"));
-  }
   let rows = await api("/" + type);
   let generation = 0;
   function render() {

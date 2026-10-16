@@ -216,6 +216,145 @@ test("a disappearing PDF does not prevent the remaining folder from being scanne
   assert.equal(result.imported, 1);
   assert.equal(app.finance.list()[0].file_name, "kept.pdf");
 });
+test("closing during a folder listing never marks existing revenue or payable PDFs as missing", async (t) => {
+  const entered = deferred(),
+    release = deferred();
+  let pause = false;
+  t.after(() => release.resolve());
+  const { app, source } = await setup(t, {
+    fileOperations: {
+      readdir: async (...args) => {
+        if (pause) {
+          entered.resolve();
+          await release.promise;
+        }
+        return readdir(...args);
+      },
+    },
+  });
+  const payable = path.join(path.dirname(source), "payable");
+  mkdirSync(payable);
+  await app.financeSettings.save({ payable_folder: payable });
+  writeFileSync(path.join(source, "revenue.pdf"), invoicePDF("REVENUE"));
+  writeFileSync(path.join(payable, "payable.pdf"), invoicePDF("PAYABLE"));
+  await app.invoiceProcessor.scan();
+  const before = app.finance.list();
+  assert.equal(before.length, 2);
+  pause = true;
+  const scan = app.invoiceProcessor.scan();
+  await entered.promise;
+  const closing = app.invoiceProcessor.close();
+  release.resolve();
+  await Promise.allSettled([scan, closing]);
+  assert.deepEqual(app.finance.list(), before);
+  assert.ok(
+    before.every(
+      (invoice) =>
+        !app.finance.logs(invoice.id).some((log) => log.status === "missing"),
+    ),
+  );
+});
+test("an incomplete directory listing or a denied source check never marks a present PDF as missing", async (t) => {
+  let incomplete = false,
+    denied = false;
+  const { app, source } = await setup(t, {
+    fileOperations: {
+      readdir: (...args) => (incomplete ? [] : readdir(...args)),
+      stat: (...args) => {
+        if (denied) throw Object.assign(new Error("Denied"), { code: "EPERM" });
+        return stat(...args);
+      },
+    },
+  });
+  const bytes = invoicePDF("PRESENT");
+  writeFileSync(path.join(source, "present.pdf"), bytes);
+  await app.invoiceProcessor.scan();
+  const before = app.finance.list()[0];
+  incomplete = true;
+  assert.equal((await app.invoiceProcessor.scan()).missing, 0);
+  assert.deepEqual(app.finance.get(before.id), before);
+  denied = true;
+  const deniedScan = await app.invoiceProcessor.scan();
+  assert.equal(deniedScan.missing, 0);
+  assert.equal(deniedScan.failed, 1);
+  assert.match(app.invoiceProcessor.state.error, /Berechtigungen/);
+  assert.deepEqual(app.finance.get(before.id), before);
+  assert.deepEqual(app.finance.file(before.id).data, bytes);
+});
+test("unchanged returning PDFs restore their prior processing state without OCR or AI and preserve corrections", async (t) => {
+  for (const status of ["processed", "failed", "pending"])
+    await t.test(status, async (t) => {
+      let extractions = 0,
+        aiCalls = 0;
+      const { app, source } = await setup(t, {
+        extractText: async () => {
+          extractions++;
+          return textResult;
+        },
+        extractor: {
+          ...ai,
+          invoice: async (...args) => {
+            aiCalls++;
+            return ai.invoice(...args);
+          },
+        },
+      });
+      const bytes = invoicePDF("RETURNED");
+      writeFileSync(path.join(source, "returned.pdf"), bytes);
+      await app.invoiceProcessor.scan();
+      const invoice = app.finance.list()[0];
+      app.finance.update(invoice.id, {
+        invoice_number: "Manual",
+        total_amount_minor: 98765,
+        status: "paid",
+      });
+      app.finance.record({ id: invoice.id, ingestion_status: status });
+      app.finance.log(
+        invoice.id,
+        status === "pending" ? "extract" : "process",
+        { processed: "success", failed: "failed", pending: "pending" }[status],
+      );
+      const before = app.finance.get(invoice.id);
+      app.finance.record({ id: invoice.id, ingestion_status: "missing" });
+      app.finance.log(invoice.id, "watch", "missing");
+      const scan = await app.invoiceProcessor.scan();
+      assert.equal(scan.skipped, 1);
+      assert.equal(scan.missing, 0);
+      assert.equal(extractions, 1);
+      assert.equal(aiCalls, 1);
+      assert.deepEqual(app.finance.get(invoice.id), before);
+      assert.deepEqual(app.finance.file(invoice.id).data, bytes);
+      assert.equal(
+        app.finance.logs(invoice.id).filter((log) => log.status === "restored")
+          .length,
+        1,
+      );
+    });
+});
+test("a changed returning PDF is processed normally while keeping manual corrections", async (t) => {
+  let extractions = 0;
+  const { app, source } = await setup(t, {
+    extractText: async () => {
+      extractions++;
+      return textResult;
+    },
+  });
+  const filename = path.join(source, "changed.pdf");
+  writeFileSync(filename, invoicePDF("ORIGINAL"));
+  await app.invoiceProcessor.scan();
+  const original = app.finance.list()[0];
+  app.finance.update(original.id, { invoice_number: "Keep correction" });
+  app.finance.record({ id: original.id, ingestion_status: "missing" });
+  const changed = invoicePDF("CHANGED");
+  writeFileSync(filename, changed);
+  await app.invoiceProcessor.scan();
+  const result = app.finance.get(original.id);
+  assert.equal(extractions, 2);
+  assert.equal(result.ingestion_status, "processed");
+  assert.equal(result.invoice_number, "Keep correction");
+  assert.notEqual(result.file_hash, original.file_hash);
+  assert.deepEqual(app.finance.file(original.id).data, changed);
+});
 test("the real folder watcher imports startup and new PDFs and stops on app close", async (t) => {
   const { app, source } = await setup(t, {
     watchEnabled: true,

@@ -518,20 +518,20 @@
 .offer-select-control,
 .pipeline-select-control,
 .analytics-select-control,
-.service-select-control {
+.app-select-control {
   position: relative;
 }
 .offer-select-control > select,
 .pipeline-select-control > select,
 .analytics-select-control > select,
-.service-select-control > select {
+.app-select-control > select {
   appearance: none;
   block-size: var(--oj-control-height);
 }
 .offer-select-control > i,
 .pipeline-select-control > i,
 .analytics-select-control > i,
-.service-select-control > i {
+.app-select-control > i {
   position: absolute;
   inset-inline-end: var(--oj-space-3);
   inset-block-start: 50%;

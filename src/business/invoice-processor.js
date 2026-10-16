@@ -39,15 +39,31 @@ export function createInvoiceProcessor(
   const observed = new Map();
   const state = { running: false, last_scan: null, error: null };
   const now = () => new Date(clock()).toISOString();
+  const ensureOpen = () => {
+    if (closed) throw new AppError(503, "closing", "Der Server wird beendet.");
+  };
   const enqueue = (fn) => {
     const result = queue.then(() => {
-      if (closed)
-        throw new AppError(503, "closing", "Der Server wird beendet.");
+      ensureOpen();
       return fn();
     });
     queue = result.catch(() => {});
     return result;
   };
+  function restoredStatus(invoice) {
+    const previous = finance
+      .logs(invoice.id)
+      .find(
+        (log) =>
+          ["process", "reprocess", "extract"].includes(log.process_type) &&
+          ["success", "failed", "pending"].includes(log.status),
+      );
+    return (
+      { success: "processed", failed: "failed", pending: "pending" }[
+        previous?.status
+      ] ?? (invoice.extracted_json !== "{}" ? "processed" : "pending")
+    );
+  }
   async function process(
     data,
     {
@@ -80,8 +96,10 @@ export function createInvoiceProcessor(
       existing &&
       !force &&
       existing.file_hash === hash &&
-      existing.ingestion_status === "processed"
+      (existing.ingestion_status === "processed" ||
+        (file_path && existing.ingestion_status === "missing"))
     ) {
+      const restored = existing.ingestion_status === "missing";
       if (file_path)
         finance.record({
           id: existing.id,
@@ -89,7 +107,15 @@ export function createInvoiceProcessor(
           file_name: filename,
           file_modified_at,
           pdf_data: data,
+          ...(restored ? { ingestion_status: restoredStatus(existing) } : {}),
         });
+      if (restored)
+        finance.log(
+          existing.id,
+          "watch",
+          "restored",
+          "Die unveränderte Quelldatei ist wieder verfügbar. Der vorherige Verarbeitungsstatus wurde ohne erneute Erkennung wiederhergestellt.",
+        );
       return { invoice: finance.get(existing.id), skipped: true };
     }
     let invoice = finance.record({
@@ -168,11 +194,12 @@ export function createInvoiceProcessor(
     return { invoice, skipped: false };
   }
   async function files(folder, depth = 0) {
+    ensureOpen();
     const found = [];
     for (const entry of await sourceFiles.readdir(folder, {
       withFileTypes: true,
     })) {
-      if (controller.signal.aborted) break;
+      ensureOpen();
       const filename = path.join(folder, entry.name);
       if (entry.isDirectory() && depth < 2)
         found.push(...(await files(filename, depth + 1)));
@@ -189,6 +216,7 @@ export function createInvoiceProcessor(
     }
   };
   async function scanImpl({ settle = false } = {}) {
+    ensureOpen();
     const result = {
       imported: 0,
       skipped: 0,
@@ -199,13 +227,16 @@ export function createInvoiceProcessor(
     const config = settings.values();
     const tombstones = ignored();
     for (const category of ["revenue", "payable"]) {
+      ensureOpen();
       const folder = config[category + "_folder"];
       if (!folder) continue;
       const found = await files(folder);
+      ensureOpen();
       const foundSet = new Set(found);
       for (const filename of found) {
         try {
           const metadata = await sourceFiles.stat(filename);
+          ensureOpen();
           const signature = `${metadata.size}:${metadata.mtimeMs}`;
           let observation = observed.get(filename);
           if (!observation || observation.signature !== signature) {
@@ -300,12 +331,31 @@ export function createInvoiceProcessor(
         }
       }
       for (const invoice of repo.folderInvoices(category)) {
+        ensureOpen();
         const relative = path.relative(folder, invoice.file_path);
         if (
           !relative.startsWith("..") &&
           !path.isAbsolute(relative) &&
           !foundSet.has(invoice.file_path)
         ) {
+          try {
+            if ((await sourceFiles.stat(invoice.file_path)).isFile()) continue;
+          } catch (error) {
+            if (closed) throw error;
+            if (!["ENOENT", "ENOTDIR"].includes(error?.code)) {
+              result.failed++;
+              state.error =
+                "Eine Quelldatei konnte nicht geprüft werden. Pfade und Berechtigungen prüfen.";
+              continue;
+            }
+          }
+          ensureOpen();
+          const current = repo.findByPath(invoice.file_path, category);
+          if (
+            current?.id !== invoice.id ||
+            current.ingestion_status === "missing"
+          )
+            continue;
           finance.record({ id: invoice.id, ingestion_status: "missing" });
           finance.log(
             invoice.id,
@@ -325,6 +375,7 @@ export function createInvoiceProcessor(
     state.error = null;
     activeScan = scanImpl(options)
       .catch((error) => {
+        if (closed) throw error;
         state.error =
           error instanceof AppError
             ? error.message

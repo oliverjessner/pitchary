@@ -7,6 +7,7 @@ import {
   link,
   button,
   field,
+  selectField,
   table,
   panel,
   heading,
@@ -24,7 +25,7 @@ const ingestion = {
   pending: "Erkennung ausstehend",
   processed: "Verarbeitet",
   failed: "Verarbeitung fehlgeschlagen",
-  missing: "Datei fehlt",
+  missing: "Quelldatei fehlt",
 };
 const payableTags = [
   "Device",
@@ -792,13 +793,13 @@ export async function financeDashboard(
   const controls = el(
     "div",
     { class: "finance-filters" },
-    field("Jahr", "year", {
+    selectField("Jahr", "year", {
       options: years.map((value) => [value, value]),
       value: year,
       onchange: (event) =>
         routeFilter("/dashboard", params, { year: event.target.value }),
     }),
-    field("Monat", "month", {
+    selectField("Monat", "month", {
       options: monthNames.map((label, index) => [
         String(index + 1).padStart(2, "0"),
         label,
@@ -808,7 +809,7 @@ export async function financeDashboard(
         routeFilter("/dashboard", params, { month: event.target.value }),
     }),
     currencies.length > 1
-      ? field("Diagramm-Währung", "currency", {
+      ? selectField("Diagramm-Währung", "currency", {
           options: currencies.map((row) => [row.currency, row.currency]),
           value: currency,
           onchange: (event) =>
@@ -989,7 +990,7 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
         }, 300);
       },
     }),
-    field("Jahr", "year", {
+    selectField("Jahr", "year", {
       options: [
         ["", "Alle Jahre"],
         ...(data.years || []).map((value) => [value, value]),
@@ -998,7 +999,7 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
       onchange: (event) =>
         routeFilter("/invoices", params, { year: event.target.value }),
     }),
-    field("Status", "status", {
+    selectField("Status", "status", {
       options: options(states, "Alle Status"),
       value: query.status,
       onchange: (event) =>
@@ -1108,7 +1109,7 @@ async function editInvoice(row, actions) {
     });
   const tags = tagEditor(row.tags);
   const fields = [
-    field("Art", "category", {
+    selectField("Art", "category", {
       value: row.category,
       options: options(categories),
     }),
@@ -1146,21 +1147,24 @@ async function editInvoice(row, actions) {
       value: amountText(row.tax_amount_minor),
       inputmode: "decimal",
     }),
-    field("Status", "status", { value: row.status, options: options(states) }),
+    selectField("Status", "status", {
+      value: row.status,
+      options: options(states),
+    }),
     field("Bezahlt am", "paid_at", {
       type: "date",
       value: row.paid_at?.slice(0, 10) || "",
       helper:
         "Beim Wechsel auf Bezahlt wird ohne Angabe das heutige Datum gesetzt.",
     }),
-    field("CRM-Kunde", "customer_id", {
+    selectField("CRM-Kunde", "customer_id", {
       value: row.customer_id || "",
       options: [
         ["", "Keine Zuordnung"],
         ...allCustomers.map((customer) => [customer.id, customer.name]),
       ],
     }),
-    field("Angebot / Vorgang", "customer_service_id", {
+    selectField("Angebot / Vorgang", "customer_service_id", {
       value: row.customer_service_id || "",
       options: [
         ["", "Keine Zuordnung"],

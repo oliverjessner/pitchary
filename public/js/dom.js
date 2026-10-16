@@ -210,6 +210,14 @@ export const options = (map, empty) => [
   ...(empty !== undefined ? [["", empty]] : []),
   ...Object.entries(map),
 ];
+export function selectField(...args) {
+  const node = field(...args);
+  const select = node.querySelector("select");
+  const wrapper = el("div", { class: "app-select-control" });
+  select.replaceWith(wrapper);
+  wrapper.append(select, icon("chevron-down"));
+  return node;
+}
 export function table(caption, headers, rows) {
   return el(
     "div",
