@@ -744,6 +744,22 @@ img.customer-logo {
 .customer-contacts-table td:nth-child(3) .oj-link {
   white-space: nowrap;
 }
+.employee-offers-table .oj-table {
+  min-inline-size: 58rem;
+}
+.employee-offers-table th {
+  white-space: nowrap;
+}
+.employee-offers-table td:first-child {
+  min-inline-size: 13rem;
+}
+.employee-offers-table td:nth-child(2) {
+  min-inline-size: 10rem;
+}
+.employee-offers-table td:nth-child(3),
+.employee-offers-table td:nth-child(4) {
+  white-space: nowrap;
+}
 .performance-panel .oj-table {
   min-inline-size: 960px;
 }

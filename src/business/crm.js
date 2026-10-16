@@ -184,6 +184,18 @@ export function createCRM(
     },
     entity(table, id) {
       const row = requireRecord(table, id);
+      if (table === "employees")
+        return {
+          ...row,
+          customer: customerRecord(requireRecord("customers", row.customer_id)),
+          relationships: relationshipRecords(
+            repo.relationships({
+              customer_id: row.customer_id,
+              employee_id: id,
+            }),
+          ),
+          activities: repo.activities(undefined, { employee_id: id }),
+        };
       if (table === "customers")
         return {
           ...customerRecord(row),

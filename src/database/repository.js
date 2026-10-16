@@ -126,6 +126,12 @@ export function createRepository(db) {
           clauses.push(`cs.${key}=?`);
           params.push(filters[key]);
         }
+      if (filters.employee_id) {
+        clauses.push(
+          "(cs.primary_employee_id=? OR EXISTS (SELECT 1 FROM activities a WHERE a.customer_service_id=cs.id AND a.employee_id=?))",
+        );
+        params.push(filters.employee_id, filters.employee_id);
+      }
       if (filters.archived !== undefined) {
         clauses.push(
           "cs.archived_at IS " + (filters.archived ? "NOT NULL" : "NULL"),
@@ -156,12 +162,22 @@ export function createRepository(db) {
           "SELECT * FROM customer_service_status_history WHERE customer_service_id=? ORDER BY occurred_at,recorded_at,rowid",
         )
         .all(id),
-    activities(id) {
+    activities(id, { employee_id } = {}) {
+      const clauses = [],
+        params = [];
+      if (id) {
+        clauses.push("a.customer_service_id=?");
+        params.push(id);
+      }
+      if (employee_id) {
+        clauses.push("a.employee_id=?");
+        params.push(employee_id);
+      }
       return db
         .prepare(
-          `SELECT a.*,e.name AS employee_name,c.name AS customer_name,s.name AS service_name,cs.currency FROM activities a LEFT JOIN employees e ON e.id=a.employee_id JOIN customer_services cs ON cs.id=a.customer_service_id JOIN customers c ON c.id=cs.customer_id JOIN services s ON s.id=cs.service_id ${id ? "WHERE a.customer_service_id=?" : ""} ORDER BY a.occurred_at DESC,a.rowid DESC`,
+          `SELECT a.*,e.name AS employee_name,c.name AS customer_name,s.name AS service_name,cs.currency,cs.archived_at AS relationship_archived_at FROM activities a LEFT JOIN employees e ON e.id=a.employee_id JOIN customer_services cs ON cs.id=a.customer_service_id JOIN customers c ON c.id=cs.customer_id JOIN services s ON s.id=cs.service_id ${clauses.length ? "WHERE " + clauses.join(" AND ") : ""} ORDER BY a.occurred_at DESC,a.rowid DESC`,
         )
-        .all(...(id ? [id] : []));
+        .all(...params);
     },
     allHistory: () =>
       db

@@ -32,6 +32,8 @@ import {
   statusBadge,
   transitions,
 } from "./dom.js";
+const employeeLink = (name, id, fallback = "–") =>
+  id && name ? link(name, "#/employees/" + id) : (name ?? fallback);
 function offerTable(rows) {
   return table(
     "Angebote",
@@ -71,7 +73,7 @@ function offerTable(rows) {
         { class: "oj-mono" },
         money(r.accepted_price_minor, r.currency),
       ),
-      r.employee_name ?? "–",
+      employeeLink(r.employee_name, r.primary_employee_id),
       el(
         "div",
         { class: "phase-duration" },
@@ -81,17 +83,17 @@ function offerTable(rows) {
     ]),
   );
 }
-function timeline(row) {
+function timeline(row, { newestFirst = false, showService = false } = {}) {
   const events = [
     ...row.history.map((h, i) => ({ kind: "status", ...h, order: i })),
     ...row.activities.map((a, i) => ({ kind: "activity", ...a, order: -i })),
   ].sort(
     (a, b) =>
-      a.occurred_at.localeCompare(b.occurred_at) ||
-      (a.recorded_at ?? a.created_at).localeCompare(
-        b.recorded_at ?? b.created_at,
-      ) ||
-      a.order - b.order,
+      (a.occurred_at.localeCompare(b.occurred_at) ||
+        (a.recorded_at ?? a.created_at).localeCompare(
+          b.recorded_at ?? b.created_at,
+        ) ||
+        a.order - b.order) * (newestFirst ? -1 : 1),
   );
   return el(
     "ol",
@@ -120,9 +122,9 @@ function timeline(row) {
             (event.price_field === "accepted_price_minor"
               ? " · Vereinbart: "
               : " · Angebot: ") +
-            money(event.previous_price_minor, row.currency) +
+            money(event.previous_price_minor, event.currency ?? row.currency) +
             " → " +
-            money(event.new_price_minor, row.currency);
+            money(event.new_price_minor, event.currency ?? row.currency);
       }
       return el(
         "li",
@@ -136,8 +138,21 @@ function timeline(row) {
             datetime(event.occurred_at),
           ),
           event.channel ? " · " + labels.channel[event.channel] : null,
-          event.employee_name ? " · " + event.employee_name : null,
+          event.employee_name
+            ? [" · ", employeeLink(event.employee_name, event.employee_id)]
+            : null,
         ),
+        showService
+          ? el(
+              "p",
+              { class: "oj-small" },
+              link(
+                event.service_name,
+                "#/relationships/" + event.customer_service_id,
+              ),
+              event.relationship_archived_at ? " · Archiviertes Angebot" : null,
+            )
+          : null,
         el("p", { class: "timeline-title" }, title),
         note ? el("p", { class: "note-text oj-small" }, note) : null,
       );
@@ -227,7 +242,11 @@ function pipelineCard(row, actions) {
         "p",
         {},
         icon("user"),
-        el("span", {}, row.employee_name ?? "Kein Ansprechpartner"),
+        employeeLink(
+          row.employee_name,
+          row.primary_employee_id,
+          "Kein Ansprechpartner",
+        ),
       ),
       el(
         "p",
@@ -481,7 +500,7 @@ export async function customerDetail(id, actions) {
       el(
         "div",
         {},
-        e.name,
+        employeeLink(e.name, e.id),
         e.archived_at ? el("span", { class: "oj-badge" }, "Archiviert") : null,
       ),
       e.email ? link(e.email, "mailto:" + e.email) : "–",
@@ -598,6 +617,168 @@ export async function customerDetail(id, actions) {
     ...customerFinanceSections(finance, actions),
   ];
   return withFinanceRefresh(content, actions);
+}
+export async function employeeDetail(id, actions) {
+  const row = await api("/employees/" + id);
+  const activityCounts = new Map();
+  for (const activity of row.activities)
+    activityCounts.set(
+      activity.customer_service_id,
+      (activityCounts.get(activity.customer_service_id) ?? 0) + 1,
+    );
+  const offers = table(
+    "Dienstleistungen & Angebote",
+    [
+      "Dienstleistung / Angebot",
+      "Bezug zur Person",
+      "Status",
+      "Preis",
+      "Aktivitäten",
+      "Aktionen",
+    ],
+    row.relationships.map((r) => [
+      el(
+        "div",
+        { class: "oj-stack service-identity" },
+        link(r.service_name, "#/services/" + r.service_id),
+        tagList(r.service_tags),
+        link("Angebot " + r.id.slice(0, 8), "#/relationships/" + r.id),
+        r.archived_at
+          ? el("span", { class: "oj-small oj-muted" }, "Archiviert")
+          : null,
+      ),
+      r.primary_employee_id === row.id
+        ? "Ansprechpartner"
+        : "Kontaktaktivitäten",
+      statusBadge(r.status),
+      el(
+        "div",
+        {},
+        el(
+          "span",
+          { class: "oj-mono" },
+          money(
+            r.accepted_price_minor ?? r.current_offered_price_minor,
+            r.currency,
+          ),
+        ),
+        el(
+          "p",
+          { class: "oj-small oj-muted" },
+          labels.billing[r.billing_type] +
+            " · " +
+            (r.accepted_price_minor === null ? "Angebotspreis" : "Vereinbart"),
+        ),
+      ),
+      activityCounts.get(r.id) ?? 0,
+      !row.archived_at && !r.archived_at
+        ? button(
+            "Aktivität hinzufügen",
+            () => actions.activity(r, { employeeId: row.id }),
+            { compact: true, iconName: "plus" },
+          )
+        : "–",
+    ]),
+  );
+  offers.classList.add("employee-offers-table");
+  return [
+    el(
+      "nav",
+      { class: "oj-breadcrumb", "aria-label": "Brotkrumennavigation" },
+      el(
+        "ol",
+        {},
+        el("li", {}, link("Kunden", "#/customers")),
+        el("li", {}, link(row.customer.name, "#/customers/" + row.customer_id)),
+        el("li", {}, el("span", { "aria-current": "page" }, row.name)),
+      ),
+    ),
+    heading(
+      row.name,
+      row.customer.name +
+        " · " +
+        (row.archived_at ? "Archivierter Mitarbeiter" : "Mitarbeiter"),
+      entityState(row, "employees", actions),
+    ),
+    panel(
+      "Kontaktdaten",
+      facts([
+        [
+          "Unternehmen",
+          link(row.customer.name, "#/customers/" + row.customer_id),
+        ],
+        ["Position", row.position || "–"],
+        ["E-Mail", row.email ? link(row.email, "mailto:" + row.email) : "–"],
+        [
+          "LinkedIn",
+          row.linkedin
+            ? el(
+                "a",
+                {
+                  class: "oj-link",
+                  href: row.linkedin,
+                  target: "_blank",
+                  rel: "noopener noreferrer",
+                },
+                "LinkedIn",
+                icon("arrow-up-right-from-square"),
+              )
+            : "–",
+        ],
+      ]),
+    ),
+    el(
+      "div",
+      { class: "metrics-grid" },
+      metric(
+        "Dienstleistungen",
+        new Set(row.relationships.map((r) => r.service_id)).size,
+      ),
+      metric(
+        "Angebote",
+        row.relationships.length,
+        "Einschließlich archivierter Angebote",
+      ),
+      metric(
+        "Erledigte Angebote",
+        row.relationships.filter((r) => r.status === "done").length,
+      ),
+      metric("Aktivitäten", row.activities.length, "Mit dieser Person erfasst"),
+    ),
+    panel(
+      "Dienstleistungen & Angebote",
+      el(
+        "p",
+        { class: "oj-small oj-muted" },
+        "Angebote, bei denen diese Person Ansprechpartner ist oder an einer erfassten Aktivität beteiligt war. Öffne ein Angebot für seine vollständige Historie.",
+      ),
+      row.relationships.length
+        ? offers
+        : el(
+            "p",
+            { class: "oj-muted" },
+            "Mit dieser Person sind noch keine Dienstleistungen oder Angebote verknüpft.",
+          ),
+    ),
+    panel(
+      "Aktivitäten mit dieser Person",
+      el(
+        "p",
+        { class: "oj-small oj-muted" },
+        "Persönlich zugeordnete Kontakte und Notizen, neueste zuerst. Allgemeine Angebotsereignisse findest du in der Angebotshistorie.",
+      ),
+      row.activities.length
+        ? timeline(
+            { history: [], activities: row.activities },
+            { newestFirst: true, showService: true },
+          )
+        : el(
+            "p",
+            { class: "oj-muted" },
+            "Noch keine Aktivitäten mit dieser Person erfasst.",
+          ),
+    ),
+  ];
 }
 export async function serviceDetail(id, actions) {
   const row = await api("/services/" + id);
@@ -1062,7 +1243,10 @@ export async function relationshipDetail(id, actions) {
             ["Vereinbarter Preis", money(r.accepted_price_minor, r.currency)],
             ["Abrechnung", labels.billing[r.billing_type]],
             ["Ursprünglicher Pitch-Kanal", labels.channel[r.pitch_channel]],
-            ["Ansprechpartner", r.employee_name ?? "–"],
+            [
+              "Ansprechpartner",
+              employeeLink(r.employee_name, r.primary_employee_id),
+            ],
             ["Kunde", link(r.customer_name, "#/customers/" + r.customer_id)],
             [
               "Dienstleistung",
@@ -1201,7 +1385,7 @@ export async function activities(actions) {
             el("p", { class: "oj-small oj-muted" }, a.service_name),
           ),
           a.channel ? labels.channel[a.channel] : "–",
-          a.employee_name ?? "–",
+          employeeLink(a.employee_name, a.employee_id),
           el(
             "p",
             { class: "note-text" },

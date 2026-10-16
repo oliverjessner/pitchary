@@ -556,7 +556,7 @@ export function createActions(refresh, navigate) {
       },
     );
   }
-  async function activity(row) {
+  async function activity(row, { employeeId = row.primary_employee_id } = {}) {
     const employees = await api("/employees", {
       query: { customer_id: row.customer_id },
     });
@@ -580,7 +580,7 @@ export function createActions(refresh, navigate) {
           options: options(labels.channel, "Kein Kanal"),
         }),
         field("Mitarbeiter", "employee_id", {
-          value: row.primary_employee_id ?? "",
+          value: employeeId ?? "",
           options: [
             ["", "Kein Ansprechpartner"],
             ...employees.map((e) => [e.id, e.name]),
