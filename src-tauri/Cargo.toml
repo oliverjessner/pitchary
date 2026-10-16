@@ -26,6 +26,8 @@ path = "tests/dock_menu.rs"
 harness = false
 
 [profile.release]
-strip = true
+# Rust/LLVM stripping can misalign Mach-O dylibs and prevent proc-macro loading.
+# https://github.com/rust-lang/rust/issues/157750
+strip = "none"
 lto = "thin"
 codegen-units = 1
