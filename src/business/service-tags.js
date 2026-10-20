@@ -49,7 +49,7 @@ export function createServiceTags(db, repo, { now, idFactory }) {
           created_at: at,
           updated_at: at,
         });
-        return { ...requireTag(id), service_count: 0 };
+        return { ...requireTag(id), service_count: 0, customer_count: 0 };
       });
     },
     updateTag(id, data) {

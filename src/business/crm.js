@@ -74,7 +74,7 @@ export function createCRM(
     allowedKeys(data, [
       ...keys,
       ...(table === "customers" ? ["logo"] : []),
-      ...(table === "services" ? ["tag_ids"] : []),
+      ...(table === "services" || table === "customers" ? ["tag_ids"] : []),
       ...(table === "employees" && creating ? ["customer_id"] : []),
     ]);
     const out = {};
@@ -158,6 +158,24 @@ export function createCRM(
     }
     return tags;
   }
+  function tagsByCustomer() {
+    const tags = new Map();
+    for (const { customer_id, ...tag } of repo.customerTags()) {
+      if (!tags.has(customer_id)) tags.set(customer_id, []);
+      tags.get(customer_id).push(tag);
+    }
+    return tags;
+  }
+  function customerWithTags(row) {
+    return {
+      ...customerRecord(row),
+      tags: repo.customerTags(row.id).map(({ customer_id, ...tag }) => tag),
+    };
+  }
+  function replaceTags(table, id, ids) {
+    if (table === "customers") repo.replaceCustomerTags(id, ids);
+    else repo.replaceServiceTags(id, ids);
+  }
   function relationshipRecords(rows) {
     const tags = tagsByService();
     return rows.map((row) => ({
@@ -169,6 +187,13 @@ export function createCRM(
     repo,
     ...serviceTags,
     listEntities(table, filters = {}) {
+      const tagIds = serviceTags.validateTagIds(
+        filters.tag_ids === undefined || filters.tag_ids === ""
+          ? []
+          : typeof filters.tag_ids === "string"
+            ? filters.tag_ids.split(",")
+            : filters.tag_ids,
+      );
       const rows = repo.list(table, {
         archived: filters.archived === true || filters.archived === "true",
         search: text(filters.search ?? "", "search", { max: 200 }),
@@ -176,18 +201,32 @@ export function createCRM(
           ? uuid(filters.customer_id, "customer_id")
           : undefined,
       });
-      if (table === "services") {
-        const tags = tagsByService();
-        return rows.map((row) => ({ ...row, tags: tags.get(row.id) ?? [] }));
-      }
-      return table === "customers" ? rows.map(customerRecord) : rows;
+      const tags = table === "services" ? tagsByService() : tagsByCustomer();
+      return rows
+        .map((row) => ({
+          ...(table === "customers" ? customerRecord(row) : row),
+          [table === "employees" ? "customer_tags" : "tags"]:
+            tags.get(table === "employees" ? row.customer_id : row.id) ?? [],
+        }))
+        .filter(
+          (row) =>
+            !tagIds.length ||
+            (row.customer_tags ?? row.tags).some((tag) =>
+              tagIds.includes(tag.id),
+            ),
+        );
     },
     entity(table, id) {
       const row = requireRecord(table, id);
       if (table === "employees")
         return {
           ...row,
-          customer: customerRecord(requireRecord("customers", row.customer_id)),
+          customer_tags: repo
+            .customerTags(row.customer_id)
+            .map(({ customer_id, ...tag }) => tag),
+          customer: customerWithTags(
+            requireRecord("customers", row.customer_id),
+          ),
           relationships: relationshipRecords(
             repo.relationships({
               customer_id: row.customer_id,
@@ -198,7 +237,7 @@ export function createCRM(
         };
       if (table === "customers")
         return {
-          ...customerRecord(row),
+          ...customerWithTags(row),
           employees: repo.list("employees", { customer_id: id }),
           archived_employees: repo.list("employees", {
             customer_id: id,
@@ -227,7 +266,7 @@ export function createCRM(
         const { general_email, ...values } = entityData(table, data, true),
           at = now();
         const tagIds =
-          table === "services"
+          table === "services" || table === "customers"
             ? serviceTags.validateTagIds(data.tag_ids ?? [])
             : null;
         const id = idFactory();
@@ -240,14 +279,14 @@ export function createCRM(
         });
         if (table === "customers" && general_email)
           repo.saveCustomerEmail(id, general_email, at);
-        if (tagIds) repo.replaceServiceTags(id, tagIds);
+        if (tagIds) replaceTags(table, id, tagIds);
         const result = repo.get(table, id);
         if (table === "services")
           return {
             ...result,
             tags: repo.serviceTags(id).map(({ service_id, ...tag }) => tag),
           };
-        return table === "customers" ? customerRecord(result) : result;
+        return table === "customers" ? customerWithTags(result) : result;
       };
       return table === "services" || table === "customers"
         ? transaction(db, save)
@@ -257,7 +296,8 @@ export function createCRM(
       const save = () => {
         requireRecord(table, id, true);
         const tagIds =
-          table === "services" && data.tag_ids !== undefined
+          (table === "services" || table === "customers") &&
+          data.tag_ids !== undefined
             ? serviceTags.validateTagIds(data.tag_ids)
             : null;
         const { general_email, ...values } = entityData(table, data);
@@ -269,13 +309,13 @@ export function createCRM(
         if (table === "customers" && general_email !== undefined)
           repo.saveCustomerEmail(id, general_email, at);
         const result = repo.get(table, id);
-        if (tagIds) repo.replaceServiceTags(id, tagIds);
+        if (tagIds) replaceTags(table, id, tagIds);
         if (table === "services")
           return {
             ...result,
             tags: repo.serviceTags(id).map(({ service_id, ...tag }) => tag),
           };
-        return table === "customers" ? customerRecord(result) : result;
+        return table === "customers" ? customerWithTags(result) : result;
       };
       return table === "services" || table === "customers"
         ? transaction(db, save)
@@ -287,7 +327,7 @@ export function createCRM(
         archived_at: archived ? now() : null,
         updated_at: now(),
       });
-      return table === "customers" ? customerRecord(result) : result;
+      return table === "customers" ? customerWithTags(result) : result;
     },
     customerLogo(id) {
       requireRecord("customers", id);

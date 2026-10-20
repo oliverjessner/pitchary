@@ -343,7 +343,7 @@ export async function entityList(type, actions) {
   const search = field("Suchen", "search", {
       type: "search",
       placeholder: isCustomer
-        ? "Name, Website, E-Mail oder Notiz"
+        ? "Name, Website, E-Mail, Notiz oder Tag"
         : "Dienstleistung, URL, Notiz oder Tag",
     }),
     archived = selectField("Ansicht", "archived", {
@@ -364,14 +364,25 @@ export async function entityList(type, actions) {
       : null,
     content = el("div", {}),
     count = el("p", { class: "oj-small oj-muted", role: "status" });
-  let rows = await api("/" + type);
+  let [rows, tags] = await Promise.all([
+    api("/" + type),
+    isCustomer ? api("/service-tags") : [],
+  ]);
+  const tagSelection = isCustomer
+    ? tagFilter(tags, () => render(), [], {
+        description: "Zeigt Unternehmen mit mindestens einem ausgewählten Tag.",
+      })
+    : null;
   let generation = 0;
   function render() {
     const term = search.querySelector("input").value.toLocaleLowerCase();
     const selectedType = customerType?.querySelector("select").value;
+    const selectedTags = tagSelection?.value() ?? [];
     const filtered = rows.filter(
       (r) =>
         (!selectedType || r.customer_type === selectedType) &&
+        (!selectedTags.length ||
+          (r.tags ?? []).some((tag) => selectedTags.includes(tag.id))) &&
         (
           r.name +
           " " +
@@ -478,18 +489,16 @@ export async function entityList(type, actions) {
     }
   });
   render();
-  return [
+  const result = [
     heading(
       title,
       isCustomer
         ? "Kunden und ihre Ansprechpartner an einem Ort."
         : "Wiederverwendbare Leistungen mit eigenständigen Angeboten.",
       [
-        !isCustomer
-          ? button("Tags verwalten", () => actions.manageTags(), {
-              iconName: "tags",
-            })
-          : null,
+        button("Tags verwalten", () => actions.manageTags(type), {
+          iconName: "tags",
+        }),
         button(
           isCustomer ? "Kunde anlegen" : "Dienstleistung anlegen",
           () => actions.entity(type),
@@ -497,10 +506,22 @@ export async function entityList(type, actions) {
         ),
       ],
     ),
-    el("div", { class: "filters" }, search, customerType, archived),
+    el(
+      "div",
+      { class: "filters" },
+      search,
+      customerType,
+      tagSelection?.node,
+      archived,
+    ),
     count,
     content,
   ];
+  result.dispose = () => {
+    generation++;
+    tagSelection?.dispose();
+  };
+  return result;
 }
 export async function customerDetail(id, actions) {
   const [row, finance] = await Promise.all([
@@ -570,6 +591,18 @@ export async function customerDetail(id, actions) {
       : null,
     row.note ? panel("Notiz", el("p", { class: "note-text" }, row.note)) : null,
     panel(
+      "Tags",
+      !row.archived_at
+        ? button(
+            "Tags bearbeiten",
+            () => actions.assignTags(row, "customers"),
+            { iconName: "tags" },
+          )
+        : null,
+      tagList(row.tags) ??
+        el("p", { class: "oj-muted" }, "Noch keine Tags zugewiesen."),
+    ),
+    panel(
       "Mitarbeiter",
       !row.archived_at
         ? el(
@@ -637,7 +670,7 @@ export async function employeeList() {
   const sorting = { sort: "name", order: "asc" };
   const search = field("Personen suchen", "search", {
     type: "search",
-    placeholder: "Name, Unternehmen, Position oder E-Mail",
+    placeholder: "Name, Unternehmen, Position, E-Mail oder Tag",
   });
   const archived = selectField("Ansicht", "archived", {
     value: "false",
@@ -650,17 +683,37 @@ export async function employeeList() {
   const archiveSelect = archived.querySelector("select");
   const count = el("p", { class: "oj-small oj-muted", role: "status" });
   const content = el("div", {});
-  let rows = await api("/employees");
+  let [rows, tags] = await Promise.all([
+    api("/employees"),
+    api("/service-tags"),
+  ]);
+  const tagSelection = tagFilter(tags, () => render(), [], {
+    description:
+      "Zeigt Personen, deren Unternehmen mindestens einen ausgewählten Tag hat.",
+  });
   let generation = 0;
   let loading = false;
   function render() {
     if (loading) return;
     const term = input.value.trim().toLocaleLowerCase("de-AT");
-    const filtered = rows.filter((row) =>
-      [row.name, row.customer_name, row.position, row.email, row.linkedin]
-        .join(" ")
-        .toLocaleLowerCase("de-AT")
-        .includes(term),
+    const selectedTags = tagSelection.value();
+    const filtered = rows.filter(
+      (row) =>
+        (!selectedTags.length ||
+          (row.customer_tags ?? []).some((tag) =>
+            selectedTags.includes(tag.id),
+          )) &&
+        [
+          row.name,
+          row.customer_name,
+          row.position,
+          row.email,
+          row.linkedin,
+          ...(row.customer_tags ?? []).map((tag) => tag.name),
+        ]
+          .join(" ")
+          .toLocaleLowerCase("de-AT")
+          .includes(term),
     );
     count.textContent = `${filtered.length} ${filtered.length === 1 ? "Person" : "Personen"}`;
     const directory = filtered.length
@@ -680,6 +733,7 @@ export async function employeeList() {
               "div",
               {},
               link(row.customer_name, "#/customers/" + row.customer_id),
+              tagList(row.customer_tags),
               row.customer_archived_at
                 ? el(
                     "p",
@@ -707,15 +761,17 @@ export async function employeeList() {
           sorting,
         )
       : empty(
-          term
+          term || selectedTags.length
             ? "Keine Personen gefunden"
             : archiveSelect.value === "true"
               ? "Keine archivierten Personen"
               : "Noch keine Personen",
-          term
-            ? "Versuche einen anderen Suchbegriff."
+          term || selectedTags.length
+            ? "Versuche einen anderen Suchbegriff oder ändere die Tag-Auswahl."
             : "Ansprechpartner legst du beim jeweiligen Kunden an.",
-          term ? null : link("Zu den Kunden", "#/customers"),
+          term || selectedTags.length
+            ? null
+            : link("Zu den Kunden", "#/customers"),
         );
     if (filtered.length) directory.classList.add("employee-directory-table");
     content.replaceChildren(directory);
@@ -757,11 +813,14 @@ export async function employeeList() {
       "Personen",
       "Alle Ansprechpartner durchsuchen. Öffne eine Person für Kontaktdaten, Angebote und Aktivitäten.",
     ),
-    el("div", { class: "filters" }, search, archived),
+    el("div", { class: "filters" }, search, tagSelection.node, archived),
     count,
     content,
   ];
-  result.dispose = () => generation++;
+  result.dispose = () => {
+    generation++;
+    tagSelection.dispose();
+  };
   return result;
 }
 export async function employeeDetail(id, actions) {
@@ -853,6 +912,7 @@ export async function employeeDetail(id, actions) {
           "Unternehmen",
           link(row.customer.name, "#/customers/" + row.customer_id),
         ],
+        ["Unternehmenstags", tagList(row.customer.tags) ?? "–"],
         ["Position", row.position || "–"],
         ["E-Mail", row.email ? link(row.email, "mailto:" + row.email) : "–"],
         [
@@ -998,26 +1058,31 @@ export async function serviceDetail(id, actions) {
     ),
   ];
 }
-export async function serviceTagManagement(actions) {
+export async function serviceTagManagement(actions, type = "services") {
   const tags = await api("/service-tags");
   return [
     el(
       "nav",
       { class: "oj-breadcrumb", "aria-label": "Brotkrumennavigation" },
-      link("Dienstleistungen", "#/services"),
+      link(type === "customers" ? "Kunden" : "Dienstleistungen", "#/" + type),
     ),
-    heading("Tags", "Tags für Dienstleistungen anlegen und bearbeiten.", [
-      button("Tag anlegen", () => actions.tag(), {
-        primary: true,
-        iconName: "plus",
-      }),
-    ]),
+    heading(
+      "Tags",
+      "Gemeinsame Tags für Unternehmen und Dienstleistungen anlegen und bearbeiten.",
+      [
+        button("Tag anlegen", () => actions.tag(), {
+          primary: true,
+          iconName: "plus",
+        }),
+      ],
+    ),
     table(
-      "Dienstleistungs-Tags",
-      ["Tag", "Notiz", "Dienstleistungen", "Aktionen"],
+      "Tags",
+      ["Tag", "Notiz", "Unternehmen", "Dienstleistungen", "Aktionen"],
       tags.map((tag) => [
         tagBadge(tag),
         el("span", { class: "note-text oj-small" }, tag.note || "–"),
+        tag.customer_count,
         tag.service_count,
         el(
           "div",

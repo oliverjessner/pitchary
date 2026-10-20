@@ -193,7 +193,7 @@ export function createActions(refresh, navigate) {
     const customer = type === "customers";
     const branding = customer ? logoEditor(row) : null;
     const tags =
-      type === "services"
+      type === "services" || customer
         ? tagPicker(
             await api("/service-tags"),
             (row?.tags ?? []).map((tag) => tag.id),
@@ -327,16 +327,16 @@ export function createActions(refresh, navigate) {
       { onSaved: refresh },
     );
   }
-  async function assignTags(row) {
+  async function assignTags(row, type = "services") {
     const picker = tagPicker(
       await api("/service-tags"),
-      row.tags.map((tag) => tag.id),
+      (row.tags ?? []).map((tag) => tag.id),
     );
     return showForm(
       "Tags zuweisen",
       [picker.node],
       () =>
-        api("/services/" + row.id, {
+        api("/" + type + "/" + row.id, {
           method: "PATCH",
           body: { tag_ids: picker.value() },
         }),
@@ -347,7 +347,7 @@ export function createActions(refresh, navigate) {
     if (
       !(await confirmDialog({
         title: "Tag löschen?",
-        message: `„${row.name}“ wird gelöscht und von ${row.service_count} ${row.service_count === 1 ? "Dienstleistung" : "Dienstleistungen"} entfernt.`,
+        message: `„${row.name}“ wird gelöscht und von ${row.service_count} ${row.service_count === 1 ? "Dienstleistung" : "Dienstleistungen"} und ${row.customer_count ?? 0} Unternehmen entfernt.`,
         confirmLabel: "Löschen",
         cancelLabel: "Abbrechen",
         variant: "danger",
@@ -676,7 +676,7 @@ export function createActions(refresh, navigate) {
     tag,
     assignTags,
     deleteTag,
-    manageTags: () => navigate("/services/tags"),
+    manageTags: (type = "services") => navigate("/" + type + "/tags"),
     archive,
     entity,
     offer,

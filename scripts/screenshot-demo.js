@@ -58,6 +58,12 @@ export async function createScreenshotApp() {
       company_address: "Beispielgasse 12, 1010 Wien",
     });
     const customers = app.crm.listEntities("customers");
+    const agency = app.crm.createTag({ name: "Agentur", color: "#ff6b35" });
+    const software = app.crm.createTag({ name: "Software", color: "#4d8dff" });
+    for (const customer of customers)
+      app.crm.updateEntity("customers", customer.id, {
+        tag_ids: [customer.name === "Morgenwerk" ? software.id : agency.id],
+      });
     let sequence = 0;
     for (let month = 4; month <= 10; month++) {
       const period = `2026-${String(month).padStart(2, "0")}`;

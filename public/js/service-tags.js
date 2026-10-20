@@ -49,14 +49,21 @@ export function tagPicker(tags, selected = []) {
         : el(
             "p",
             { class: "oj-small oj-muted" },
-            "Noch keine Tags vorhanden. Lege sie über „Tags verwalten“ bei den Dienstleistungen an.",
+            "Noch keine Tags vorhanden. Lege sie über „Tags verwalten“ bei Kunden oder Dienstleistungen an.",
           ),
     ),
     value: () =>
       inputs.filter((input) => input.checked).map((input) => input.value),
   };
 }
-export function tagFilter(tags, onChange, selected = []) {
+export function tagFilter(
+  tags,
+  onChange,
+  selected = [],
+  {
+    description = "Zeigt Angebote mit mindestens einem ausgewählten Tag.",
+  } = {},
+) {
   const prefix = "tag-filter-" + ++pickerNumber;
   const picker = tagPicker(tags, selected);
   picker.node.querySelector("legend").className = "oj-sr-only";
@@ -105,11 +112,7 @@ export function tagFilter(tags, onChange, selected = []) {
     "div",
     { class: "tag-filter-panel oj-stack" },
     search,
-    el(
-      "p",
-      { class: "oj-small oj-muted" },
-      "Zeigt Angebote mit mindestens einem ausgewählten Tag.",
-    ),
+    el("p", { class: "oj-small oj-muted" }, description),
     picker.node,
     noMatches,
     reset,

@@ -91,9 +91,12 @@ async function render(focus = true) {
     if (section === "dashboard")
       content = await views.dashboard(guarded, params);
     else if (section === "customers")
-      content = id
-        ? await views.customerDetail(id, guarded)
-        : await views.entityList("customers", guarded);
+      content =
+        id === "tags"
+          ? await views.serviceTagManagement(guarded, "customers")
+          : id
+            ? await views.customerDetail(id, guarded)
+            : await views.entityList("customers", guarded);
     else if (section === "employees")
       content = id
         ? await views.employeeDetail(id, guarded)

@@ -1,4 +1,5 @@
 import { el, icon, link } from "./dom.js";
+import { tagList } from "./service-tags.js";
 let editorNumber = 0;
 export function customerLogo(row, { large = false } = {}) {
   const frame = el(
@@ -40,7 +41,12 @@ export function customerIdentity(row) {
     "div",
     { class: "customer-identity" },
     customerLogo(row),
-    el("div", { class: "oj-stack" }, link(row.name, "#/customers/" + row.id)),
+    el(
+      "div",
+      { class: "oj-stack" },
+      link(row.name, "#/customers/" + row.id),
+      tagList(row.tags),
+    ),
   );
 }
 export function logoEditor(row) {

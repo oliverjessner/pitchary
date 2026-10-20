@@ -1,5 +1,6 @@
 # 0.6.1
 
+- Gemeinsame Tags für Unternehmen und Dienstleistungen mit Tagzuordnung bei Kunden, Tagfiltern in Kunden- und Personenübersicht und Erhalt der Tags beim Zusammenführen von Kunden.
 - Kunden- und Personentabellen mit auf- und absteigender Sortierung per Spaltenüberschrift, Richtungspfeilen und Tastaturbedienung.
 
 # 0.6.0

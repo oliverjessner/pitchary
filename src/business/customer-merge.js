@@ -289,6 +289,7 @@ export function createCustomerMerge(db) {
             );
           aliases.set(key, target);
         }
+        repo.copyCustomerTags.run(target, source);
         const counts = {
           employees: Number(repo.moveEmployees.run(target, source).changes),
           customer_services: Number(

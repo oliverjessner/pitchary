@@ -241,7 +241,7 @@
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
-  z-index: var(--oj-z-dropdown);
+  z-index: calc(var(--oj-z-sticky) + 2);
   padding: var(--oj-space-3);
   border: 1px solid var(--oj-border-control);
   border-radius: var(--oj-radius-md);

@@ -717,7 +717,7 @@ test("schema 10 import mappings remain idempotent after source identifiers are r
     ]),
   );
   db.exec(
-    "ALTER TABLE finance_invoices RENAME COLUMN source_legacy_id TO source_previous_id; DELETE FROM finance_settings WHERE key='legacy_import_namespace'; PRAGMA user_version=10;",
+    "ALTER TABLE finance_invoices RENAME COLUMN source_legacy_id TO source_previous_id; DELETE FROM finance_settings WHERE key='legacy_import_namespace'; DROP TABLE customer_tag_assignments; PRAGMA user_version=10;",
   );
   db.close();
   db = openDatabase(filename);

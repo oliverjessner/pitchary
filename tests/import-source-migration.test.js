@@ -41,7 +41,7 @@ function schema10(t) {
     ]),
   );
   db.exec(
-    "ALTER TABLE finance_invoices RENAME COLUMN source_legacy_id TO source_previous_id; PRAGMA user_version=10;",
+    "ALTER TABLE finance_invoices RENAME COLUMN source_legacy_id TO source_previous_id; DROP TABLE customer_tag_assignments; PRAGMA user_version=10;",
   );
   db.close();
   return { filename, before, invoice };
@@ -52,7 +52,7 @@ test("migration 011 preserves complete invoice data, PDFs, corrections, logs, CR
   for (let attempt = 0; attempt < 2; attempt++) {
     const db = openDatabase(filename);
     try {
-      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 11);
+      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 12);
       for (const [table, rows] of before)
         assert.deepEqual(
           db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),

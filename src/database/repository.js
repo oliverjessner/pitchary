@@ -27,7 +27,7 @@ export function createRepository(db) {
     tags: () =>
       db
         .prepare(
-          "SELECT t.id,t.name,t.note,t.color,t.created_at,t.updated_at,count(a.service_id) AS service_count FROM service_tags t LEFT JOIN service_tag_assignments a ON a.tag_id=t.id GROUP BY t.id ORDER BY t.name_key,t.id",
+          "SELECT t.id,t.name,t.note,t.color,t.created_at,t.updated_at,(SELECT count(*) FROM service_tag_assignments a WHERE a.tag_id=t.id) AS service_count,(SELECT count(*) FROM customer_tag_assignments a WHERE a.tag_id=t.id) AS customer_count FROM service_tags t ORDER BY t.name_key,t.id",
         )
         .all(),
     tagByKey: (key) =>
@@ -44,6 +44,21 @@ export function createRepository(db) {
       );
       const insert = db.prepare(
         "INSERT INTO service_tag_assignments(service_id,tag_id) VALUES(?,?)",
+      );
+      tagIds.forEach((tagId) => insert.run(id, tagId));
+    },
+    customerTags: (id) =>
+      db
+        .prepare(
+          `SELECT t.id,t.name,t.note,t.color,a.customer_id FROM service_tags t JOIN customer_tag_assignments a ON a.tag_id=t.id ${id ? "WHERE a.customer_id=?" : ""} ORDER BY t.name_key,t.id`,
+        )
+        .all(...(id ? [id] : [])),
+    replaceCustomerTags(id, tagIds) {
+      db.prepare(
+        "DELETE FROM customer_tag_assignments WHERE customer_id=?",
+      ).run(id);
+      const insert = db.prepare(
+        "INSERT INTO customer_tag_assignments(customer_id,tag_id) VALUES(?,?)",
       );
       tagIds.forEach((tagId) => insert.run(id, tagId));
     },
@@ -66,6 +81,14 @@ export function createRepository(db) {
       const clauses = ["archived_at IS " + (archived ? "NOT NULL" : "NULL")];
       const params = [];
       if (search) {
+        const tagAssignment =
+          name === "services"
+            ? "service_tag_assignments a WHERE a.service_id=services.id"
+            : name === "customers"
+              ? "customer_tag_assignments a WHERE a.customer_id=customers.id"
+              : name === "employees"
+                ? "customer_tag_assignments a WHERE a.customer_id=employees.customer_id"
+                : null;
         const fields = [
           "name",
           ...(name === "employees"
@@ -87,14 +110,14 @@ export function createRepository(db) {
         clauses.push(
           "(" +
             fields.map((field) => field + " LIKE ? ESCAPE '\\'").join(" OR ") +
-            (name === "services"
-              ? " OR EXISTS (SELECT 1 FROM service_tag_assignments a JOIN service_tags t ON t.id=a.tag_id WHERE a.service_id=services.id AND t.name LIKE ? ESCAPE '\\')"
+            (tagAssignment
+              ? ` OR EXISTS (SELECT 1 FROM ${tagAssignment} AND EXISTS (SELECT 1 FROM service_tags t WHERE t.id=a.tag_id AND t.name LIKE ? ESCAPE '\\'))`
               : "") +
             ")",
         );
         const term = "%" + search.replace(/[\\%_]/g, "\\$&") + "%";
         params.push(...fields.map(() => term));
-        if (name === "services") params.push(term);
+        if (tagAssignment) params.push(term);
       }
       if (customer_id) {
         clauses.push("customer_id=?");

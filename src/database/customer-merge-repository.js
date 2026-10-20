@@ -14,6 +14,9 @@ export function createCustomerMergeRepository(db) {
     moveEmployees: db.prepare(
       "UPDATE employees SET customer_id=? WHERE customer_id=?",
     ),
+    copyCustomerTags: db.prepare(
+      "INSERT OR IGNORE INTO customer_tag_assignments(customer_id,tag_id) SELECT ?,tag_id FROM customer_tag_assignments WHERE customer_id=?",
+    ),
     moveRelationships: db.prepare(
       "UPDATE customer_services SET customer_id=? WHERE customer_id=?",
     ),
