@@ -42,6 +42,16 @@ export async function createScreenshotApp() {
   });
   try {
     seedDemo(app.database);
+    const employees = app.crm.listEntities("employees");
+    for (const [name, profile] of [
+      ["Anna Berger", "demo-anna-berger"],
+      ["Leon Weber", "demo-leon-weber"],
+    ]) {
+      const employee = employees.find((employee) => employee.name === name);
+      app.crm.updateEntity("employees", employee.id, {
+        linkedin: `https://www.linkedin.com/in/${profile}/`,
+      });
+    }
     await app.financeSettings.save({
       company_name: "Feld & Form Studio",
       company_email: "office@feld-form.example",

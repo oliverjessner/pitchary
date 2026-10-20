@@ -1,5 +1,6 @@
 # 0.5.1
 
+- LinkedIn-Spalte mit direkten Profillinks in der Personenübersicht.
 - Personenmenü mit Suche, Archivansicht und direkten Links zu den persönlichen Kontaktdaten, Angeboten und Aktivitäten.
 - Einheitliche OJ-Selects in allen Filtern und Formularen, einschließlich Rechnungen und Einstellungen.
 - employee view

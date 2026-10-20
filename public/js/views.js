@@ -645,7 +645,7 @@ export async function employeeList() {
     const directory = filtered.length
       ? table(
           "Personen",
-          ["Name", "Unternehmen", "Position", "E-Mail"],
+          ["Name", "Unternehmen", "Position", "E-Mail", "LinkedIn"],
           filtered.map((row) => [
             employeeLink(row.name, row.id),
             el(
@@ -662,6 +662,19 @@ export async function employeeList() {
             ),
             row.position || "–",
             row.email ? link(row.email, "mailto:" + row.email) : "–",
+            row.linkedin
+              ? el(
+                  "a",
+                  {
+                    class: "oj-link",
+                    href: row.linkedin,
+                    target: "_blank",
+                    rel: "noopener noreferrer",
+                  },
+                  "LinkedIn",
+                  icon("arrow-up-right-from-square"),
+                )
+              : "–",
           ]),
         )
       : empty(

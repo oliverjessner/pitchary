@@ -738,13 +738,16 @@ img.customer-logo {
   white-space: nowrap;
 }
 .employee-directory-table .oj-table {
-  min-inline-size: 46rem;
+  min-inline-size: 52rem;
 }
 .employee-directory-table th {
   white-space: nowrap;
 }
 .employee-directory-table td:first-child {
   min-inline-size: 11rem;
+}
+.employee-directory-table td:last-child .oj-link {
+  white-space: nowrap;
 }
 .employee-offers-table .oj-table {
   min-inline-size: 58rem;
