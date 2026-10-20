@@ -127,7 +127,7 @@ test("employee links open personal services and history, including archives, wit
   await expect(
     page
       .getByRole("navigation", { name: "Hauptnavigation" })
-      .getByRole("link", { name: "Kunden", exact: true }),
+      .getByRole("link", { name: "Personen", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   const profile = section(page, "Kontaktdaten");
   await expect(profile).toContainText(employee.position);

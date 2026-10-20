@@ -25,6 +25,7 @@ fn main() {
                 let expected = [
                     "Dashboard",
                     "Kunden",
+                    "Personen",
                     "Dienstleistungen",
                     "Pipeline",
                     "Analytics",
@@ -44,7 +45,7 @@ fn main() {
                     assert!(!target.is_null());
                 }
             }
-            println!("Native Dock callback: all 8 entries are present, enabled and have action targets; Tauri delegate preserved.");
+            println!("Native Dock callback: all 9 entries are present, enabled and have action targets; Tauri delegate preserved.");
             app.handle().exit(0);
             Ok(())
         })

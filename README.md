@@ -5,6 +5,7 @@ Pitchary ist ein lokales CRM für Kunden, Angebote und Rechnungen.
 ## Funktionen
 
 - Leads, Kunden und Ansprechpartner verwalten.
+- Personen über ein eigenes Menü nach Name, Unternehmen, Position oder E-Mail suchen und ihre Kontaktdaten, Angebote und Aktivitäten öffnen.
 - Dienstleistungen und Preise hinterlegen.
 - Angebote vom ersten Pitch bis zum Abschluss verfolgen, Kontakte und Preisverhandlungen protokollieren.
 - PDF-Rechnungen importieren, per OCR oder optional mit KI auslesen und den Zahlungsstatus verwalten.
@@ -36,6 +37,8 @@ Die App ist derzeit nicht notarisiert. Falls macOS den ersten Start blockiert, u
 | Kunden                                                                       | Dienstleistungen                                        |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------- |
 | ![Kundenübersicht mit Logos und Status](src-tauri/screenshots/customers.png) | ![Dienstleistungen](src-tauri/screenshots/services.png) |
+
+![Personenübersicht mit Suche und direkten Links zur Kontaktansicht](src-tauri/screenshots/employees.png)
 
 | Pipeline                                                                          | Analytics                                                                                |
 | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |

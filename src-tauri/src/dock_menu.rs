@@ -11,6 +11,7 @@ use tauri::{AppHandle, Manager, Url};
 const ENTRIES: &[(&str, &str, &str)] = &[
     ("dock-dashboard", "Dashboard", "/dashboard"),
     ("dock-customers", "Kunden", "/customers"),
+    ("dock-employees", "Personen", "/employees"),
     ("dock-services", "Dienstleistungen", "/services"),
     ("dock-pipeline", "Pipeline", "/pipeline"),
     ("dock-analytics", "Analytics", "/analytics"),

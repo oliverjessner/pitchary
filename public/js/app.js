@@ -94,8 +94,10 @@ async function render(focus = true) {
       content = id
         ? await views.customerDetail(id, guarded)
         : await views.entityList("customers", guarded);
-    else if (section === "employees" && id)
-      content = await views.employeeDetail(id, guarded);
+    else if (section === "employees")
+      content = id
+        ? await views.employeeDetail(id, guarded)
+        : await views.employeeList();
     else if (section === "services")
       content =
         id === "tags"
@@ -139,12 +141,7 @@ async function render(focus = true) {
       .forEach((a) => {
         if (
           a.hash ===
-          "#/" +
-            (section === "relationships"
-              ? "pipeline"
-              : section === "employees"
-                ? "customers"
-                : section)
+          "#/" + (section === "relationships" ? "pipeline" : section)
         )
           a.setAttribute("aria-current", "page");
         else a.removeAttribute("aria-current");

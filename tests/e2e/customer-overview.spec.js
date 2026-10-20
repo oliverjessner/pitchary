@@ -127,7 +127,7 @@ test("customer overview combines branding, contacts, offer history and editable 
         customer.name,
       );
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-      await expect(navigation.getByRole("link")).toHaveCount(8);
+      await expect(navigation.getByRole("link")).toHaveCount(9);
       await expect(
         navigation.getByRole("link", { name: "Kunden", exact: true }),
       ).toHaveAttribute("aria-current", "page");

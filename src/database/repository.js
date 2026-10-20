@@ -68,7 +68,14 @@ export function createRepository(db) {
       if (search) {
         const fields = [
           "name",
-          name === "employees" ? "email" : "note",
+          ...(name === "employees"
+            ? [
+                "email",
+                "position",
+                "linkedin",
+                "(SELECT name FROM customers WHERE id=employees.customer_id)",
+              ]
+            : ["note"]),
           ...(name === "services" ? ["url"] : []),
           ...(name === "customers"
             ? [
@@ -95,7 +102,7 @@ export function createRepository(db) {
       }
       return db
         .prepare(
-          `SELECT ${projection(name)} FROM ${table(name)} WHERE ${clauses.join(" AND ")} ORDER BY name COLLATE NOCASE,id`,
+          `SELECT ${projection(name)}${name === "employees" ? ",(SELECT name FROM customers WHERE id=employees.customer_id) AS customer_name,(SELECT archived_at FROM customers WHERE id=employees.customer_id) AS customer_archived_at" : ""} FROM ${table(name)} WHERE ${clauses.join(" AND ")} ORDER BY name COLLATE NOCASE,id`,
         )
         .all(...params);
     },

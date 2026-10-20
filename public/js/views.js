@@ -613,6 +613,115 @@ export async function customerDetail(id, actions) {
   ];
   return withFinanceRefresh(content, actions);
 }
+export async function employeeList() {
+  const search = field("Personen suchen", "search", {
+    type: "search",
+    placeholder: "Name, Unternehmen, Position oder E-Mail",
+  });
+  const archived = selectField("Ansicht", "archived", {
+    value: "false",
+    options: [
+      ["false", "Aktiv"],
+      ["true", "Archiviert"],
+    ],
+  });
+  const input = search.querySelector("input");
+  const archiveSelect = archived.querySelector("select");
+  const count = el("p", { class: "oj-small oj-muted", role: "status" });
+  const content = el("div", {});
+  let rows = await api("/employees");
+  let generation = 0;
+  let loading = false;
+  function render() {
+    if (loading) return;
+    const term = input.value.trim().toLocaleLowerCase("de-AT");
+    const filtered = rows.filter((row) =>
+      [row.name, row.customer_name, row.position, row.email, row.linkedin]
+        .join(" ")
+        .toLocaleLowerCase("de-AT")
+        .includes(term),
+    );
+    count.textContent = `${filtered.length} ${filtered.length === 1 ? "Person" : "Personen"}`;
+    const directory = filtered.length
+      ? table(
+          "Personen",
+          ["Name", "Unternehmen", "Position", "E-Mail"],
+          filtered.map((row) => [
+            employeeLink(row.name, row.id),
+            el(
+              "div",
+              {},
+              link(row.customer_name, "#/customers/" + row.customer_id),
+              row.customer_archived_at
+                ? el(
+                    "p",
+                    { class: "oj-small oj-muted" },
+                    "Archiviertes Unternehmen",
+                  )
+                : null,
+            ),
+            row.position || "–",
+            row.email ? link(row.email, "mailto:" + row.email) : "–",
+          ]),
+        )
+      : empty(
+          term
+            ? "Keine Personen gefunden"
+            : archiveSelect.value === "true"
+              ? "Keine archivierten Personen"
+              : "Noch keine Personen",
+          term
+            ? "Versuche einen anderen Suchbegriff."
+            : "Ansprechpartner legst du beim jeweiligen Kunden an.",
+          term ? null : link("Zu den Kunden", "#/customers"),
+        );
+    if (filtered.length) directory.classList.add("employee-directory-table");
+    content.replaceChildren(directory);
+  }
+  async function load() {
+    const token = ++generation;
+    loading = true;
+    content.setAttribute("aria-busy", "true");
+    count.textContent = "Personen werden geladen…";
+    content.replaceChildren();
+    try {
+      const data = await api("/employees", {
+        query: { archived: archiveSelect.value },
+      });
+      if (token !== generation) return;
+      rows = data;
+      loading = false;
+      render();
+    } catch (error) {
+      if (token !== generation) return;
+      count.textContent = "Personen konnten nicht geladen werden.";
+      content.replaceChildren(
+        el(
+          "p",
+          { class: "oj-alert oj-alert-danger", role: "alert" },
+          error.message,
+        ),
+        button("Erneut laden", load),
+      );
+    } finally {
+      if (token === generation) content.setAttribute("aria-busy", "false");
+    }
+  }
+  input.addEventListener("input", render);
+  archiveSelect.addEventListener("change", load);
+  render();
+  const result = [
+    heading(
+      "Personen",
+      "Alle Ansprechpartner durchsuchen. Öffne eine Person für Kontaktdaten, Angebote und Aktivitäten.",
+    ),
+    el("div", { class: "filters" }, search, archived),
+    count,
+    content,
+  ];
+  result.dispose = () => generation++;
+  return result;
+}
 export async function employeeDetail(id, actions) {
   const row = await api("/employees/" + id);
   const activityCounts = new Map();
@@ -683,7 +792,7 @@ export async function employeeDetail(id, actions) {
       el(
         "ol",
         {},
-        el("li", {}, link("Kunden", "#/customers")),
+        el("li", {}, link("Personen", "#/employees")),
         el("li", {}, link(row.customer.name, "#/customers/" + row.customer_id)),
         el("li", {}, el("span", { "aria-current": "page" }, row.name)),
       ),
@@ -942,12 +1051,6 @@ export async function pipeline(actions, params) {
       role: "region",
       "aria-label": "Pipeline nach Status",
     });
-  for (const control of [status, archive]) {
-    const select = control.querySelector("select");
-    const wrapper = el("div", { class: "pipeline-select-control" });
-    select.replaceWith(wrapper);
-    wrapper.append(select, icon("chevron-down"));
-  }
   const count = el("p", { class: "oj-small oj-muted" });
   const scrollPhase = (direction) => {
     const column = board.querySelector(".pipeline-column");
@@ -1559,11 +1662,6 @@ export async function analytics() {
         ...analyticsContent(await api("/analytics", { query })),
       ),
     );
-  for (const select of filters.querySelectorAll("select")) {
-    const wrapper = el("div", { class: "analytics-select-control" });
-    select.replaceWith(wrapper);
-    wrapper.append(select, icon("chevron-down"));
-  }
   return [
     heading(
       "Analytics",

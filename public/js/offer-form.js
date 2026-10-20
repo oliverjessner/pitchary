@@ -1,6 +1,6 @@
 import {
   el,
-  field as nativeField,
+  field,
   options,
   labels,
   minor,
@@ -9,16 +9,6 @@ import {
   icon,
 } from "./dom.js";
 import { customerLogo } from "./customer-branding.js";
-function field(...args) {
-  const node = nativeField(...args);
-  const select = node.querySelector("select");
-  if (select) {
-    const wrapper = el("div", { class: "offer-select-control" });
-    select.replaceWith(wrapper);
-    wrapper.append(select, icon("chevron-down"));
-  }
-  return node;
-}
 function setText(node, value) {
   if (node.textContent !== value) node.textContent = value;
 }

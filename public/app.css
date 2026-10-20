@@ -515,22 +515,15 @@
   gap: var(--oj-space-3);
   align-items: start;
 }
-.offer-select-control,
-.pipeline-select-control,
-.analytics-select-control,
 .app-select-control {
   position: relative;
+  min-inline-size: 0;
 }
-.offer-select-control > select,
-.pipeline-select-control > select,
-.analytics-select-control > select,
 .app-select-control > select {
   appearance: none;
   block-size: var(--oj-control-height);
+  padding-inline-end: var(--oj-space-8);
 }
-.offer-select-control > i,
-.pipeline-select-control > i,
-.analytics-select-control > i,
 .app-select-control > i {
   position: absolute;
   inset-inline-end: var(--oj-space-3);
@@ -743,6 +736,15 @@ img.customer-logo {
 }
 .customer-contacts-table td:nth-child(3) .oj-link {
   white-space: nowrap;
+}
+.employee-directory-table .oj-table {
+  min-inline-size: 46rem;
+}
+.employee-directory-table th {
+  white-space: nowrap;
+}
+.employee-directory-table td:first-child {
+  min-inline-size: 11rem;
 }
 .employee-offers-table .oj-table {
   min-inline-size: 58rem;

@@ -202,7 +202,14 @@ export function field(
     "div",
     { class: "oj-field" + (wide ? " wide" : "") },
     el("label", { class: "oj-label", for: id }, label),
-    control,
+    options
+      ? el(
+          "div",
+          { class: "app-select-control" },
+          control,
+          icon("chevron-down"),
+        )
+      : control,
     helper ? el("p", { id: id + "-help", class: "oj-helper" }, helper) : null,
   );
 }
@@ -211,12 +218,7 @@ export const options = (map, empty) => [
   ...Object.entries(map),
 ];
 export function selectField(...args) {
-  const node = field(...args);
-  const select = node.querySelector("select");
-  const wrapper = el("div", { class: "app-select-control" });
-  select.replaceWith(wrapper);
-  wrapper.append(select, icon("chevron-down"));
-  return node;
+  return field(...args);
 }
 export function table(caption, headers, rows) {
   return el(
