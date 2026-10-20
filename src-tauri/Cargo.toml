@@ -25,6 +25,11 @@ name = "dock_menu"
 path = "tests/dock_menu.rs"
 harness = false
 
+[[test]]
+name = "invoice_window"
+path = "tests/invoice_window.rs"
+harness = false
+
 [profile.release]
 # Rust/LLVM stripping can misalign Mach-O dylibs and prevent proc-macro loading.
 # https://github.com/rust-lang/rust/issues/157750

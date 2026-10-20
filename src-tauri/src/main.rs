@@ -1,23 +1,22 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod app_window;
 #[cfg(target_os = "macos")]
 mod dock_menu;
+
+use app_window::window;
 
 use std::{
     fs::{self, OpenOptions},
     io::{BufRead, BufReader, Write},
     path::Path,
     process::{Child, Command, Stdio},
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        mpsc, Mutex,
-    },
+    sync::{mpsc, Mutex},
     thread,
     time::{Duration, Instant},
 };
-use tauri::{Manager, RunEvent, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{Manager, RunEvent, Url};
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_opener::OpenerExt;
 
 struct Backend(Mutex<Option<Child>>);
 
@@ -100,73 +99,6 @@ fn start_backend(
     Ok((backend, url))
 }
 
-fn external(app: &tauri::AppHandle, url: &Url) {
-    if matches!(url.scheme(), "https" | "http" | "mailto") {
-        let _ = app.opener().open_url(url.as_str(), None::<&str>);
-    }
-}
-
-fn window(app: &tauri::AppHandle, label: &str, url: Url) -> tauri::Result<WebviewWindow> {
-    let origin = url.origin();
-    let navigation_app = app.clone();
-    let popup_app = app.clone();
-    let popup_origin = origin.clone();
-    let download_app = app.clone();
-    WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
-        .title("Pitchary")
-        .inner_size(1400.0, 950.0)
-        .min_inner_size(360.0, 560.0)
-        .on_navigation(move |url| {
-            if url.origin() == origin {
-                return true;
-            }
-            external(&navigation_app, url);
-            false
-        })
-        .on_new_window(move |url, _features| {
-            if url.origin() == popup_origin {
-                static NUMBER: AtomicUsize = AtomicUsize::new(0);
-                let label = format!("document-{}", NUMBER.fetch_add(1, Ordering::Relaxed));
-                if let Ok(window) = window(&popup_app, &label, url) {
-                    return tauri::webview::NewWindowResponse::Create { window };
-                }
-            } else {
-                external(&popup_app, &url);
-            }
-            tauri::webview::NewWindowResponse::Deny
-        })
-        .on_download(move |_webview, event| {
-            if let tauri::webview::DownloadEvent::Requested { destination, .. } = event {
-                let name = destination
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-                if let Ok(directory) = download_app.path().download_dir() {
-                    // This callback runs on the WebView event loop. A blocking
-                    // native dialog would deadlock it; keep downloads automatic.
-                    let original = std::path::PathBuf::from(name);
-                    let stem = original.file_stem().unwrap_or_default().to_string_lossy();
-                    let extension = original
-                        .extension()
-                        .map(|value| format!(".{}", value.to_string_lossy()))
-                        .unwrap_or_default();
-                    let mut filename = directory.join(&original);
-                    let mut number = 1;
-                    while filename.exists() {
-                        filename = directory.join(format!("{stem} ({number}){extension}"));
-                        number += 1;
-                    }
-                    *destination = filename;
-                    return true;
-                }
-                return false;
-            }
-            true
-        })
-        .build()
-}
-
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -176,7 +108,7 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
+        .plugin(app_window::opener_plugin())
         .on_menu_event(|app, event| {
             #[cfg(target_os = "macos")]
             if let Err(error) = dock_menu::handle_event(app, event.id().as_ref()) {

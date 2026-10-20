@@ -1,5 +1,6 @@
 # 0.6.0
 
+- Rechnungs-PDFs öffnen in Tauri wieder in einem angemeldeten App-Fenster; interne Links werden nicht mehr vom Opener-Plugin abgefangen.
 - LinkedIn-Spalte mit direkten Profillinks in der Personenübersicht.
 - Personenmenü mit Suche, Archivansicht und direkten Links zu den persönlichen Kontaktdaten, Angeboten und Aktivitäten.
 - Einheitliche OJ-Selects in allen Filtern und Formularen, einschließlich Rechnungen und Einstellungen.
