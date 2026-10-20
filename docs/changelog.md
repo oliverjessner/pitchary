@@ -1,4 +1,4 @@
-# 0.5.1
+# 0.6.0
 
 - LinkedIn-Spalte mit direkten Profillinks in der Personenübersicht.
 - Personenmenü mit Suche, Archivansicht und direkten Links zu den persönlichen Kontaktdaten, Angeboten und Aktivitäten.
