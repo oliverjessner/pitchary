@@ -43,7 +43,7 @@
         "@oliverj/tinyico": "0.1.0",
         "fastify": "5.12.7",
         "fetchary": "2.0.4",
-        "oj-designsystem": "0.2.0",
+        "oj-designsystem": "file:vendor/oj-designsystem-0.2.2.tgz",
         "sharp": "0.35.5"
     },
     "devDependencies": {

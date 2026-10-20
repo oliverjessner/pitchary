@@ -17,15 +17,15 @@ async function layout(page, name, testInfo) {
   mkdirSync("artifacts/screenshots", { recursive: true });
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
-    await page.locator(".tag-filter-trigger").click();
-    const bounds = await page.locator(".tag-filter-panel").boundingBox();
+    await page.locator(".oj-multiselect-trigger").click();
+    const bounds = await page.locator(".oj-multiselect-panel").boundingBox();
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
     expect(bounds.y).toBeGreaterThanOrEqual(0);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(1001);
     expect(
       await page.evaluate(() => {
-        const panel = document.querySelector(".tag-filter-panel");
+        const panel = document.querySelector(".oj-multiselect-panel");
         const popup = panel.getBoundingClientRect();
         const header = document
           .querySelector(".app-topbar")
@@ -60,7 +60,7 @@ async function layout(page, name, testInfo) {
       fullPage: true,
     });
     await page.keyboard.press("Escape");
-    await expect(page.locator(".tag-filter-trigger")).toBeFocused();
+    await expect(page.locator(".oj-multiselect-trigger")).toBeFocused();
   }
 }
 
@@ -222,7 +222,7 @@ test("company and person tag filters combine OR selection with search, sorting a
   ).toBe(true);
   await page.goto("/#/customers");
   await page.getByLabel("Suchen", { exact: true }).fill(prefix);
-  const trigger = page.locator(".tag-filter-trigger");
+  const trigger = page.locator(".oj-multiselect-trigger");
   const aChoice = page.getByRole("checkbox", { name: a.name, exact: true });
   const bChoice = page.getByRole("checkbox", { name: b.name, exact: true });
   await expect(table(page, "Kunden").locator("tbody tr")).toHaveCount(4);

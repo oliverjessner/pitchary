@@ -300,8 +300,8 @@ test("pipeline heading, filters and toolbar stay fixed while the board scrolls",
         () => document.documentElement.scrollWidth <= innerWidth + 1,
       ),
     ).toBe(true);
-    await page.locator(".tag-filter-trigger").click();
-    const popup = page.locator(".tag-filter-panel");
+    await page.locator(".oj-multiselect-trigger").click();
+    const popup = page.locator(".oj-multiselect-panel");
     const popupBounds = await popup.boundingBox();
     expect(popupBounds.x).toBeGreaterThanOrEqual(0);
     expect(popupBounds.y).toBeGreaterThanOrEqual(0);
@@ -310,7 +310,7 @@ test("pipeline heading, filters and toolbar stay fixed while the board scrolls",
     await page.getByRole("checkbox", { name: tag.name, exact: true }).check();
     await expect(page.locator(".offer-card")).toHaveCount(24);
     await page.keyboard.press("Escape");
-    await expect(page.locator(".tag-filter-trigger")).toBeFocused();
+    await expect(page.locator(".oj-multiselect-trigger")).toBeFocused();
     const last = board
       .locator(".offer-card")
       .last()

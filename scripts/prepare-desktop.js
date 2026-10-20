@@ -73,7 +73,7 @@ const dependencyHash = sha256(
 const stamp = path.join(app, ".dependencies");
 const install =
   !existsSync(stamp) || readFileSync(stamp, "utf8") !== dependencyHash;
-for (const name of ["src", "public"]) {
+for (const name of ["src", "public", "vendor"]) {
   rmSync(path.join(app, name), { recursive: true, force: true });
   cpSync(path.join(root, name), path.join(app, name), { recursive: true });
 }

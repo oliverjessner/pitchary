@@ -1,5 +1,6 @@
 # 0.6.2
 
+- Tagfilter in Kunden-, Personen- und Pipelineansicht verwenden die Multiselect-Komponente aus OJ 0.2.2 mit Suche, Mehrfachauswahl und Tastaturbedienung. Der korrigierte lokale OJ-Build wird für reproduzierbare Installationen mitgeliefert.
 - Eigene sortierbare Tagspalte in der Kunden- und Personenübersicht.
 
 # 0.6.1

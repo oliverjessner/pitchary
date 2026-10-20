@@ -10,14 +10,14 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
   page.on("pageerror", (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("http://127.0.0.1:3218/#/pipeline");
-  const trigger = page.locator(".tag-filter-trigger");
-  const dropdown = page.locator(".tag-filter");
+  const trigger = page.locator(".oj-multiselect-trigger");
+  const dropdown = page.locator("[data-oj-multiselect]");
   await trigger.click();
-  await expect(dropdown).toHaveAttribute("open", "");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByLabel("Tags suchen", { exact: true })).toBeDisabled();
   await expect(dropdown).toContainText("Noch keine Tags vorhanden.");
   await page.keyboard.press("Escape");
-  await expect(dropdown).not.toHaveAttribute("open", "");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(trigger).toBeFocused();
 
   const create = async (resource, data) => {
@@ -96,7 +96,8 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
   await expect(cards).toHaveCount(4);
   await trigger.focus();
   await page.keyboard.press("Enter");
-  await expect(dropdown).toHaveAttribute("open", "");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(tagSearch).toBeFocused();
   await webChoice.focus();
   await page.keyboard.press("Space");
   await expect(webChoice).toBeChecked();
@@ -121,7 +122,7 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
   await supportChoice.check();
   await expect(cards).toHaveCount(3);
   await page.keyboard.press("Escape");
-  await expect(dropdown).not.toHaveAttribute("open", "");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(trigger).toBeFocused();
   await search.fill(prefix + " Alpha");
   await expect(cards).toHaveCount(1);
@@ -172,7 +173,7 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
     await page.setViewportSize({ width, height: 1000 });
     const heights = await page
       .locator(
-        '.filters input[name="search"], .filters .tag-filter-trigger, .filters select',
+        '.filters input[name="search"], .filters .oj-multiselect-trigger, .filters select',
       )
       .evaluateAll((nodes) =>
         nodes.map((node) => node.getBoundingClientRect().height),
@@ -180,7 +181,7 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
     expect(heights).toHaveLength(4);
     expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(1);
     await trigger.click();
-    const panel = page.locator(".tag-filter-panel");
+    const panel = page.locator(".oj-multiselect-panel");
     const bounds = await panel.boundingBox();
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
@@ -190,9 +191,7 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
       ),
     ).toBe(true);
     expect(
-      await dropdown
-        .locator(".service-tag-options")
-        .evaluate((node) => node.scrollHeight > node.clientHeight),
+      await panel.evaluate((node) => node.scrollHeight > node.clientHeight),
     ).toBe(true);
     const axe = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
@@ -216,13 +215,13 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
   await expect(cards).toHaveCount(0);
   await expect(count).toContainText("0 Angebote · 6 Phasen");
   await trigger.click();
-  await expect(dropdown).not.toHaveAttribute("open", "");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await trigger.click();
   await expect(
     page.getByRole("checkbox", { name: unused.name, exact: true }),
   ).toBeChecked();
   await search.click();
-  await expect(dropdown).not.toHaveAttribute("open", "");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await trigger.click();
   await page
     .getByRole("button", { name: "Auswahl zurücksetzen", exact: true })
@@ -251,6 +250,15 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
   await expect(
     page.getByRole("button", { name: "Auswahl zurücksetzen", exact: true }),
   ).toBeDisabled();
+  const previousPicker = await dropdown.elementHandle();
+  await page
+    .getByRole("link", { name: "Dienstleistungen", exact: true })
+    .click();
+  await expect(page.locator(".oj-multiselect-panel")).toHaveCount(0);
+  expect(
+    await previousPicker.evaluate((node) => node.getAttribute("data-oj-state")),
+  ).toBe("closed");
+  await previousPicker.dispose();
   expect(errors).toEqual([]);
 });
 
@@ -276,7 +284,7 @@ test("pipeline stays usable with malformed or unavailable browser storage", asyn
   });
   await page.reload();
   await expect(status).toHaveValue("");
-  await expect(page.locator(".tag-filter-trigger")).toHaveAccessibleName(
+  await expect(page.locator(".oj-multiselect-trigger")).toHaveAccessibleName(
     "Tags Alle Tags",
   );
   await page.addInitScript(() => {
