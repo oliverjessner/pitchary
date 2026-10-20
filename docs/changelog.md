@@ -1,5 +1,6 @@
 # 0.6.1
 
+- Automatische Kundenlogos funktionieren mit Fetchary 2.0.4 wieder, auch für lokale HTTP-Websites.
 - Gemeinsame Tags für Unternehmen und Dienstleistungen mit Tagzuordnung bei Kunden, Tagfiltern in Kunden- und Personenübersicht und Erhalt der Tags beim Zusammenführen von Kunden.
 - Kunden- und Personentabellen mit auf- und absteigender Sortierung per Spaltenüberschrift, Richtungspfeilen und Tastaturbedienung.
 - Rechnungs-PDFs öffnen in Tauri wieder in einem angemeldeten App-Fenster; interne Links werden nicht mehr vom Opener-Plugin abgefangen.

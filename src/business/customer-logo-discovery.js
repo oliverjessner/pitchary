@@ -95,6 +95,8 @@ export function createCustomerLogoDiscovery(
     let pageRequested = false;
     const result = await extractIcon(site.href, {
       mode: "http",
+      // This local CRM supports intranet sites through its own HTTP transport.
+      allowPrivateNetwork: true,
       timeout: 8000,
       userAgent: "Pitchary (customer logo lookup)",
       fetch: async (url, options) => {
