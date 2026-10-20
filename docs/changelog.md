@@ -1,3 +1,7 @@
+# 0.6.1
+
+- Kunden- und Personentabellen mit auf- und absteigender Sortierung per Spaltenüberschrift, Richtungspfeilen und Tastaturbedienung.
+
 # 0.6.0
 
 - Rechnungs-PDFs öffnen in Tauri wieder in einem angemeldeten App-Fenster; interne Links werden nicht mehr vom Opener-Plugin abgefangen.

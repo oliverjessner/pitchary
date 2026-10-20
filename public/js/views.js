@@ -20,6 +20,7 @@ import {
   field,
   selectField,
   table,
+  sortableTable,
   panel,
   heading,
   metric,
@@ -337,6 +338,7 @@ export async function dashboard(actions, params) {
 export async function entityList(type, actions) {
   const isCustomer = type === "customers";
   const title = isCustomer ? "Kunden" : "Dienstleistungen";
+  const sorting = { sort: "name", order: "asc" };
   let archiveMode = false;
   const search = field("Suchen", "search", {
       type: "search",
@@ -387,54 +389,72 @@ export async function entityList(type, actions) {
           .includes(term),
     );
     count.textContent = `${filtered.length} ${title}`;
-    content.replaceChildren(
-      table(
-        title,
-        [
-          "Name",
-          ...(isCustomer ? ["Status"] : []),
-          "Notiz",
-          "Angelegt",
-          "Aktionen",
-        ],
-        filtered.map((r) => [
-          isCustomer
-            ? customerIdentity(r)
-            : el(
-                "div",
-                { class: "oj-stack service-identity" },
-                link(r.name, "#/" + type + "/" + r.id),
-                tagList(r.tags),
-              ),
-          ...(isCustomer
-            ? [
-                el(
-                  "span",
-                  {
-                    class:
-                      "oj-badge customer-type oj-badge-" +
-                      (r.customer_type === "customer" ? "success" : "neutral"),
-                    title:
-                      r.customer_type === "customer"
-                        ? "Bereits eine Einnahmenrechnung gestellt"
-                        : "Noch keine Einnahmenrechnung gestellt",
-                  },
-                  r.customer_type === "customer" ? "Kunde" : "Lead",
-                ),
-              ]
-            : []),
-          el("span", { class: "note-text oj-small" }, r.note || "–"),
-          datetime(r.created_at),
-          archiveMode
-            ? button("Wiederherstellen", () => actions.archive(type, r, true), {
-                compact: true,
-              })
-            : button("Bearbeiten", () => actions.entity(type, r), {
-                compact: true,
-              }),
-        ]),
-      ),
-    );
+    const renderRow = (r) => [
+      isCustomer
+        ? customerIdentity(r)
+        : el(
+            "div",
+            { class: "oj-stack service-identity" },
+            link(r.name, "#/" + type + "/" + r.id),
+            tagList(r.tags),
+          ),
+      ...(isCustomer
+        ? [
+            el(
+              "span",
+              {
+                class:
+                  "oj-badge customer-type oj-badge-" +
+                  (r.customer_type === "customer" ? "success" : "neutral"),
+                title:
+                  r.customer_type === "customer"
+                    ? "Bereits eine Einnahmenrechnung gestellt"
+                    : "Noch keine Einnahmenrechnung gestellt",
+              },
+              r.customer_type === "customer" ? "Kunde" : "Lead",
+            ),
+          ]
+        : []),
+      el("span", { class: "note-text oj-small" }, r.note || "–"),
+      datetime(r.created_at),
+      archiveMode
+        ? button("Wiederherstellen", () => actions.archive(type, r, true), {
+            compact: true,
+          })
+        : button("Bearbeiten", () => actions.entity(type, r), {
+            compact: true,
+          }),
+    ];
+    const directory = isCustomer
+      ? sortableTable(
+          title,
+          [
+            { label: "Name", key: "name" },
+            {
+              label: "Status",
+              key: "customer_type",
+              value: (row) =>
+                row.customer_type === "customer" ? "Kunde" : "Lead",
+            },
+            { label: "Notiz", key: "note" },
+            {
+              label: "Angelegt",
+              key: "created_at",
+              value: (row) => Date.parse(row.created_at),
+            },
+            { label: "Aktionen" },
+          ],
+          filtered,
+          renderRow,
+          sorting,
+        )
+      : table(
+          title,
+          ["Name", "Notiz", "Angelegt", "Aktionen"],
+          filtered.map(renderRow),
+        );
+    if (isCustomer) directory.classList.add("customer-directory-table");
+    content.replaceChildren(directory);
   }
   search.querySelector("input").addEventListener("input", render);
   customerType?.querySelector("select").addEventListener("change", render);
@@ -614,6 +634,7 @@ export async function customerDetail(id, actions) {
   return withFinanceRefresh(content, actions);
 }
 export async function employeeList() {
+  const sorting = { sort: "name", order: "asc" };
   const search = field("Personen suchen", "search", {
     type: "search",
     placeholder: "Name, Unternehmen, Position oder E-Mail",
@@ -643,10 +664,17 @@ export async function employeeList() {
     );
     count.textContent = `${filtered.length} ${filtered.length === 1 ? "Person" : "Personen"}`;
     const directory = filtered.length
-      ? table(
+      ? sortableTable(
           "Personen",
-          ["Name", "Unternehmen", "Position", "E-Mail", "LinkedIn"],
-          filtered.map((row) => [
+          [
+            { label: "Name", key: "name" },
+            { label: "Unternehmen", key: "customer_name" },
+            { label: "Position", key: "position" },
+            { label: "E-Mail", key: "email" },
+            { label: "LinkedIn", key: "linkedin" },
+          ],
+          filtered,
+          (row) => [
             employeeLink(row.name, row.id),
             el(
               "div",
@@ -675,7 +703,8 @@ export async function employeeList() {
                   icon("arrow-up-right-from-square"),
                 )
               : "–",
-          ]),
+          ],
+          sorting,
         )
       : empty(
           term

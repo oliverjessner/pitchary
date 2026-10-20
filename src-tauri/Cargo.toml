@@ -1,6 +1,6 @@
 [package]
 name = "pitchary"
-version = "0.6.0"
+version = "0.6.1"
 description = "Local customer, sales and invoice management"
 authors = ["Oliver Jessner"]
 edition = "2021"

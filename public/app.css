@@ -728,6 +728,45 @@ img.customer-logo {
   max-width: 360px;
   overflow-wrap: anywhere;
 }
+.table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--oj-space-3);
+  min-block-size: var(--oj-control-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.table-sort i {
+  color: var(--oj-text-muted);
+  font-size: 0.75rem;
+}
+.table-sort:hover,
+th[aria-sort] .table-sort i {
+  color: var(--oj-text);
+}
+.table-sort:focus-visible {
+  outline: var(--oj-focus-width) solid var(--oj-focus-color);
+  outline-offset: var(--oj-focus-offset);
+  border-radius: var(--oj-radius-sm);
+}
+.customer-directory-table .oj-table {
+  min-inline-size: 52rem;
+}
+.customer-directory-table td:first-child {
+  min-inline-size: 12rem;
+}
+.customer-directory-table td:nth-child(3) {
+  min-inline-size: 14rem;
+}
+.customer-directory-table td:nth-child(4) {
+  white-space: nowrap;
+}
 .customer-contacts-table .oj-table {
   min-inline-size: 45rem;
 }

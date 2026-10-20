@@ -220,6 +220,29 @@ export const options = (map, empty) => [
 export function selectField(...args) {
   return field(...args);
 }
+function tableBody(rows, columnCount) {
+  return el(
+    "tbody",
+    {},
+    rows.length
+      ? rows.map((row) =>
+          el(
+            "tr",
+            {},
+            row.map((c) => el("td", {}, c)),
+          ),
+        )
+      : el(
+          "tr",
+          {},
+          el(
+            "td",
+            { colspan: columnCount, class: "oj-muted" },
+            "Keine Einträge.",
+          ),
+        ),
+  );
+}
 export function table(caption, headers, rows) {
   return el(
     "div",
@@ -242,29 +265,87 @@ export function table(caption, headers, rows) {
           headers.map((h) => el("th", { scope: "col" }, h)),
         ),
       ),
-      el(
-        "tbody",
-        {},
-        rows.length
-          ? rows.map((row) =>
-              el(
-                "tr",
-                {},
-                row.map((c) => el("td", {}, c)),
-              ),
-            )
-          : el(
-              "tr",
-              {},
-              el(
-                "td",
-                { colspan: headers.length, class: "oj-muted" },
-                "Keine Einträge.",
-              ),
-            ),
-      ),
+      tableBody(rows, headers.length),
     ),
   );
+}
+const tableCollator = new Intl.Collator("de-AT", {
+  numeric: true,
+  sensitivity: "base",
+});
+export function sortableTable(caption, columns, rows, renderRow, sorting) {
+  const headers = columns.map(({ label, key }) =>
+    key
+      ? el(
+          "button",
+          {
+            type: "button",
+            class: "table-sort",
+            onclick: (event) => {
+              event.currentTarget.focus({ preventScroll: true });
+              sorting.order =
+                sorting.sort === key && sorting.order === "asc"
+                  ? "desc"
+                  : "asc";
+              sorting.sort = key;
+              render();
+            },
+          },
+          label,
+          icon("sort"),
+        )
+      : label,
+  );
+  const result = table(caption, headers, []);
+  const cells = result.querySelectorAll("thead th");
+  function render() {
+    const column = columns.find(({ key }) => key === sorting.sort);
+    const value = column.value ?? ((row) => row[column.key]);
+    const direction = sorting.order === "asc" ? 1 : -1;
+    const sorted = [...rows].sort((a, b) => {
+      const left = value(a),
+        right = value(b);
+      const leftEmpty = left === null || left === undefined || left === "";
+      const rightEmpty = right === null || right === undefined || right === "";
+      if (leftEmpty !== rightEmpty) return leftEmpty ? 1 : -1;
+      const compared = leftEmpty
+        ? 0
+        : typeof left === "number" && typeof right === "number"
+          ? left - right
+          : tableCollator.compare(String(left), String(right));
+      return (
+        compared * direction ||
+        tableCollator.compare(a.name ?? "", b.name ?? "") ||
+        tableCollator.compare(a.id ?? "", b.id ?? "")
+      );
+    });
+    result
+      .querySelector("tbody")
+      .replaceWith(tableBody(sorted.map(renderRow), columns.length));
+    columns.forEach(({ key }, index) => {
+      if (!key) return;
+      const active = sorting.sort === key;
+      if (active)
+        cells[index].setAttribute(
+          "aria-sort",
+          sorting.order === "asc" ? "ascending" : "descending",
+        );
+      else cells[index].removeAttribute("aria-sort");
+      headers[index].title =
+        active && sorting.order === "asc"
+          ? "Absteigend sortieren"
+          : "Aufsteigend sortieren";
+      headers[index].querySelector("i").className =
+        "fa-solid fa-" +
+        (active
+          ? sorting.order === "asc"
+            ? "arrow-up"
+            : "arrow-down"
+          : "sort");
+    });
+  }
+  render();
+  return result;
 }
 export function panel(title, ...content) {
   return el(
