@@ -36,6 +36,7 @@ import {
 } from "./dom.js";
 const employeeLink = (name, id, fallback = "–") =>
   id && name ? link(name, "#/employees/" + id) : (name ?? fallback);
+const tagNames = (tags = []) => tags.map((tag) => tag.name).join(", ");
 function offerTable(rows) {
   return table(
     "Angebote",
@@ -424,6 +425,7 @@ export async function entityList(type, actions) {
               },
               r.customer_type === "customer" ? "Kunde" : "Lead",
             ),
+            tagList(r.tags) ?? "–",
           ]
         : []),
       el("span", { class: "note-text oj-small" }, r.note || "–"),
@@ -447,6 +449,7 @@ export async function entityList(type, actions) {
               value: (row) =>
                 row.customer_type === "customer" ? "Kunde" : "Lead",
             },
+            { label: "Tags", key: "tags", value: (row) => tagNames(row.tags) },
             { label: "Notiz", key: "note" },
             {
               label: "Angelegt",
@@ -722,6 +725,11 @@ export async function employeeList() {
           [
             { label: "Name", key: "name" },
             { label: "Unternehmen", key: "customer_name" },
+            {
+              label: "Tags",
+              key: "customer_tags",
+              value: (row) => tagNames(row.customer_tags),
+            },
             { label: "Position", key: "position" },
             { label: "E-Mail", key: "email" },
             { label: "LinkedIn", key: "linkedin" },
@@ -733,7 +741,6 @@ export async function employeeList() {
               "div",
               {},
               link(row.customer_name, "#/customers/" + row.customer_id),
-              tagList(row.customer_tags),
               row.customer_archived_at
                 ? el(
                     "p",
@@ -742,6 +749,7 @@ export async function employeeList() {
                   )
                 : null,
             ),
+            tagList(row.customer_tags) ?? "–",
             row.position || "–",
             row.email ? link(row.email, "mailto:" + row.email) : "–",
             row.linkedin

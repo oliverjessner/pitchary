@@ -8,6 +8,7 @@ const customers = [
     name: "Zebra 10",
     customer_type: "lead",
     note: "Notiz 10",
+    tags: [{ id: "tag10", name: "Tag 10", color: "#4d8dff" }],
     created_at: "2026-01-02T10:00:00.000Z",
   },
   {
@@ -22,6 +23,7 @@ const customers = [
     name: "Zebra 2",
     customer_type: "customer",
     note: "Notiz 2",
+    tags: [{ id: "tag2", name: "Tag 2", color: "#4d8dff" }],
     created_at: "2026-11-01T10:00:00.000Z",
   },
   {
@@ -29,6 +31,7 @@ const customers = [
     name: "beta",
     customer_type: "lead",
     note: "Änderung",
+    tags: [{ id: "tag-aenderung", name: "Änderung", color: "#ff6b35" }],
     created_at: "2026-02-01T10:00:00.000Z",
   },
 ];
@@ -38,6 +41,7 @@ const employees = [
     name: "Zebra 10",
     customer_id: "company-a",
     customer_name: "Ähre GmbH",
+    customer_tags: [{ id: "tag10", name: "Tag 10", color: "#4d8dff" }],
     position: "Vertrieb 10",
     email: "z@example.test",
     linkedin: "https://www.linkedin.com/in/z/",
@@ -56,6 +60,7 @@ const employees = [
     name: "Zebra 2",
     customer_id: "company-c",
     customer_name: "Zebra 2",
+    customer_tags: [{ id: "tag2", name: "Tag 2", color: "#4d8dff" }],
     position: "Vertrieb 2",
     email: "anna2@example.test",
     linkedin: "https://www.linkedin.com/in/anna2/",
@@ -65,6 +70,9 @@ const employees = [
     name: "beta",
     customer_id: "company-d",
     customer_name: "beta GmbH",
+    customer_tags: [
+      { id: "tag-aenderung", name: "Änderung", color: "#ff6b35" },
+    ],
     position: "Änderungsmanagement",
     email: "anna10@example.test",
     linkedin: "https://www.linkedin.com/in/anna10/",
@@ -164,6 +172,11 @@ test("customers sort every data column in both directions and retain sorting acr
       ["beta", "Zebra 10", "Ähre", "Zebra 2"],
     ],
     [
+      "Tags",
+      ["beta", "Zebra 2", "Zebra 10", "Ähre"],
+      ["Zebra 10", "Zebra 2", "beta", "Ähre"],
+    ],
+    [
       "Notiz",
       ["beta", "Zebra 2", "Zebra 10", "Ähre"],
       ["Zebra 10", "Zebra 2", "beta", "Ähre"],
@@ -246,6 +259,11 @@ test("people sort all contact columns with missing values last and preserve link
       "Unternehmen",
       ["Zebra 10", "beta", "Zebra 2", "Änne"],
       ["Änne", "Zebra 2", "beta", "Zebra 10"],
+    ],
+    [
+      "Tags",
+      ["beta", "Zebra 2", "Zebra 10", "Änne"],
+      ["Zebra 10", "Zebra 2", "beta", "Änne"],
     ],
     [
       "Position",

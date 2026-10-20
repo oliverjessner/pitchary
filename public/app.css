@@ -756,15 +756,15 @@ th[aria-sort] .table-sort i {
   border-radius: var(--oj-radius-sm);
 }
 .customer-directory-table .oj-table {
-  min-inline-size: 52rem;
+  min-inline-size: 58rem;
 }
 .customer-directory-table td:first-child {
   min-inline-size: 12rem;
 }
-.customer-directory-table td:nth-child(3) {
+.customer-directory-table td:nth-child(4) {
   min-inline-size: 14rem;
 }
-.customer-directory-table td:nth-child(4) {
+.customer-directory-table td:nth-child(5) {
   white-space: nowrap;
 }
 .customer-contacts-table .oj-table {
@@ -777,7 +777,11 @@ th[aria-sort] .table-sort i {
   white-space: nowrap;
 }
 .employee-directory-table .oj-table {
-  min-inline-size: 52rem;
+  min-inline-size: 58rem;
+}
+.customer-directory-table td:nth-child(3),
+.employee-directory-table td:nth-child(3) {
+  min-inline-size: 10rem;
 }
 .employee-directory-table th {
   white-space: nowrap;

@@ -1,3 +1,7 @@
+# 0.6.2
+
+- Eigene sortierbare Tagspalte in der Kunden- und Personenübersicht.
+
 # 0.6.1
 
 - Automatische Kundenlogos funktionieren mit Fetchary 2.0.4 wieder, auch für lokale HTTP-Websites.

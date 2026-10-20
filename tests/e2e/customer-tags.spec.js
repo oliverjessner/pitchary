@@ -226,6 +226,23 @@ test("company and person tag filters combine OR selection with search, sorting a
   const aChoice = page.getByRole("checkbox", { name: a.name, exact: true });
   const bChoice = page.getByRole("checkbox", { name: b.name, exact: true });
   await expect(table(page, "Kunden").locator("tbody tr")).toHaveCount(4);
+  await expect(table(page, "Kunden").getByRole("columnheader")).toHaveText([
+    "Name",
+    "Status",
+    "Tags",
+    "Notiz",
+    "Angelegt",
+    "Aktionen",
+  ]);
+  const customerRow = table(page, "Kunden")
+    .getByRole("row")
+    .filter({ hasText: customers[0].name });
+  await expect(
+    customerRow.locator("td").nth(2).getByText(a.name, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    customerRow.locator("td").first().locator(".service-tag"),
+  ).toHaveCount(0);
   await table(page, "Kunden")
     .getByRole("button", { name: "Name", exact: true })
     .click();
@@ -264,6 +281,23 @@ test("company and person tag filters combine OR selection with search, sorting a
   await page.goto("/#/employees");
   const search = page.getByLabel("Personen suchen", { exact: true });
   await search.fill(prefix);
+  await expect(table(page, "Personen").getByRole("columnheader")).toHaveText([
+    "Name",
+    "Unternehmen",
+    "Tags",
+    "Position",
+    "E-Mail",
+    "LinkedIn",
+  ]);
+  const employeeRow = table(page, "Personen")
+    .getByRole("row")
+    .filter({ hasText: employees[0].name });
+  await expect(
+    employeeRow.locator("td").nth(2).getByText(a.name, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    employeeRow.locator("td").nth(1).locator(".service-tag"),
+  ).toHaveCount(0);
   await trigger.click();
   await aChoice.check();
   await expect(table(page, "Personen").locator("tbody tr")).toHaveCount(3);
