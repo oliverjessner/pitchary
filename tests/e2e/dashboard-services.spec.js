@@ -194,7 +194,7 @@ test("internal software is available for offers, activities and analytics filter
   expect(errors).toEqual([]);
 });
 
-test("service tags can be created, assigned, edited, searched and removed", async ({
+test("service tags can be created, assigned, edited, filtered and removed", async ({
   page,
   request,
 }, testInfo) => {
@@ -312,9 +312,65 @@ test("service tags can be created, assigned, edited, searched and removed", asyn
   ).toBe("#22c55e");
   await services(page);
   await page.getByLabel("Suchen", { exact: true }).fill(renamed);
+  const directory = page.getByRole("table", {
+    name: "Dienstleistungen",
+    exact: true,
+  });
+  const serviceRow = directory.getByRole("row").filter({
+    has: page.getByRole("link", { name: serviceName, exact: true }),
+  });
+  await expect(directory.getByRole("columnheader")).toHaveText([
+    "Name",
+    "Tags",
+    "Notiz",
+    "Angelegt",
+    "Aktionen",
+  ]);
   await expect(
-    page.getByRole("link", { name: serviceName, exact: true }),
+    serviceRow.locator("td").nth(1).getByText(renamed, { exact: true }),
   ).toBeVisible();
+  await expect(
+    serviceRow.locator("td").first().locator(".service-tag"),
+  ).toHaveCount(0);
+  const trigger = page.locator(".oj-multiselect-trigger");
+  await trigger.click();
+  await page.getByLabel("Tags suchen", { exact: true }).fill(second);
+  await page.getByRole("checkbox", { name: second, exact: true }).check();
+  await expect(directory).toContainText("Keine Einträge.");
+  await page.getByLabel("Tags suchen", { exact: true }).fill(renamed);
+  await page.getByRole("checkbox", { name: renamed, exact: true }).check();
+  await expect(serviceRow).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toHaveAccessibleName("Tags 2 Tags ausgewählt");
+  await page.getByLabel("Suchen", { exact: true }).fill(second);
+  await expect(directory).toContainText("Keine Einträge.");
+  await page.getByLabel("Suchen", { exact: true }).fill(renamed);
+  await expect(serviceRow).toBeVisible();
+  await page.getByLabel("Ansicht", { exact: true }).selectOption("true");
+  await expect(directory).toContainText("Keine Einträge.");
+  await page.getByLabel("Ansicht", { exact: true }).selectOption("false");
+  await expect(serviceRow).toBeVisible();
+  await expect(trigger).toHaveAccessibleName("Tags 2 Tags ausgewählt");
+  await trigger.click();
+  await page
+    .getByRole("button", { name: "Auswahl zurücksetzen", exact: true })
+    .click();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toHaveAccessibleName("Tags Alle Tags");
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(serviceRow).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    await checkA11y(page);
+    await page.screenshot({
+      path: `artifacts/screenshots/${testInfo.project.name}-${width}-service-tag-directory.png`,
+      fullPage: true,
+    });
+  }
   await page.getByRole("button", { name: "Bearbeiten", exact: true }).click();
   await expect(
     page.getByRole("checkbox", { name: renamed, exact: true }),

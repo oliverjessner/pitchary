@@ -5,7 +5,7 @@ Pitchary ist ein lokales CRM für Kunden, Angebote und Rechnungen.
 ## Funktionen
 
 - Leads, Kunden und Ansprechpartner verwalten.
-- Unternehmen mit farbigen Tags gruppieren; Kunden und Personen nach Unternehmenstags filtern und dieselben Tags für Dienstleistungen nutzen.
+- Unternehmen und Dienstleistungen mit farbigen Tags gruppieren; eigene Tagspalten und durchsuchbare Tagfilter mit Mehrfachauswahl in Kunden-, Personen- und Dienstleistungsübersicht.
 - Kunden- und Personentabellen per Spaltenüberschrift auf- und absteigend sortieren; Suche und Archivfilter behalten die Sortierung bei.
 - Personen über ein eigenes Menü nach Name, Unternehmen, Position oder E-Mail suchen und ihre Kontaktdaten, Angebote und Aktivitäten öffnen.
 - Dienstleistungen und Preise hinterlegen.

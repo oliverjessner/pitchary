@@ -714,6 +714,7 @@ th[aria-sort] .table-sort i {
   min-inline-size: 58rem;
 }
 .customer-directory-table td:nth-child(3),
+.service-directory-table td:nth-child(2),
 .employee-directory-table td:nth-child(3) {
   min-inline-size: 10rem;
 }

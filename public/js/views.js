@@ -365,20 +365,17 @@ export async function entityList(type, actions) {
       : null,
     content = el("div", {}),
     count = el("p", { class: "oj-small oj-muted", role: "status" });
-  let [rows, tags] = await Promise.all([
-    api("/" + type),
-    isCustomer ? api("/service-tags") : [],
-  ]);
-  const tagSelection = isCustomer
-    ? tagFilter(tags, () => render(), [], {
-        description: "Zeigt Unternehmen mit mindestens einem ausgewählten Tag.",
-      })
-    : null;
+  let [rows, tags] = await Promise.all([api("/" + type), api("/service-tags")]);
+  const tagSelection = tagFilter(tags, () => render(), [], {
+    description: isCustomer
+      ? "Zeigt Unternehmen mit mindestens einem ausgewählten Tag."
+      : "Zeigt Dienstleistungen mit mindestens einem ausgewählten Tag.",
+  });
   let generation = 0;
   function render() {
     const term = search.querySelector("input").value.toLocaleLowerCase();
     const selectedType = customerType?.querySelector("select").value;
-    const selectedTags = tagSelection?.value() ?? [];
+    const selectedTags = tagSelection.value();
     const filtered = rows.filter(
       (r) =>
         (!selectedType || r.customer_type === selectedType) &&
@@ -404,12 +401,7 @@ export async function entityList(type, actions) {
     const renderRow = (r) => [
       isCustomer
         ? customerIdentity(r)
-        : el(
-            "div",
-            { class: "oj-stack service-identity" },
-            link(r.name, "#/" + type + "/" + r.id),
-            tagList(r.tags),
-          ),
+        : link(r.name, "#/" + type + "/" + r.id),
       ...(isCustomer
         ? [
             el(
@@ -425,9 +417,9 @@ export async function entityList(type, actions) {
               },
               r.customer_type === "customer" ? "Kunde" : "Lead",
             ),
-            tagList(r.tags) ?? "–",
           ]
         : []),
+      tagList(r.tags) ?? "–",
       el("span", { class: "note-text oj-small" }, r.note || "–"),
       datetime(r.created_at),
       archiveMode
@@ -464,10 +456,12 @@ export async function entityList(type, actions) {
         )
       : table(
           title,
-          ["Name", "Notiz", "Angelegt", "Aktionen"],
+          ["Name", "Tags", "Notiz", "Angelegt", "Aktionen"],
           filtered.map(renderRow),
         );
-    if (isCustomer) directory.classList.add("customer-directory-table");
+    directory.classList.add(
+      isCustomer ? "customer-directory-table" : "service-directory-table",
+    );
     content.replaceChildren(directory);
   }
   search.querySelector("input").addEventListener("input", render);
@@ -514,7 +508,7 @@ export async function entityList(type, actions) {
       { class: "filters" },
       search,
       customerType,
-      tagSelection?.node,
+      tagSelection.node,
       archived,
     ),
     count,
@@ -522,7 +516,7 @@ export async function entityList(type, actions) {
   ];
   result.dispose = () => {
     generation++;
-    tagSelection?.dispose();
+    tagSelection.dispose();
   };
   return result;
 }
