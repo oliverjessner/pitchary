@@ -399,9 +399,7 @@ export async function entityList(type, actions) {
     );
     count.textContent = `${filtered.length} ${title}`;
     const renderRow = (r) => [
-      isCustomer
-        ? customerIdentity(r)
-        : link(r.name, "#/" + type + "/" + r.id),
+      isCustomer ? customerIdentity(r) : link(r.name, "#/" + type + "/" + r.id),
       ...(isCustomer
         ? [
             el(
