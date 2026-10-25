@@ -1,5 +1,6 @@
 # 0.6.4
 
+- DMG-Erstellung verwendet auf aktuellen macOS-Versionen `diskutil image create`, wiederholt temporäre „Resource busy“-Fehler und ersetzt vorhandene Images erst nach erfolgreicher Prüfung.
 - GLib-Sicherheitsfix für RUSTSEC-2024-0429 als lokaler Backport für Tauri/GTK3 eingebunden; CI prüft die ursprünglichen Iterator-Regressionstests im Release-Modus.
 - Filter und Suchbegriffe bleiben je Ansicht beim Menüwechsel und Neuladen erhalten.
 - Die Umsatzübersicht zeigt nur Kunden mit Einnahmenrechnungen; reine Rechnungsprofile und Kunden mit ausschließlich Ausgaben werden ausgeblendet.

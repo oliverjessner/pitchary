@@ -1,14 +1,6 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { tmpdir } from "node:os";
+import { createDiskImage } from "./disk-image.js";
 import {
   appPath,
   assertPlatform,
@@ -56,26 +48,8 @@ for (const filename of nativeFiles(path.join(appPath, "Contents")))
 run("codesign", ["--force", "--deep", "--sign", "-", appPath]);
 run("codesign", ["--verify", "--deep", "--strict", appPath]);
 mkdirSync(releaseDirectory, { recursive: true });
-const temporary = mkdtempSync(path.join(tmpdir(), "pitchary-dmg-"));
 const dmg = path.join(releaseDirectory, dmgName);
-try {
-  run("ditto", [appPath, path.join(temporary, "Pitchary.app")]);
-  symlinkSync("/Applications", path.join(temporary, "Applications"));
-  run("hdiutil", [
-    "create",
-    "-volname",
-    "Pitchary",
-    "-srcfolder",
-    temporary,
-    "-ov",
-    "-format",
-    "UDZO",
-    dmg,
-  ]);
-  run("hdiutil", ["verify", dmg]);
-} finally {
-  rmSync(temporary, { recursive: true, force: true });
-}
+await createDiskImage(appPath, dmg);
 if (sourceHash() !== inputsHash)
   throw new Error(
     "Sources changed during packaging. Rebuild before publishing.",
