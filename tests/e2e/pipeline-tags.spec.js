@@ -264,7 +264,11 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
   await page
     .getByRole("link", { name: "Dienstleistungen", exact: true })
     .click();
-  await expect(page.locator(".oj-multiselect-panel")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Dienstleistungen", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".oj-multiselect-panel:visible")).toHaveCount(0);
+  expect(await previousPicker.evaluate((node) => node.isConnected)).toBe(false);
   expect(
     await previousPicker.evaluate((node) => node.getAttribute("data-oj-state")),
   ).toBe("closed");

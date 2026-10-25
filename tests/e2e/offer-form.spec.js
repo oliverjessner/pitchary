@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { mkdirSync } from "node:fs";
 test("offer dialog reviews each customer, aligns prices and keeps actions visible on narrow screens", async ({
@@ -134,7 +135,8 @@ test("search keeps hidden selections, bulk actions work and invalid prices canno
   page,
   request,
 }, testInfo) => {
-  const prefix = "Filter " + testInfo.project.name;
+  // All browser specs share the API fixture; search terms must not match other specs.
+  const prefix = `Angebotsauswahl ${testInfo.project.name} ${randomUUID()}`;
   const ids = [];
   for (const suffix of ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"]) {
     const response = await request.post("/api/customers", {
@@ -154,12 +156,21 @@ test("search keeps hidden selections, bulk actions work and invalid prices canno
   await dialog.getByLabel("Kunden suchen").fill(prefix + " Alpha");
   await dialog.getByLabel(prefix + " Alpha", { exact: true }).check();
   await dialog.getByLabel("Kunden suchen").fill(prefix + " Beta");
+  await expect(
+    dialog.getByRole("checkbox", { name: prefix + " Beta", exact: true }),
+  ).toBeVisible();
+  await expect(
+    dialog.locator(".offer-customer-option:not([hidden])"),
+  ).toHaveCount(1);
   await dialog
     .getByRole("button", { name: "Treffer auswählen", exact: true })
     .click();
   await expect(dialog.getByRole("status")).toContainText(
     "2 eigenständige Angebote",
   );
+  await expect(
+    dialog.locator('input[name="customer_ids"]:checked'),
+  ).toHaveCount(2);
   await dialog.getByLabel("Kunden suchen").fill("Kein Treffer");
   await expect(
     dialog.getByText("Keine passenden Kunden.", { exact: true }),

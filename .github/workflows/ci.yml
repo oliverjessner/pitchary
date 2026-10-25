@@ -1,6 +1,14 @@
 name: Verify CRM
 on: [push, pull_request]
 jobs:
+  glib-backport:
+    name: GLib security backport
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev
+      - name: Run optimized upstream iterator regression tests
+        run: cargo test --manifest-path src-tauri/vendor/glib/Cargo.toml --release --lib variant_iter::tests
   test:
     runs-on: ubuntu-latest
     steps:

@@ -32,3 +32,5 @@ artifacts/
 src-tauri/target/
 src-tauri/runtime/
 src-tauri/gen/
+src-tauri/vendor/glib/target/
+src-tauri/vendor/glib/Cargo.lock

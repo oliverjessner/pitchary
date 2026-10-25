@@ -16,6 +16,11 @@ tauri-plugin-opener = "=2.7.1"
 tauri-plugin-single-instance = "=2.5.3"
 serde_json = "1"
 
+# Backport RUSTSEC-2024-0429 while Tauri's GTK3 stack requires glib 0.18.
+# Provenance and removal criteria: vendor/README.md.
+[patch.crates-io]
+glib = { path = "vendor/glib" }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 muda = { version = "=0.20.0", default-features = false }
 objc2 = "=0.6.5"
