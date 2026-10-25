@@ -18,6 +18,7 @@ import {
   datetime,
 } from "./dom.js";
 import { customerLogo } from "./customer-branding.js";
+import { restoreParams, saveFilters } from "./filter-state.js";
 
 const categories = { revenue: "Einnahmen", payable: "Ausgaben" };
 const states = { open: "Offen", paid: "Bezahlt" };
@@ -121,10 +122,12 @@ function routeFilter(route, params, values) {
     value === "" || value === null
       ? next.delete(key)
       : next.set(key, String(value));
+  saveFilters(route.slice(1), Object.fromEntries(next));
   location.hash = "#" + route + (next.size ? "?" + next : "");
 }
 function rememberSearch(route, params, value) {
   value ? params.set("search", value) : params.delete("search");
+  saveFilters(route.slice(1), Object.fromEntries(params));
   history.replaceState(
     null,
     "",
@@ -775,6 +778,7 @@ export async function financeDashboard(
   actions,
   params = new URLSearchParams(),
 ) {
+  params = restoreParams("dashboard", params);
   const today = new Date();
   const year = params.get("year") || String(today.getFullYear()),
     month =
@@ -930,6 +934,7 @@ export async function financeDashboard(
 }
 
 export async function invoiceList(actions, params = new URLSearchParams()) {
+  params = restoreParams("invoices", params);
   const category = params.get("category") === "payable" ? "payable" : "revenue";
   const query = {
     category,
@@ -973,9 +978,9 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
         clearTimeout(timer);
         const value = event.target.value;
         const token = ++requestNumber;
+        query.search = value;
+        rememberSearch("/invoices", params, value);
         timer = setTimeout(async () => {
-          query.search = value;
-          rememberSearch("/invoices", params, value);
           content.setAttribute("aria-busy", "true");
           try {
             const result = await api(financePath + "/invoices", { query });
@@ -1499,6 +1504,7 @@ export async function financeCustomers(
   actions,
   params = new URLSearchParams(),
 ) {
+  params = restoreParams("finance-customers", params);
   const year = params.get("year") || String(new Date().getFullYear());
   const [data, rankings] = await Promise.all([
     api(financePath + "/customers"),

@@ -1039,9 +1039,7 @@ export function createFinance(
     customers(filters = {}) {
       object(filters);
       const invoices = all().filter((row) => row.category === "revenue"),
-        profileIds = new Set(
-          repo.profileCustomerIds.all().map((row) => row.customer_id),
-        );
+        customerIds = new Set(invoices.map((row) => row.customer_id));
       const search = text(filters.search ?? "", "search", {
         max: 200,
       }).toLocaleLowerCase("de-AT");
@@ -1049,8 +1047,7 @@ export function createFinance(
       return rows
         .filter(
           (row) =>
-            (invoices.some((invoice) => invoice.customer_id === row.id) ||
-              profileIds.has(row.id)) &&
+            customerIds.has(row.id) &&
             (!search || row.name.toLocaleLowerCase("de-AT").includes(search)) &&
             (filters.archived === undefined ||
               Boolean(row.archived_at) ===

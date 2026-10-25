@@ -1,5 +1,7 @@
-# 0.6.3
+# 0.6.4
 
+- Filter und Suchbegriffe bleiben je Ansicht beim Menüwechsel und Neuladen erhalten.
+- Die Umsatzübersicht zeigt nur Kunden mit Einnahmenrechnungen; reine Rechnungsprofile und Kunden mit ausschließlich Ausgaben werden ausgeblendet.
 - Eigene Tagspalte und Tagfilter mit Suche und Mehrfachauswahl in der Dienstleistungsübersicht, kombinierbar mit Textsuche und Archivansicht.
 
 # 0.6.2

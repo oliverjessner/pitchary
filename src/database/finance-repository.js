@@ -148,9 +148,6 @@ export function createFinanceRepository(db) {
     invoiceLogs: db.prepare(
       "SELECT * FROM finance_processing_logs WHERE invoice_id=? ORDER BY created_at DESC,rowid DESC",
     ),
-    profileCustomerIds: db.prepare(
-      "SELECT customer_id FROM finance_customer_profiles",
-    ),
     customers: db.prepare(
       "SELECT id,name,note,website,logo_mime,logo_data IS NOT NULL AS has_logo,created_at,updated_at,archived_at,customer_type FROM customers ORDER BY name COLLATE NOCASE,id",
     ),

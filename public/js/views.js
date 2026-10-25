@@ -10,6 +10,7 @@ import {
   customerWebsite,
 } from "./customer-branding.js";
 import { tagBadge, tagList, tagFilter } from "./service-tags.js";
+import { readFilters, saveFilters, selectedTags } from "./filter-state.js";
 import {
   el,
   icon,
@@ -337,18 +338,20 @@ export async function dashboard(actions, params) {
   return content;
 }
 export async function entityList(type, actions) {
+  const saved = readFilters(type);
   const isCustomer = type === "customers";
   const title = isCustomer ? "Kunden" : "Dienstleistungen";
   const sorting = { sort: "name", order: "asc" };
-  let archiveMode = false;
+  let archiveMode = saved.archived === "true";
   const search = field("Suchen", "search", {
       type: "search",
+      value: typeof saved.search === "string" ? saved.search : "",
       placeholder: isCustomer
         ? "Name, Website, E-Mail, Notiz oder Tag"
         : "Dienstleistung, URL, Notiz oder Tag",
     }),
     archived = selectField("Ansicht", "archived", {
-      value: "false",
+      value: String(archiveMode),
       options: [
         ["false", "Aktiv"],
         ["true", "Archiviert"],
@@ -356,6 +359,9 @@ export async function entityList(type, actions) {
     }),
     customerType = isCustomer
       ? selectField("Status", "customer_type", {
+          value: ["customer", "lead"].includes(saved.customer_type)
+            ? saved.customer_type
+            : "",
           options: [
             ["", "Alle"],
             ["customer", "Kunden"],
@@ -365,17 +371,26 @@ export async function entityList(type, actions) {
       : null,
     content = el("div", {}),
     count = el("p", { class: "oj-small oj-muted", role: "status" });
-  let [rows, tags] = await Promise.all([api("/" + type), api("/service-tags")]);
-  const tagSelection = tagFilter(tags, () => render(), [], {
-    description: isCustomer
-      ? "Zeigt Unternehmen mit mindestens einem ausgewählten Tag."
-      : "Zeigt Dienstleistungen mit mindestens einem ausgewählten Tag.",
-  });
+  let [rows, tags] = await Promise.all([
+    api("/" + type, { query: { archived: archiveMode } }),
+    api("/service-tags"),
+  ]);
+  const tagSelection = tagFilter(
+    tags,
+    () => render(),
+    selectedTags(tags, saved),
+    {
+      description: isCustomer
+        ? "Zeigt Unternehmen mit mindestens einem ausgewählten Tag."
+        : "Zeigt Dienstleistungen mit mindestens einem ausgewählten Tag.",
+    },
+  );
   let generation = 0;
   function render() {
     const term = search.querySelector("input").value.toLocaleLowerCase();
     const selectedType = customerType?.querySelector("select").value;
     const selectedTags = tagSelection.value();
+    saveSelection();
     const filtered = rows.filter(
       (r) =>
         (!selectedType || r.customer_type === selectedType) &&
@@ -463,9 +478,18 @@ export async function entityList(type, actions) {
     content.replaceChildren(directory);
   }
   search.querySelector("input").addEventListener("input", render);
+  function saveSelection() {
+    saveFilters(type, {
+      search: search.querySelector("input").value,
+      archived: archived.querySelector("select").value,
+      customer_type: customerType?.querySelector("select").value || "",
+      tagIds: tagSelection.value(),
+    });
+  }
   customerType?.querySelector("select").addEventListener("change", render);
   archived.querySelector("select").addEventListener("change", async () => {
     archiveMode = archived.querySelector("select").value === "true";
+    saveSelection();
     const token = ++generation;
     try {
       const data = await api("/" + type, { query: { archived: archiveMode } });
@@ -662,13 +686,15 @@ export async function customerDetail(id, actions) {
   return withFinanceRefresh(content, actions);
 }
 export async function employeeList() {
+  const saved = readFilters("employees");
   const sorting = { sort: "name", order: "asc" };
   const search = field("Personen suchen", "search", {
     type: "search",
+    value: typeof saved.search === "string" ? saved.search : "",
     placeholder: "Name, Unternehmen, Position, E-Mail oder Tag",
   });
   const archived = selectField("Ansicht", "archived", {
-    value: "false",
+    value: saved.archived === "true" ? "true" : "false",
     options: [
       ["false", "Aktiv"],
       ["true", "Archiviert"],
@@ -679,16 +705,29 @@ export async function employeeList() {
   const count = el("p", { class: "oj-small oj-muted", role: "status" });
   const content = el("div", {});
   let [rows, tags] = await Promise.all([
-    api("/employees"),
+    api("/employees", { query: { archived: archiveSelect.value } }),
     api("/service-tags"),
   ]);
-  const tagSelection = tagFilter(tags, () => render(), [], {
-    description:
-      "Zeigt Personen, deren Unternehmen mindestens einen ausgewählten Tag hat.",
-  });
+  const tagSelection = tagFilter(
+    tags,
+    () => render(),
+    selectedTags(tags, saved),
+    {
+      description:
+        "Zeigt Personen, deren Unternehmen mindestens einen ausgewählten Tag hat.",
+    },
+  );
   let generation = 0;
   let loading = false;
+  function saveSelection() {
+    saveFilters("employees", {
+      search: input.value,
+      archived: archiveSelect.value,
+      tagIds: tagSelection.value(),
+    });
+  }
   function render() {
+    saveSelection();
     if (loading) return;
     const term = input.value.trim().toLocaleLowerCase("de-AT");
     const selectedTags = tagSelection.value();
@@ -777,6 +816,7 @@ export async function employeeList() {
     content.replaceChildren(directory);
   }
   async function load() {
+    saveSelection();
     const token = ++generation;
     loading = true;
     content.setAttribute("aria-busy", "true");
@@ -1098,6 +1138,7 @@ export async function serviceTagManagement(actions, type = "services") {
   ];
 }
 export async function pipeline(actions, params) {
+  const savedFilters = readFilters("pipeline");
   const phaseIcons = {
     open: "inbox",
     pitched: "paper-plane",
@@ -1107,33 +1148,26 @@ export async function pipeline(actions, params) {
     rejected: "circle-xmark",
   };
   const [initialRows, tags] = await Promise.all([
-    api("/customer-services"),
+    api("/customer-services", {
+      query: { archived: savedFilters.archived === "true" },
+    }),
     api("/service-tags"),
   ]);
-  const filterStorageKey = "pitchary.pipeline.filters";
-  let savedFilters = {};
-  try {
-    savedFilters = JSON.parse(localStorage.getItem(filterStorageKey)) ?? {};
-  } catch {
-    // Filtering also works when browser storage is unavailable or malformed.
-  }
   const requestedStatus = params.has("status")
     ? params.get("status")
     : savedFilters.status;
-  const savedTagIds = new Set(
-    Array.isArray(savedFilters.tagIds) ? savedFilters.tagIds : [],
-  );
   let rows = initialRows;
   const tagSelection = tagFilter(
     tags,
     () => {
-      saveFilters();
+      saveSelection();
       render();
     },
-    tags.filter((tag) => savedTagIds.has(tag.id)).map((tag) => tag.id),
+    selectedTags(tags, savedFilters),
   );
   const search = field("Suchen", "search", {
       type: "search",
+      value: typeof savedFilters.search === "string" ? savedFilters.search : "",
       placeholder: "Kunde oder Dienstleistung",
     }),
     status = field("Status", "status", {
@@ -1145,7 +1179,7 @@ export async function pipeline(actions, params) {
       options: options(labels.status, "Alle Status"),
     }),
     archive = field("Ansicht", "archived", {
-      value: "false",
+      value: savedFilters.archived === "true" ? "true" : "false",
       options: [
         ["false", "Aktive Angebote"],
         ["true", "Archivierte Angebote"],
@@ -1284,29 +1318,28 @@ export async function pipeline(actions, params) {
     if (selected) board.scrollLeft = 0;
     updateAfterRender();
   }
-  search.querySelector("input").addEventListener("input", render);
-  function saveFilters() {
-    try {
-      localStorage.setItem(
-        filterStorageKey,
-        JSON.stringify({
-          status: status.querySelector("select").value,
-          tagIds: tagSelection.value(),
-        }),
-      );
-    } catch {
-      // The active selection remains usable without browser storage.
-    }
+  search.querySelector("input").addEventListener("input", () => {
+    saveSelection();
+    render();
+  });
+  function saveSelection() {
+    saveFilters("pipeline", {
+      status: status.querySelector("select").value,
+      tagIds: tagSelection.value(),
+      search: search.querySelector("input").value,
+      archived: archive.querySelector("select").value,
+    });
   }
   status.querySelector("select").addEventListener("change", () => {
     if (params.has("status")) {
       params.set("status", status.querySelector("select").value);
       history.replaceState(null, "", "#/pipeline?" + params.toString());
     }
-    saveFilters();
+    saveSelection();
     render();
   });
   archive.querySelector("select").addEventListener("change", async () => {
+    saveSelection();
     const token = ++generation;
     try {
       const data = await api("/customer-services", {
@@ -1321,6 +1354,7 @@ export async function pipeline(actions, params) {
       updateAfterRender();
     }
   });
+  saveSelection();
   render();
   const content = [
     el(
@@ -1497,7 +1531,8 @@ export async function relationshipDetail(id, actions) {
     ),
   ];
 }
-async function filterBar(onApply, { dates = true } = {}) {
+async function filterBar(view, onApply, { dates = true } = {}) {
+  const saved = readFilters(view);
   const [activeCustomers, activeServices, archivedCustomers, archivedServices] =
     await Promise.all([
       api("/customers"),
@@ -1549,12 +1584,35 @@ async function filterBar(onApply, { dates = true } = {}) {
     el("div", { class: "filters" }, fields, submit),
     error,
   );
+  for (const control of form.querySelectorAll("input,select")) {
+    const value = saved[control.name];
+    if (
+      typeof value === "string" &&
+      (control.tagName !== "SELECT" ||
+        [...control.options].some((option) => option.value === value))
+    )
+      control.value = value;
+  }
+  if (Object.keys(saved).length) {
+    try {
+      await onApply(Object.fromEntries(new FormData(form)));
+    } catch (err) {
+      error.textContent = err.message;
+      error.hidden = false;
+    }
+  }
+  const remember = () =>
+    saveFilters(view, Object.fromEntries(new FormData(form)));
+  form.addEventListener("input", remember);
+  form.addEventListener("change", remember);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     submit.disabled = true;
     error.hidden = true;
     try {
-      await onApply(Object.fromEntries(new FormData(form)));
+      const query = Object.fromEntries(new FormData(form));
+      await onApply(query);
+      saveFilters(view, query);
     } catch (err) {
       error.textContent = err.message;
       error.hidden = false;
@@ -1609,7 +1667,7 @@ export async function activities(actions) {
     );
   }
   render();
-  const filters = await filterBar(async (query) => {
+  const filters = await filterBar("activities", async (query) => {
     items = await api("/activities", { query });
     render();
   });
@@ -1764,7 +1822,7 @@ export async function analytics() {
       { class: "oj-stack" },
       analyticsContent(await api("/analytics")),
     ),
-    filters = await filterBar(async (query) =>
+    filters = await filterBar("analytics", async (query) =>
       content.replaceChildren(
         ...analyticsContent(await api("/analytics", { query })),
       ),

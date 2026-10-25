@@ -502,6 +502,39 @@ test("invoice filters and sort use effective corrections while undated documents
   );
 });
 
+test("revenue customers exclude billing profiles and expenses without revenue invoices", (t) => {
+  const { finance, crm } = fixture(t);
+  const billed = crm.createEntity("customers", { name: "Revenue customer" });
+  const profile = crm.createEntity("customers", { name: "Profile only" });
+  const supplier = crm.createEntity("customers", { name: "Expenses only" });
+  finance.updateCustomer(profile.id, { billing_address: "Example street 1" });
+  finance.updateCustomer(supplier.id, { billing_address: "Supplier street 1" });
+  invoice(finance, {
+    customer_id: supplier.id,
+    counterparty_name: supplier.name,
+    category: "payable",
+  });
+  const revenue = invoice(finance, {
+    customer_id: billed.id,
+    counterparty_name: billed.name,
+  });
+  finance.updateCustomer(billed.id, { billing_address: "Customer street 1" });
+  assert.deepEqual(
+    finance.customers().map((row) => row.id),
+    [billed.id],
+  );
+  finance.remove(revenue.id);
+  assert.deepEqual(finance.customers(), []);
+  assert.equal(
+    finance.customer(billed.id).billing_address,
+    "Customer street 1",
+  );
+  assert.equal(
+    finance.customer(profile.id).billing_address,
+    "Example street 1",
+  );
+});
+
 test("customer revenue projections and billing profiles reuse CRM contacts and preserve branding atomically", (t) => {
   const { finance, crm, db } = fixture(t);
   const customer = crm.createEntity("customers", {

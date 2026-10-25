@@ -141,6 +141,7 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
     "pitched",
   );
   await expect(trigger).toHaveAccessibleName("Tags 2 Tags ausgewählt");
+  await expect(search).toHaveValue(prefix);
   await expect(cards).toHaveCount(1);
   await trigger.click();
   await expect(webChoice).toBeChecked();
@@ -166,6 +167,15 @@ test("pipeline tag multiselect combines tags, search, status and archives with k
   await expect(cards).toHaveCount(1);
   await expect(cards).toContainText(services[2].name);
   await expect(trigger).toHaveAccessibleName("Tags 2 Tags ausgewählt");
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Kunden", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Pipeline", exact: true }).click();
+  await expect(page.getByLabel("Ansicht", { exact: true })).toHaveValue("true");
+  await expect(search).toHaveValue(prefix);
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText(services[2].name);
   await page.getByLabel("Ansicht", { exact: true }).selectOption("false");
   await expect(cards).toHaveCount(3);
   mkdirSync("artifacts/screenshots", { recursive: true });
