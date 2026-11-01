@@ -1,3 +1,10 @@
+# 0.6.5
+
+- MCP kann Kunden, Personen und Dienstleistungen anlegen und vorhandene Einträge nachschlagen. Änderungen, Archivierung, Löschen und beliebige SQL-Befehle sind gesperrt; bestehende Datensätze bleiben unverändert.
+- OJ-Designsystem wird aus npm installiert und lässt sich mit `npm run update:designsystem` aktualisieren; lokale Browser-Assets und Lizenzhinweise werden automatisch synchronisiert.
+- Erfolgreiches Publish räumt anschließend generierte Build-, Runtime- und Testdateien auf. Release-Artefakte, Datenbanken und Backups bleiben erhalten; bei Fehlern und Dry Runs findet kein Cleanup statt.
+- Abhängigkeiten aktualisiert und Paket-, Lockfile-, Cargo- und Tauri-Versionen auf `0.6.5` abgestimmt.
+
 # 0.6.4
 
 - DMG-Erstellung verwendet auf aktuellen macOS-Versionen `diskutil image create`, wiederholt temporäre „Resource busy“-Fehler und ersetzt vorhandene Images erst nach erfolgreicher Prüfung.

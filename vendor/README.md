@@ -1,16 +1,13 @@
 # OJ-Designsystem
 
-`oj-designsystem-0.2.2.tgz` ist ein lokal erstelltes Paket aus dem benachbarten Repository `../oj-designsystem`. Es behebt den Scrollversatz langer Multiselect-Listen und hält per Tastatur fokussierte Optionen sichtbar. Dieser Stand ist lokal vorbereitet und nicht auf npm veröffentlicht.
+`oj-designsystem` wird als reguläre npm-Abhängigkeit installiert. Version und Integrität stehen in `package-lock.json`; ein benachbartes Repository oder ein manuell erstelltes Archiv ist nicht erforderlich.
 
-Die Abhängigkeit in `package.json` und die Integrität in `package-lock.json` verweisen auf dieses Archiv. Dadurch funktionieren `npm ci` und die Desktop-Vorbereitung ohne Zugriff auf das benachbarte Repository.
+`npm install` und `npm ci` synchronisieren über `postinstall` die installierte Distribution einschließlich Fonts und Lizenzhinweisen nach `public/vendor/oj-designsystem`. Die App lädt diese Assets lokal und funktioniert weiter ohne CDN. Die Desktop-Vorbereitung übernimmt diese synchronisierten Dateien.
 
-Das Archiv nach Änderungen im Designsystem neu erstellen:
+Auf die neueste veröffentlichte Version aktualisieren:
 
 ```sh
-cd ../oj-designsystem
-npm run build
-npm pack --ignore-scripts --pack-destination ../pitchary/vendor
-cd ../pitchary
-npm install --save-exact ./vendor/oj-designsystem-0.2.2.tgz
-npm run sync:designsystem
+npm run update:designsystem
 ```
+
+Der Befehl aktualisiert die npm-Abhängigkeit und den Lockfile und synchronisiert anschließend die Browser-Assets. Danach `package.json`, `package-lock.json` und die Änderungen in `public/vendor/oj-designsystem` zusammen committen. Zum reinen erneuten Synchronisieren: `npm run sync:designsystem`.

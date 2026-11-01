@@ -1,6 +1,6 @@
 {
     "name": "pitchary",
-    "version": "0.6.4",
+    "version": "0.6.5",
     "description": "Local single-user CRM for customers, services and sales",
     "license": "MIT",
     "homepage": "https://github.com/oliverjessner/pitchary#readme",
@@ -19,8 +19,10 @@
     "scripts": {
         "postinstall": "node scripts/sync-designsystem.js",
         "sync:designsystem": "node scripts/sync-designsystem.js",
+        "update:designsystem": "npm install oj-designsystem@latest --save && npm run sync:designsystem",
         "dev": "node --watch src/server/server.js",
         "start": "node src/server/server.js",
+        "mcp": "node src/mcp/server.js",
         "migrate": "node scripts/migrate.js",
         "seed": "node scripts/seed.js",
         "backup": "node scripts/backup.js",
@@ -36,20 +38,21 @@
         "desktop:dev": "tauri dev",
         "desktop:build": "node scripts/build-desktop.js",
         "version:sync": "node scripts/sync-versions.js",
+        "cleanup": "node scripts/cleanup.js",
         "publish": "node scripts/publish.js"
     },
     "dependencies": {
-        "@fastify/static": "10.1.6",
+        "@fastify/static": "10.1.8",
         "@oliverj/tinyico": "0.1.0",
         "fastify": "5.12.7",
-        "fetchary": "2.0.4",
-        "oj-designsystem": "file:vendor/oj-designsystem-0.2.2.tgz",
+        "fetchary": "2.1.1",
+        "oj-designsystem": "^0.3.0",
         "sharp": "0.35.5"
     },
     "devDependencies": {
         "@axe-core/playwright": "4.14.0",
         "@playwright/test": "1.64.1",
-        "@tauri-apps/cli": "2.12.3",
+        "@tauri-apps/cli": "2.12.4",
         "prettier": "3.9.10"
     },
     "engines": {

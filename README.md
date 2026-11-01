@@ -23,6 +23,7 @@ Add your customers and contacts, define your services and create an offer for ea
 - Import invoice PDFs, read scanned text with OCR and optionally recognize invoice details with AI.
 - Monitor invoice folders and track open, paid and overdue invoices.
 - Review income, expenses, customer revenue and sales win rates.
+- [Connect an MCP client](docs/MCP.md) to find and add customers, contacts and services. Editing and deletion remain in the app.
 
 ## Install
 
