@@ -33,9 +33,13 @@ export const transitions = {
 };
 export function createCRM(
   db,
-  { clock = () => new Date().toISOString(), idFactory = randomUUID } = {},
+  {
+    clock = () => new Date().toISOString(),
+    idFactory = randomUUID,
+    repository = createRepository(db),
+  } = {},
 ) {
-  const repo = createRepository(db);
+  const repo = repository;
   const channels = repo.pitchChannels().map(({ id }) => id);
   const now = () => clock();
   const serviceTags = createServiceTags(db, repo, { now, idFactory });

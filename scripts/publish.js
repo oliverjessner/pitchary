@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -26,6 +27,7 @@ import {
 } from "./desktop-common.js";
 import { changelogRelease } from "./changelog.js";
 import { acquirePublishLock } from "./publish-lock.js";
+import { cleanupBuildArtifacts, formatCleanupReport } from "./cleanup.js";
 
 export function parseArgs(args) {
   const options = {
@@ -272,17 +274,41 @@ export async function main(args = process.argv.slice(2)) {
   const options = parseArgs(args);
   if (options.help) {
     console.log(
-      "Usage: npm run publish -- [--dry-run] [--skip-build] [--skip-brew] [--tap-path PATH]\n\nDefault: tests, macOS app/DMG build, GitHub release, cask commit and tap push.\n--dry-run only prepares local artifacts and never writes to GitHub or the tap.\n--skip-build only accepts an artifact with matching source and DMG checksums.",
+      "Usage: npm run publish -- [--dry-run] [--skip-build] [--skip-brew] [--tap-path PATH]\n\nDefault: tests, macOS app/DMG build, GitHub release, cask commit and tap push, then cleanup of generated caches.\n--dry-run only prepares local artifacts and never writes to GitHub or the tap or runs cleanup.\n--skip-build only accepts an artifact with matching source and DMG checksums; missing test runtime files are prepared again.",
     );
     return;
   }
   assertPlatform();
   const unlock = acquirePublishLock(path.join(root, "artifacts/.publish-lock"));
   try {
-    await publish(options);
+    await publishAndCleanup(options);
   } finally {
     unlock();
   }
+}
+export async function publishAndCleanup(
+  options,
+  {
+    publishRelease = publish,
+    cleanup = cleanupBuildArtifacts,
+    log = console.log,
+  } = {},
+) {
+  await publishRelease(options);
+  if (options.dryRun) return;
+  try {
+    log(formatCleanupReport(cleanup()));
+  } catch (error) {
+    throw new Error(
+      `Publishing succeeded, but local cleanup failed: ${error.message}\nResolve the local cleanup issue and run npm run cleanup.`,
+      { cause: error },
+    );
+  }
+}
+export function needsDesktopPreparation(options, exists = existsSync) {
+  return (
+    !options.skipBuild || !exists(path.join(root, "src-tauri/runtime/bin/node"))
+  );
 }
 async function publish(options) {
   syncVersions();
@@ -347,7 +373,7 @@ async function publish(options) {
   }
   run("npm", ["run", "format:check"]);
   run("npm", ["test"]);
-  if (!options.skipBuild) run("npm", ["run", "desktop:prepare"]);
+  if (needsDesktopPreparation(options)) run("npm", ["run", "desktop:prepare"]);
   run("cargo", ["test", "--locked", "--manifest-path", "src-tauri/Cargo.toml"]);
   if (!options.skipBuild) run("npm", ["run", "desktop:build"]);
   const manifest = JSON.parse(
