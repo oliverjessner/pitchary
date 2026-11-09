@@ -199,6 +199,13 @@ function pipelineCard(row, actions) {
         ),
       ]
     : statusActions(row, actions, { card: true });
+  if (!row.archived_at && row.status === "rejected")
+    controls.push(
+      button("Archivieren", () => actions.archive("customer-services", row), {
+        compact: true,
+        iconName: "box-archive",
+      }),
+    );
   if (row.archived_at) controls[0].classList.add("offer-card-next");
   return el(
     "article",
