@@ -1,3 +1,7 @@
+# 0.7.0
+
+- Die Dienstleistungstabelle zeigt unter „Pitched“ die Anzahl der bisherigen Kunden-Pitches.
+
 # 0.6.5
 
 - MCP kann Kunden, Personen und Dienstleistungen anlegen und vorhandene Einträge nachschlagen. Änderungen, Archivierung, Löschen und beliebige SQL-Befehle sind gesperrt; bestehende Datensätze bleiben unverändert.
