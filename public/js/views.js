@@ -101,7 +101,7 @@ function timeline(row, { newestFirst = false, showService = false } = {}) {
   );
   return el(
     "ol",
-    { class: "timeline" },
+    { class: "timeline", role: "list" },
     events.map((event) => {
       let title, note;
       if (event.kind === "status") {

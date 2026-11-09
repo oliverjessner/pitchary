@@ -1,5 +1,6 @@
 # 0.7.0
 
+- Aktivitäten in Personen- und Angebotszeitleisten sind durch sichtbare Punkte und Trennlinien voneinander abgegrenzt.
 - Die Dienstleistungstabelle zeigt unter „Pitched“ die Anzahl der bisherigen Kunden-Pitches.
 
 # 0.6.5
