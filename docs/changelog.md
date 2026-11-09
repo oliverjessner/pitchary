@@ -1,6 +1,8 @@
 # 0.7.0
 
 - Abgelehnte Angebotskarten lassen sich direkt in der Pipeline archivieren.
+- Neue und bestehende Angebote erhalten ein frei bearbeitbares Angebotsdatum, das auch in der Vergangenheit liegen kann.
+- Die Dienstleistungstabelle lässt sich wie die Kundentabelle über ihre Spalten auf- und absteigend sortieren.
 - Der Hinweis zur automatischen Logosuche steht direkt unter „Logo hochladen“.
 - Aktivitäten in Personen- und Angebotszeitleisten sind durch sichtbare Punkte und Trennlinien voneinander abgegrenzt.
 - Die Dienstleistungstabelle zeigt unter „Pitched“ die Anzahl der bisherigen Kunden-Pitches.

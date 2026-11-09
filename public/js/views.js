@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { formatDate } from "./calendar.js";
 import {
   financeDashboard,
   customerFinanceSections,
@@ -451,35 +452,42 @@ export async function entityList(type, actions) {
             compact: true,
           }),
     ];
-    const directory = isCustomer
-      ? sortableTable(
-          title,
-          [
-            { label: "Name", key: "name" },
-            {
-              label: "Status",
-              key: "customer_type",
-              value: (row) =>
-                row.customer_type === "customer" ? "Kunde" : "Lead",
-            },
-            { label: "Tags", key: "tags", value: (row) => tagNames(row.tags) },
-            { label: "Notiz", key: "note" },
-            {
-              label: "Angelegt",
-              key: "created_at",
-              value: (row) => Date.parse(row.created_at),
-            },
-            { label: "Aktionen" },
-          ],
-          filtered,
-          renderRow,
-          sorting,
-        )
-      : table(
-          title,
-          ["Name", "Tags", "Pitched", "Notiz", "Angelegt", "Aktionen"],
-          filtered.map(renderRow),
-        );
+    const directory = sortableTable(
+      title,
+      [
+        { label: "Name", key: "name" },
+        ...(isCustomer
+          ? [
+              {
+                label: "Status",
+                key: "customer_type",
+                value: (row) =>
+                  row.customer_type === "customer" ? "Kunde" : "Lead",
+              },
+            ]
+          : []),
+        { label: "Tags", key: "tags", value: (row) => tagNames(row.tags) },
+        ...(!isCustomer
+          ? [
+              {
+                label: "Pitched",
+                key: "pitched_count",
+                value: (row) => row.pitched_count ?? 0,
+              },
+            ]
+          : []),
+        { label: "Notiz", key: "note" },
+        {
+          label: "Angelegt",
+          key: "created_at",
+          value: (row) => Date.parse(row.created_at),
+        },
+        { label: "Aktionen" },
+      ],
+      filtered,
+      renderRow,
+      sorting,
+    );
     directory.classList.add(
       isCustomer ? "customer-directory-table" : "service-directory-table",
     );
@@ -1478,6 +1486,10 @@ export async function relationshipDetail(id, actions) {
           "Angebotsdetails",
           facts([
             ["Status", statusBadge(r.status)],
+            [
+              "Angebotsdatum",
+              el("time", { datetime: r.offer_date }, formatDate(r.offer_date)),
+            ],
             ["Verweildauer", age(r.status_since)],
             [
               "Ursprünglicher Pitch-Preis",
