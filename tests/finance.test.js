@@ -940,7 +940,7 @@ test("migration 008 preserves every populated schema 7 CRM row and immutable his
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 12);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
     for (const [index, table] of tables.entries())
       assert.deepEqual(
         db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),
@@ -954,7 +954,13 @@ test("migration 008 preserves every populated schema 7 CRM row and immutable his
             ? before[index].map((row) =>
                 Object.assign(Object.create(null), row, { url: "" }),
               )
-            : before[index],
+            : table === "customer_services"
+              ? before[index].map((row) =>
+                  Object.assign(Object.create(null), row, {
+                    offer_date: row.created_at.slice(0, 10),
+                  }),
+                )
+              : before[index],
       );
     assert.equal(
       db.prepare("SELECT count(*) AS n FROM finance_invoices").get().n,

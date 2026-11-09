@@ -70,6 +70,16 @@ export function uuid(value, field) {
     invalid(`${field}: UUID erwartet.`, field);
   return value;
 }
+export function calendarDate(value, field) {
+  if (
+    typeof value !== "string" ||
+    !/^(?!0000)\d{4}-\d\d-\d\d$/.test(value) ||
+    !Number.isFinite(Date.parse(value + "T00:00:00.000Z")) ||
+    new Date(value + "T00:00:00.000Z").toISOString().slice(0, 10) !== value
+  )
+    invalid("Ungültiger Kalendertag.", field);
+  return value;
+}
 export function dateTime(value, now, earliest, field = "occurred_at") {
   if (
     typeof value !== "string" ||

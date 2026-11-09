@@ -57,7 +57,7 @@ test("migration 004 preserves schema 3 rows, logos, archives, history and databa
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 12);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
     assert.equal(db.prepare("PRAGMA foreign_keys").get().foreign_keys, 1);
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
     assert.equal(
@@ -77,7 +77,13 @@ test("migration 004 preserves schema 3 rows, logos, archives, history and databa
             ? before[index].map((row) =>
                 Object.assign(Object.create(null), row, { url: "" }),
               )
-            : before[index],
+            : table === "customer_services"
+              ? before[index].map((row) =>
+                  Object.assign(Object.create(null), row, {
+                    offer_date: row.created_at.slice(0, 10),
+                  }),
+                )
+              : before[index],
       ),
     );
     for (const table of ["customer_service_status_history", "activities"]) {
