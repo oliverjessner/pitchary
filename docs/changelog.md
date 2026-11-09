@@ -1,5 +1,6 @@
 # 0.7.0
 
+- Neue und bestehende Angebote erhalten ein frei bearbeitbares Angebotsdatum, das auch in der Vergangenheit liegen kann.
 - Der Hinweis zur automatischen Logosuche steht direkt unter „Logo hochladen“.
 - Aktivitäten in Personen- und Angebotszeitleisten sind durch sichtbare Punkte und Trennlinien voneinander abgegrenzt.
 - Die Dienstleistungstabelle zeigt unter „Pitched“ die Anzahl der bisherigen Kunden-Pitches.

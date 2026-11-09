@@ -362,7 +362,7 @@ test("migration 009 backfills effective revenue assignments and preserves every 
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 12);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
     for (const table of tables) {
       const actual = db
         .prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`)
@@ -371,6 +371,10 @@ test("migration 009 backfills effective revenue assignments and preserves every 
           const value = { ...row };
           if (table === "customers") delete value.customer_type;
           if (table === "services") delete value.url;
+          if (table === "customer_services") {
+            assert.equal(value.offer_date, value.created_at.slice(0, 10));
+            delete value.offer_date;
+          }
           if (table === "finance_invoices") {
             value.source_import_id = value.source_legacy_id;
             delete value.source_legacy_id;

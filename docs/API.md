@@ -99,11 +99,14 @@ Angebot:
   "current_offered_price_minor": 120050,
   "currency": "EUR",
   "billing_type": "one_time",
-  "pitch_channel": "email"
+  "pitch_channel": "email",
+  "offer_date": "2026-09-01"
 }
 ```
 
-PATCH erlaubt `primary_employee_id` und `pitch_channel` für aktive Angebote in jedem Status. Der ursprüngliche Pitch-Kanal lässt sich auch nach dem ersten Pitch korrigieren und muss ein registrierter Kanal sein; vorhandene Kontaktaktivitäten behalten ihren eigenen Kanal. `currency` und `billing_type` sind nur vor dem ersten Pitch bearbeitbar. Status, Preise, Kunde, Dienstleistung und Ursprungspreis können nicht durch PATCH überschrieben werden.
+`offer_date` ist das unabhängig vom Erfassungszeitpunkt bearbeitbare Angebotsdatum als realer Kalendertag in `YYYY-MM-DD`. Vergangene und zukünftige Tage sind erlaubt. Ohne Angabe verwenden Einzel- und Mehrfachanlage den heutigen Tag in Europe/Vienna; bestehende Angebote erhalten bei der Migration den UTC-Kalendertag ihres bisherigen `created_at`. PATCH erhält das Datum bei ausgelassenem Feld. Die Änderung verändert weder `created_at`, `status_since` noch Statushistorie oder Aktivitätszeitpunkte; Analytics-Zeiträume bleiben auf das Erfassungsdatum bezogen.
+
+PATCH erlaubt `primary_employee_id`, `pitch_channel` und `offer_date` für aktive Angebote in jedem Status. Der ursprüngliche Pitch-Kanal lässt sich auch nach dem ersten Pitch korrigieren und muss ein registrierter Kanal sein; vorhandene Kontaktaktivitäten behalten ihren eigenen Kanal. `currency` und `billing_type` sind nur vor dem ersten Pitch bearbeitbar. Status, Preise, Kunde, Dienstleistung und Ursprungspreis können nicht durch PATCH überschrieben werden.
 
 Status/Zusage:
 
