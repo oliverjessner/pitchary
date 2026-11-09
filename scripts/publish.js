@@ -114,7 +114,7 @@ export function validateCask(filename) {
     [
       "ruby",
       "-e",
-      'require "cask/cask_loader"; Cask::CaskLoader.load(File.read(ARGV.fetch(0)))',
+      'require "cask/cask_loader"; Cask::CaskLoader.from_content(File.read(ARGV.fetch(0)))',
       "--",
       filename,
     ],
