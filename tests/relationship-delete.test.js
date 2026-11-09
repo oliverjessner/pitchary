@@ -220,7 +220,7 @@ test("migration 005 preserves a populated schema 4 database and keeps individual
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 12);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
     tables.forEach((table, index) =>
       assert.deepEqual(
         db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),
@@ -234,7 +234,13 @@ test("migration 005 preserves a populated schema 4 database and keeps individual
             ? before[index].map((row) =>
                 Object.assign(Object.create(null), row, { url: "" }),
               )
-            : before[index],
+            : table === "customer_services"
+              ? before[index].map((row) =>
+                  Object.assign(Object.create(null), row, {
+                    offer_date: row.created_at.slice(0, 10),
+                  }),
+                )
+              : before[index],
       ),
     );
     for (const table of ["customer_service_status_history", "activities"]) {

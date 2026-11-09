@@ -15,6 +15,7 @@ import {
   choice,
   money,
   uuid,
+  calendarDate,
   dateTime,
   filterInput,
   allowedKeys,
@@ -42,6 +43,19 @@ export function createCRM(
   const repo = repository;
   const channels = repo.pitchChannels().map(({ id }) => id);
   const now = () => clock();
+  function offerDate(value, at) {
+    if (value !== undefined) return calendarDate(value, "offer_date");
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Vienna",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(at));
+    const values = Object.fromEntries(
+      parts.map(({ type, value }) => [type, value]),
+    );
+    return `${values.year}-${values.month}-${values.day}`;
+  }
   const serviceTags = createServiceTags(db, repo, { now, idFactory });
   const requireRecord = (table, id, active = false) => {
     uuid(id, "id");
@@ -396,6 +410,7 @@ export function createCRM(
         "currency",
         "billing_type",
         "pitch_channel",
+        "offer_date",
       ]);
       requireRecord("customers", data.customer_id, true);
       requireRecord("services", data.service_id, true);
@@ -409,6 +424,7 @@ export function createCRM(
           data.customer_id,
         ),
         status: "open",
+        offer_date: offerDate(data.offer_date, at),
         first_pitched_price_minor: null,
         current_offered_price_minor: money(
           data.current_offered_price_minor,
@@ -446,6 +462,7 @@ export function createCRM(
         "currency",
         "billing_type",
         "pitch_channel",
+        "offer_date",
       ]);
       if (
         !Array.isArray(data.customer_ids) ||
@@ -464,6 +481,7 @@ export function createCRM(
       choice(data.billing_type ?? "one_time", billingTypes, "billing_type");
       choice(data.pitch_channel ?? "email", channels, "pitch_channel");
       const at = now(),
+        date = offerDate(data.offer_date, at),
         ids = [];
       transaction(db, () => {
         for (const customer_id of rows) {
@@ -473,6 +491,7 @@ export function createCRM(
             service_id: data.service_id,
             primary_employee_id: null,
             status: "open",
+            offer_date: date,
             first_pitched_price_minor: null,
             current_offered_price_minor: data.current_offered_price_minor,
             accepted_price_minor: null,
@@ -498,9 +517,12 @@ export function createCRM(
         "pitch_channel",
         "billing_type",
         "currency",
+        "offer_date",
       ]);
       const row = requireRecord("customer_services", id, true);
       const out = { updated_at: now() };
+      if ("offer_date" in data)
+        out.offer_date = calendarDate(data.offer_date, "offer_date");
       if ("primary_employee_id" in data)
         out.primary_employee_id =
           data.primary_employee_id === row.primary_employee_id
