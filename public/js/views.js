@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { formatDate } from "./calendar.js";
 import {
   financeDashboard,
   customerFinanceSections,
@@ -1478,6 +1479,10 @@ export async function relationshipDetail(id, actions) {
           "Angebotsdetails",
           facts([
             ["Status", statusBadge(r.status)],
+            [
+              "Angebotsdatum",
+              el("time", { datetime: r.offer_date }, formatDate(r.offer_date)),
+            ],
             ["Verweildauer", age(r.status_since)],
             [
               "Ursprünglicher Pitch-Preis",

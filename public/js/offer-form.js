@@ -9,6 +9,7 @@ import {
   icon,
 } from "./dom.js";
 import { customerLogo } from "./customer-branding.js";
+import { today } from "./calendar.js";
 function setText(node, value) {
   if (node.textContent !== value) node.textContent = value;
 }
@@ -199,6 +200,11 @@ export function createOfferForm({
   fields.push(
     section(
       "Angebotsdetails",
+      field("Angebotsdatum", "offer_date", {
+        type: "date",
+        value: today(),
+        required: true,
+      }),
       el(
         "div",
         { class: "offer-money-row" },
