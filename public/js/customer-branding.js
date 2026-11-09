@@ -56,7 +56,13 @@ export function logoEditor(row) {
     id,
     class: "oj-input",
     accept: "image/png,image/jpeg,image/webp",
-    "aria-describedby": id + "-help " + id + "-error",
+    "aria-describedby": [
+      id + "-help",
+      id + "-error",
+      !row?.id ? id + "-auto" : null,
+    ]
+      .filter(Boolean)
+      .join(" "),
   });
   const preview = el(
     "div",
@@ -183,6 +189,13 @@ export function logoEditor(row) {
     "div",
     { class: "oj-field wide" },
     el("label", { class: "oj-label", for: id }, "Logo hochladen"),
+    !row?.id
+      ? el(
+          "p",
+          { class: "oj-helper", id: id + "-auto" },
+          "Das Logo wird anhand der Website oder E-Mail-Domain automatisch gesucht.",
+        )
+      : null,
     input,
     el(
       "p",

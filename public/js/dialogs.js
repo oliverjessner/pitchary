@@ -212,9 +212,6 @@ export function createActions(refresh, navigate) {
               type: "email",
               value: row?.general_email ?? "",
               maxlength: 500,
-              helper: !row?.id
-                ? "Das Logo wird anhand der Website oder E-Mail-Domain automatisch gesucht."
-                : undefined,
             }),
             field("Website", "website", {
               type: "url",
