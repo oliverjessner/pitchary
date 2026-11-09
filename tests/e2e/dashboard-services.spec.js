@@ -322,6 +322,7 @@ test("service tags can be created, assigned, edited, filtered and removed", asyn
   await expect(directory.getByRole("columnheader")).toHaveText([
     "Name",
     "Tags",
+    "Pitched",
     "Notiz",
     "Angelegt",
     "Aktionen",
