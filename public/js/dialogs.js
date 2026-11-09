@@ -384,6 +384,7 @@ export function createActions(refresh, navigate) {
           currency: data.currency,
           billing_type: data.billing_type,
           pitch_channel: data.pitch_channel,
+          offer_date: data.offer_date,
         };
         if (batch)
           body.customer_ids = new FormData(form).getAll("customer_ids");
@@ -625,6 +626,11 @@ export function createActions(refresh, navigate) {
         name: row.employee_name + " (archiviert)",
       });
     const fields = [
+      field("Angebotsdatum", "offer_date", {
+        type: "date",
+        value: row.offer_date,
+        required: true,
+      }),
       field("Ansprechpartner", "primary_employee_id", {
         value: row.primary_employee_id ?? "",
         options: [
