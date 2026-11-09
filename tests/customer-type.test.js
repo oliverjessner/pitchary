@@ -362,7 +362,7 @@ test("migration 009 backfills effective revenue assignments and preserves every 
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
     for (const table of tables) {
       const actual = db
         .prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`)

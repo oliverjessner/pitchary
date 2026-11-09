@@ -1,3 +1,4 @@
+import { t, getLocale, getLanguage } from "./i18n.js";
 import { api } from "./api.js";
 const pitchChannels = await api("/pitch-channels");
 export function el(tag, attrs = {}, ...children) {
@@ -56,40 +57,51 @@ export const button = (
     iconName ? icon(iconName) : null,
     label,
   );
+const builtinChannels = {
+  linkedin: "LinkedIn",
+  email: "E-Mail",
+  phone: "Telefon",
+  meeting: "Meeting",
+  internal_software: "Interne Software",
+  other: "Sonstiges",
+};
 export const labels = {
   status: {
-    open: "Offen",
-    pitched: "Gepitcht",
-    accepted: "Angenommen",
-    done: "Erledigt",
-    ghosted: "Ghosted",
-    rejected: "Abgelehnt",
+    open: t("Offen"),
+    pitched: t("Gepitcht"),
+    accepted: t("Angenommen"),
+    done: t("Erledigt"),
+    ghosted: t("Ghosted"),
+    rejected: t("Abgelehnt"),
   },
   channel: Object.fromEntries(
-    pitchChannels.map(({ id, label }) => [id, label]),
+    pitchChannels.map(({ id, label }) => [
+      id,
+      builtinChannels[id] === label ? t(label) : label,
+    ]),
   ),
   billing: {
-    one_time: "Einmalig",
-    monthly: "Monatlich",
-    yearly: "Jährlich",
-    hourly: "Pro Stunde",
-    daily: "Pro Tag",
+    one_time: t("Einmalig"),
+    monthly: t("Monatlich"),
+    yearly: t("Jährlich"),
+    hourly: t("Pro Stunde"),
+    daily: t("Pro Tag"),
   },
   activity: {
-    pitch: "Pitch",
-    follow_up: "Follow-up",
-    call: "Telefonat",
-    meeting: "Meeting",
-    note: "Notiz",
-    price_change: "Preisänderung",
+    pitch: t("Pitch"),
+    follow_up: t("Follow-up"),
+    call: t("Telefonat"),
+    meeting: t("Meeting"),
+    note: t("Notiz"),
+    price_change: t("Preisänderung"),
   },
   reason: {
-    budget: "Budget",
-    timing: "Zeitpunkt",
-    competitor: "Mitbewerber",
-    no_need: "Kein Bedarf",
-    no_response: "Keine Rückmeldung",
-    other: "Sonstiges",
+    budget: t("Budget"),
+    timing: t("Zeitpunkt"),
+    competitor: t("Mitbewerber"),
+    no_need: t("Kein Bedarf"),
+    no_response: t("Keine Rückmeldung"),
+    other: t("Sonstiges"),
   },
 };
 export const transitions = {
@@ -103,43 +115,50 @@ export const transitions = {
 export const money = (value, currency = "EUR") =>
   value === null || value === undefined
     ? "–"
-    : new Intl.NumberFormat("de-AT", { style: "currency", currency }).format(
-        value / 100,
-      );
+    : new Intl.NumberFormat(getLocale(), {
+        style: "currency",
+        currency,
+      }).format(value / 100);
 export const decimal = (value) =>
   value === null || value === undefined
     ? ""
-    : `${Math.trunc(value / 100)},${String(value % 100).padStart(2, "0")}`;
+    : `${Math.trunc(value / 100)}${getLanguage() === "en" ? "." : ","}${String(value % 100).padStart(2, "0")}`;
 export function minor(value) {
   const normalized = String(value).trim().replace(",", ".");
   if (!/^\d{1,11}(\.\d{1,2})?$/.test(normalized))
     throw new Error(
-      "Preis mit maximal zwei Nachkommastellen eingeben, z. B. 1200,50.",
+      t("Preis mit maximal zwei Nachkommastellen eingeben, z. B. 1200,50."),
     );
   const [whole, fraction = ""] = normalized.split(".");
   const amount = Number(BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0")));
-  if (amount > 1000000000000) throw new Error("Preis ist zu groß.");
+  if (amount > 1000000000000) throw new Error(t("Preis ist zu groß."));
   return amount;
 }
 export const datetime = (value) =>
   value
-    ? new Intl.DateTimeFormat("de-AT", {
+    ? new Intl.DateTimeFormat(getLocale(), {
         dateStyle: "medium",
         timeStyle: "short",
       }).format(new Date(value))
     : "–";
-export const duration = (ms) =>
-  ms === null
-    ? "–"
-    : new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(
-        ms / 86400000,
-      ) + " Tage";
+export function duration(ms) {
+  if (ms === null) return "–";
+  const days = ms / 86400000;
+  const count = new Intl.NumberFormat(getLocale(), {
+    maximumFractionDigits: 1,
+  }).format(days);
+  return new Intl.PluralRules(getLocale(), { maximumFractionDigits: 1 }).select(
+    days,
+  ) === "one"
+    ? t("{count} Tag", { count })
+    : t("{count} Tage", { count });
+}
 export const age = (value) =>
   duration(Math.max(0, Date.now() - Date.parse(value)));
 export const percent = (value) =>
   value === null
     ? "–"
-    : new Intl.NumberFormat("de-AT", {
+    : new Intl.NumberFormat(getLocale(), {
         style: "percent",
         maximumFractionDigits: 1,
       }).format(value);
@@ -238,7 +257,7 @@ function tableBody(rows, columnCount) {
           el(
             "td",
             { colspan: columnCount, class: "oj-muted" },
-            "Keine Einträge.",
+            t("Keine Einträge."),
           ),
         ),
   );
@@ -269,7 +288,7 @@ export function table(caption, headers, rows) {
     ),
   );
 }
-const tableCollator = new Intl.Collator("de-AT", {
+const tableCollator = new Intl.Collator(getLocale(), {
   numeric: true,
   sensitivity: "base",
 });
@@ -333,8 +352,8 @@ export function sortableTable(caption, columns, rows, renderRow, sorting) {
       else cells[index].removeAttribute("aria-sort");
       headers[index].title =
         active && sorting.order === "asc"
-          ? "Absteigend sortieren"
-          : "Aufsteigend sortieren";
+          ? t("Absteigend sortieren")
+          : t("Aufsteigend sortieren");
       headers[index].querySelector("i").className =
         "fa-solid fa-" +
         (active

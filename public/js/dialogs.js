@@ -6,6 +6,7 @@ import {
   toast,
 } from "../vendor/oj-designsystem/index.js";
 import { api } from "./api.js";
+import { t } from "./i18n.js";
 import { el, button, field, options, labels, minor, decimal } from "./dom.js";
 import { logoEditor } from "./customer-branding.js";
 import { createOfferForm } from "./offer-form.js";
@@ -16,11 +17,11 @@ export function showForm(
   fields,
   submit,
   {
-    submitLabel = "Speichern",
+    submitLabel = t("Speichern"),
     onSaved = () => {},
     onMount,
     description,
-    successMessage = "Gespeichert.",
+    successMessage = t("Gespeichert."),
     fieldsClass = "form-grid",
     dialogClass = "",
     footerContent,
@@ -50,7 +51,7 @@ export function showForm(
         class: "oj-button oj-button-secondary",
         "data-oj-dialog-close": "",
       },
-      "Abbrechen",
+      t("Abbrechen"),
     ),
     save,
   );
@@ -112,7 +113,10 @@ export function showForm(
       const result = await submit(Object.fromEntries(new FormData(form)), form);
       closeDialog(dialog, "saved");
       if (successMessage)
-        toast(successMessage, { type: "success", dismissLabel: "Schließen" });
+        toast(successMessage, {
+          type: "success",
+          dismissLabel: t("Schließen"),
+        });
       await onSaved(result);
     } catch (err) {
       if (dialog.isConnected) {
@@ -130,7 +134,8 @@ export function showForm(
         error.id = id + "-error";
         error.tabIndex = -1;
         error.focus();
-      } else toast(err.message, { type: "error", dismissLabel: "Schließen" });
+      } else
+        toast(err.message, { type: "error", dismissLabel: t("Schließen") });
     } finally {
       save.disabled = false;
       save.removeAttribute("aria-busy");
@@ -145,33 +150,42 @@ export function createActions(refresh, navigate) {
   async function deleteRelationship(row) {
     if (
       !(await confirmDialog({
-        title: "Angebot endgültig löschen?",
-        message: `Das Angebot „${row.service_name}“ für „${row.customer_name}“ wird mit seiner gesamten Statushistorie und allen Aktivitäten endgültig gelöscht. Das lässt sich nicht rückgängig machen.`,
-        confirmLabel: "Endgültig löschen",
-        cancelLabel: "Abbrechen",
+        title: t("Angebot endgültig löschen?"),
+        message: t(
+          "Das Angebot „{service}“ für „{customer}“ wird mit seiner gesamten Statushistorie und allen Aktivitäten endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
+          {
+            service: row.service_name,
+            customer: row.customer_name,
+          },
+        ),
+        confirmLabel: t("Endgültig löschen"),
+        cancelLabel: t("Abbrechen"),
         variant: "danger",
       }))
     )
       return;
     try {
       await api(`/customer-services/${row.id}/permanent`, { method: "DELETE" });
-      toast("Angebot gelöscht.", {
+      toast(t("Angebot gelöscht."), {
         type: "success",
-        dismissLabel: "Schließen",
+        dismissLabel: t("Schließen"),
       });
       navigate("/pipeline");
     } catch (err) {
-      toast(err.message, { type: "error", dismissLabel: "Schließen" });
+      toast(err.message, { type: "error", dismissLabel: t("Schließen") });
     }
   }
   async function archive(type, row, restore = false) {
     if (
       !restore &&
       !(await confirmDialog({
-        title: "Archivieren?",
-        message: `„${row.name ?? row.service_name}“ bleibt mit allen historischen Beziehungen erhalten.`,
-        confirmLabel: "Archivieren",
-        cancelLabel: "Abbrechen",
+        title: t("Archivieren?"),
+        message: t(
+          "„{name}“ bleibt mit allen historischen Beziehungen erhalten.",
+          { name: row.name ?? row.service_name },
+        ),
+        confirmLabel: t("Archivieren"),
+        cancelLabel: t("Abbrechen"),
       }))
     )
       return;
@@ -179,13 +193,13 @@ export function createActions(refresh, navigate) {
       await api(`/${type}/${row.id}${restore ? "/restore" : ""}`, {
         method: restore ? "POST" : "DELETE",
       });
-      toast(restore ? "Wiederhergestellt." : "Archiviert.", {
+      toast(restore ? t("Wiederhergestellt.") : t("Archiviert."), {
         type: "success",
-        dismissLabel: "Schließen",
+        dismissLabel: t("Schließen"),
       });
       await refresh();
     } catch (err) {
-      toast(err.message, { type: "error", dismissLabel: "Schließen" });
+      toast(err.message, { type: "error", dismissLabel: t("Schließen") });
     }
   }
   async function entity(type, row) {
@@ -200,7 +214,7 @@ export function createActions(refresh, navigate) {
           )
         : null;
     const fields = [
-      field(employee ? "Name" : "Name", "name", {
+      field(t("Name"), "name", {
         value: row?.name ?? "",
         required: true,
         maxlength: 200,
@@ -208,12 +222,12 @@ export function createActions(refresh, navigate) {
       }),
       ...(customer
         ? [
-            field("Haupt-E-Mail", "general_email", {
+            field(t("Haupt-E-Mail"), "general_email", {
               type: "email",
               value: row?.general_email ?? "",
               maxlength: 500,
             }),
-            field("Website", "website", {
+            field(t("Website"), "website", {
               type: "url",
               value: row?.website ?? "",
               maxlength: 2048,
@@ -224,7 +238,7 @@ export function createActions(refresh, navigate) {
         : []),
       ...(type === "services"
         ? [
-            field("URL (optional)", "url", {
+            field(t("URL (optional)"), "url", {
               type: "url",
               value: row?.url ?? "",
               maxlength: 2048,
@@ -234,23 +248,23 @@ export function createActions(refresh, navigate) {
         : []),
       ...(employee
         ? [
-            field("E-Mail", "email", {
+            field(t("E-Mail"), "email", {
               value: row?.email ?? "",
               type: "email",
               maxlength: 500,
             }),
-            field("Position", "position", {
+            field(t("Position"), "position", {
               value: row?.position ?? "",
               maxlength: 500,
             }),
-            field("LinkedIn", "linkedin", {
+            field(t("LinkedIn"), "linkedin", {
               value: row?.linkedin ?? "",
               type: "url",
               maxlength: 500,
             }),
           ]
         : [
-            field("Notiz", "note", {
+            field(t("Notiz"), "note", {
               type: "textarea",
               value: row?.note ?? "",
               wide: true,
@@ -261,12 +275,12 @@ export function createActions(refresh, navigate) {
     if (tags) fields.push(tags.node);
     const dialog = showForm(
       row?.id
-        ? "Bearbeiten"
+        ? t("Bearbeiten")
         : employee
-          ? "Mitarbeiter anlegen"
+          ? t("Mitarbeiter anlegen")
           : type === "customers"
-            ? "Kunde anlegen"
-            : "Dienstleistung anlegen",
+            ? t("Kunde anlegen")
+            : t("Dienstleistung anlegen"),
       fields,
       async (data) => {
         if (tags) data.tag_ids = tags.value();
@@ -296,20 +310,20 @@ export function createActions(refresh, navigate) {
   }
   function tag(row) {
     return showForm(
-      row ? "Tag bearbeiten" : "Tag anlegen",
+      row ? t("Tag bearbeiten") : t("Tag anlegen"),
       [
-        field("Name", "name", {
+        field(t("Name"), "name", {
           value: row?.name ?? "",
           required: true,
           maxlength: 80,
           autofocus: true,
         }),
-        field("Farbe", "color", {
+        field(t("Farbe"), "color", {
           type: "color",
           value: row?.color ?? "#4d8dff",
           required: true,
         }),
-        field("Notiz", "note", {
+        field(t("Notiz"), "note", {
           type: "textarea",
           value: row?.note ?? "",
           maxlength: 2000,
@@ -330,7 +344,7 @@ export function createActions(refresh, navigate) {
       (row.tags ?? []).map((tag) => tag.id),
     );
     return showForm(
-      "Tags zuweisen",
+      t("Tags zuweisen"),
       [picker.node],
       () =>
         api("/" + type + "/" + row.id, {
@@ -343,16 +357,36 @@ export function createActions(refresh, navigate) {
   async function deleteTag(row) {
     if (
       !(await confirmDialog({
-        title: "Tag löschen?",
-        message: `„${row.name}“ wird gelöscht und von ${row.service_count} ${row.service_count === 1 ? "Dienstleistung" : "Dienstleistungen"} und ${row.customer_count ?? 0} Unternehmen entfernt.`,
-        confirmLabel: "Löschen",
-        cancelLabel: "Abbrechen",
+        title: t("Tag löschen?"),
+        message:
+          row.service_count === 1
+            ? t(
+                "„{name}“ wird gelöscht und von {services} Dienstleistung und {customers} Unternehmen entfernt.",
+                {
+                  name: row.name,
+                  services: row.service_count,
+                  customers: row.customer_count ?? 0,
+                },
+              )
+            : t(
+                "„{name}“ wird gelöscht und von {services} Dienstleistungen und {customers} Unternehmen entfernt.",
+                {
+                  name: row.name,
+                  services: row.service_count,
+                  customers: row.customer_count ?? 0,
+                },
+              ),
+        confirmLabel: t("Löschen"),
+        cancelLabel: t("Abbrechen"),
         variant: "danger",
       }))
     )
       return;
     await api("/service-tags/" + row.id, { method: "DELETE" });
-    toast("Tag gelöscht.", { type: "success", dismissLabel: "Schließen" });
+    toast(t("Tag gelöscht."), {
+      type: "success",
+      dismissLabel: t("Schließen"),
+    });
     await refresh();
   }
   async function offer({ customer, service, batch = false } = {}) {
@@ -362,8 +396,10 @@ export function createActions(refresh, navigate) {
     ]);
     if (!customers.length || !services.length) {
       toast(
-        "Bitte zuerst mindestens einen Kunden und eine Dienstleistung anlegen.",
-        { type: "warning", dismissLabel: "Schließen" },
+        t(
+          "Bitte zuerst mindestens einen Kunden und eine Dienstleistung anlegen.",
+        ),
+        { type: "warning", dismissLabel: t("Schließen") },
       );
       return;
     }
@@ -375,7 +411,7 @@ export function createActions(refresh, navigate) {
       batch,
     });
     showForm(
-      batch ? "Angebote anlegen" : "Neues Angebot",
+      batch ? t("Angebote anlegen") : t("Neues Angebot"),
       ui.fields,
       (data, form) => {
         const body = {
@@ -398,7 +434,7 @@ export function createActions(refresh, navigate) {
         });
       },
       {
-        submitLabel: "Angebot anlegen",
+        submitLabel: t("Angebot anlegen"),
         fieldsClass: "offer-fields",
         dialogClass: "offer-dialog",
         pinnedFooter: true,
@@ -418,7 +454,7 @@ export function createActions(refresh, navigate) {
             const customerId = form.elements.namedItem("customer_id").value;
             if (!customerId) {
               select.replaceChildren(
-                el("option", { value: "" }, "Zuerst Kunde auswählen"),
+                el("option", { value: "" }, t("Zuerst Kunde auswählen")),
               );
               return;
             }
@@ -430,11 +466,14 @@ export function createActions(refresh, navigate) {
               });
               if (token !== generation || !form.isConnected) return;
               select.replaceChildren(
-                el("option", { value: "" }, "Kein Ansprechpartner"),
+                el("option", { value: "" }, t("Kein Ansprechpartner")),
                 ...items.map((e) => el("option", { value: e.id }, e.name)),
               );
             } catch (err) {
-              toast(err.message, { type: "error", dismissLabel: "Schließen" });
+              toast(err.message, {
+                type: "error",
+                dismissLabel: t("Schließen"),
+              });
             } finally {
               if (token === generation) select.disabled = false;
             }
@@ -453,27 +492,32 @@ export function createActions(refresh, navigate) {
       resuming =
         to === "pitched" && ["rejected", "ghosted"].includes(row.status);
     const fields = [
-      field("Zeitpunkt", "occurred_at", {
+      field(t("Zeitpunkt"), "occurred_at", {
         type: "datetime-local",
         step: "any",
         value: localTime(new Date()),
         required: true,
         wide: true,
-        helper:
+        helper: t(
           "Beginn dieser Statusphase. Keine Zeitpunkte vor der aktuellen Phase oder in der Zukunft.",
+        ),
       }),
     ];
     if (to === "accepted")
       fields.push(
-        field("Vereinbarter Preis (" + row.currency + ")", "price", {
-          value: decimal(row.current_offered_price_minor),
-          required: true,
-          inputmode: "decimal",
-        }),
+        field(
+          t("Vereinbarter Preis ({currency})", { currency: row.currency }),
+          "price",
+          {
+            value: decimal(row.current_offered_price_minor),
+            required: true,
+            inputmode: "decimal",
+          },
+        ),
       );
     if (rejected)
       fields.push(
-        field("Absagegrund", "code", {
+        field(t("Absagegrund"), "code", {
           value: "budget",
           options: options(labels.reason),
           required: true,
@@ -481,13 +525,13 @@ export function createActions(refresh, navigate) {
       );
     fields.push(
       field(
-        resuming ? "Grund für die Wiederaufnahme" : "Ergänzende Notiz",
+        resuming ? t("Grund für die Wiederaufnahme") : t("Ergänzende Notiz"),
         "note",
         { type: "textarea", required: resuming, wide: true, maxlength: 2000 },
       ),
     );
     showForm(
-      resuming ? "Angebot wieder aufnehmen" : labels.status[to],
+      resuming ? t("Angebot wieder aufnehmen") : labels.status[to],
       fields,
       (data) =>
         api(`/customer-services/${row.id}/status`, {
@@ -514,25 +558,29 @@ export function createActions(refresh, navigate) {
       ? "accepted_price_minor"
       : "current_offered_price_minor";
     showForm(
-      "Preis ändern",
+      t("Preis ändern"),
       [
-        field("Preisfeld", "field", {
+        field(t("Preisfeld"), "field", {
           value: fieldName,
           options: [
             [
               fieldName,
               fieldName === "accepted_price_minor"
-                ? "Vereinbarter Preis"
-                : "Aktueller Angebotspreis",
+                ? t("Vereinbarter Preis")
+                : t("Aktueller Angebotspreis"),
             ],
           ],
         }),
-        field("Neuer Preis (" + row.currency + ")", "price", {
-          value: decimal(row[fieldName]),
-          required: true,
-          inputmode: "decimal",
-        }),
-        field("Begründung", "note", {
+        field(
+          t("Neuer Preis ({currency})", { currency: row.currency }),
+          "price",
+          {
+            value: decimal(row[fieldName]),
+            required: true,
+            inputmode: "decimal",
+          },
+        ),
+        field(t("Begründung"), "note", {
           type: "textarea",
           wide: true,
           maxlength: 2000,
@@ -548,8 +596,9 @@ export function createActions(refresh, navigate) {
           },
         }),
       {
-        description:
+        description: t(
           "Der ursprüngliche Pitch-Preis bleibt erhalten. Jede Änderung wird in der Timeline protokolliert.",
+        ),
         onSaved: refresh,
       },
     );
@@ -559,9 +608,9 @@ export function createActions(refresh, navigate) {
       query: { customer_id: row.customer_id },
     });
     showForm(
-      "Aktivität hinzufügen",
+      t("Aktivität hinzufügen"),
       [
-        field("Aktivität", "type", {
+        field(t("Aktivität"), "type", {
           value: "follow_up",
           options: options(
             Object.fromEntries(
@@ -573,24 +622,24 @@ export function createActions(refresh, navigate) {
             ),
           ),
         }),
-        field("Kanal", "channel", {
+        field(t("Kanal"), "channel", {
           value: "email",
-          options: options(labels.channel, "Kein Kanal"),
+          options: options(labels.channel, t("Kein Kanal")),
         }),
-        field("Mitarbeiter", "employee_id", {
+        field(t("Mitarbeiter"), "employee_id", {
           value: employeeId ?? "",
           options: [
-            ["", "Kein Ansprechpartner"],
+            ["", t("Kein Ansprechpartner")],
             ...employees.map((e) => [e.id, e.name]),
           ],
         }),
-        field("Zeitpunkt", "occurred_at", {
+        field(t("Zeitpunkt"), "occurred_at", {
           type: "datetime-local",
           step: "any",
           value: localTime(new Date()),
           required: true,
         }),
-        field("Notiz", "note", {
+        field(t("Notiz"), "note", {
           type: "textarea",
           wide: true,
           required: true,
@@ -608,7 +657,9 @@ export function createActions(refresh, navigate) {
           },
         }),
       {
-        description: "Eine Kontaktaktivität ändert den Angebotsstatus nicht.",
+        description: t(
+          "Eine Kontaktaktivität ändert den Angebotsstatus nicht.",
+        ),
         onSaved: refresh,
       },
     );
@@ -623,22 +674,22 @@ export function createActions(refresh, navigate) {
     )
       employees.push({
         id: row.primary_employee_id,
-        name: row.employee_name + " (archiviert)",
+        name: t("{name} (archiviert)", { name: row.employee_name }),
       });
     const fields = [
-      field("Angebotsdatum", "offer_date", {
+      field(t("Angebotsdatum"), "offer_date", {
         type: "date",
         value: row.offer_date,
         required: true,
       }),
-      field("Ansprechpartner", "primary_employee_id", {
+      field(t("Ansprechpartner"), "primary_employee_id", {
         value: row.primary_employee_id ?? "",
         options: [
-          ["", "Kein Ansprechpartner"],
+          ["", t("Kein Ansprechpartner")],
           ...employees.map((e) => [e.id, e.name]),
         ],
       }),
-      field("Ursprünglicher Pitch-Kanal", "pitch_channel", {
+      field(t("Ursprünglicher Pitch-Kanal"), "pitch_channel", {
         value: row.pitch_channel,
         options: options(labels.channel),
         required: true,
@@ -646,7 +697,7 @@ export function createActions(refresh, navigate) {
     ];
     if (row.first_pitched_price_minor === null)
       fields.push(
-        field("Währung", "currency", {
+        field(t("Währung"), "currency", {
           value: row.currency,
           options: [
             ["EUR", "EUR"],
@@ -654,13 +705,13 @@ export function createActions(refresh, navigate) {
             ["GBP", "GBP"],
           ],
         }),
-        field("Abrechnung", "billing_type", {
+        field(t("Abrechnung"), "billing_type", {
           value: row.billing_type,
           options: options(labels.billing),
         }),
       );
     showForm(
-      "Angebot bearbeiten",
+      t("Angebot bearbeiten"),
       fields,
       (data) =>
         api("/customer-services/" + row.id, {

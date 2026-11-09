@@ -279,7 +279,9 @@ test("pipeline places current customer logos beside names with a stable fallback
   const image = card.getByAltText("Logo von " + customer.name);
   const load = async ({ archived = false } = {}) => {
     await page.goto("/#/pipeline?status=open");
+    await expect(page.locator("#main")).toHaveAttribute("aria-busy", "false");
     await page.reload();
+    await expect(page.locator("#main")).toHaveAttribute("aria-busy", "false");
     await page.getByLabel("Suchen", { exact: true }).fill(service.name);
     if (archived)
       await page.getByLabel("Ansicht", { exact: true }).selectOption("true");

@@ -109,7 +109,7 @@ test("recognition model defaults without writing settings and persists across da
       (await createFinanceSettings(db, { clock, tools }).public()).model,
       "gpt-4.1-mini",
     );
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
   } finally {
     db.close();
   }

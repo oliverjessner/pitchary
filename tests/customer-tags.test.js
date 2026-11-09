@@ -261,12 +261,12 @@ test("schema 12 preserves existing service tags and customer assignments persist
     tag_ids: [tag.id],
   });
   db.exec(
-    "DROP TABLE customer_tag_assignments; ALTER TABLE customer_services DROP COLUMN offer_date; PRAGMA user_version=11",
+    "DROP TABLE customer_tag_assignments; ALTER TABLE customer_services DROP COLUMN offer_date; DROP TABLE app_settings; PRAGMA user_version=11",
   );
   db.close();
   db = openDatabase(filename);
   crm = createCRM(db);
-  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
   assert.deepEqual(ids(crm.entity("services", service.id).tags), [tag.id]);
   crm.updateEntity("customers", customer.id, { tag_ids: [tag.id] });
   db.close();

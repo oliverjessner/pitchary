@@ -30,7 +30,7 @@ function schema10(t) {
   finance.log(invoice.id, "import", "success", "Preserve log");
   const tables = db
     .prepare(
-      "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='finance_settings' ORDER BY name",
+      "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('finance_settings','app_settings') ORDER BY name",
     )
     .all()
     .map(({ name }) => name);
@@ -41,7 +41,7 @@ function schema10(t) {
     ]),
   );
   db.exec(
-    "ALTER TABLE finance_invoices RENAME COLUMN source_legacy_id TO source_previous_id; DROP TABLE customer_tag_assignments; ALTER TABLE customer_services DROP COLUMN offer_date; PRAGMA user_version=10;",
+    "ALTER TABLE finance_invoices RENAME COLUMN source_legacy_id TO source_previous_id; DROP TABLE customer_tag_assignments; ALTER TABLE customer_services DROP COLUMN offer_date; DROP TABLE app_settings; PRAGMA user_version=10;",
   );
   db.close();
   return { filename, before, invoice };
@@ -52,7 +52,11 @@ test("migration 011 preserves complete invoice data, PDFs, corrections, logs, CR
   for (let attempt = 0; attempt < 2; attempt++) {
     const db = openDatabase(filename);
     try {
-      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
+      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
+      assert.equal(
+        db.prepare("SELECT language FROM app_settings").get().language,
+        "de",
+      );
       for (const [table, rows] of before)
         assert.deepEqual(
           db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),
