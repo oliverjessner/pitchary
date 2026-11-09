@@ -11,9 +11,11 @@ const joins = `SELECT cs.*, c.name AS customer_name, c.archived_at AS customer_a
 const projection = (name) =>
   name === "customers"
     ? "id,name,note,website,logo_mime,created_at,updated_at,archived_at,customer_type,logo_data IS NOT NULL AS has_logo,COALESCE((SELECT general_email FROM finance_customer_profiles WHERE customer_id=customers.id),'') AS general_email"
-    : name === "service_tags"
-      ? "id,name,note,color,created_at,updated_at"
-      : "*";
+    : name === "services"
+      ? "services.*,(SELECT count(*) FROM customer_service_status_history h JOIN customer_services cs ON cs.id=h.customer_service_id WHERE cs.service_id=services.id AND h.to_status='pitched')+(SELECT count(*) FROM activities a JOIN customer_services cs ON cs.id=a.customer_service_id WHERE cs.service_id=services.id AND a.type='pitch') AS pitched_count"
+      : name === "service_tags"
+        ? "id,name,note,color,created_at,updated_at"
+        : "*";
 export function createRepository(db) {
   const table = (name) => {
     if (!tables.has(name)) throw new Error("Unknown repository");

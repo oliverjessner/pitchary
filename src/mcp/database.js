@@ -12,6 +12,16 @@ const readableTables = new Set([
   "finance_customer_profiles",
   "pitch_channels",
 ]);
+// Service pitch totals need only relationship keys and event classifications.
+// Keep notes, prices and the rest of these records inaccessible to the MCP.
+const pitchCountColumns = new Map([
+  ["customer_services", new Set(["id", "service_id", ""])],
+  [
+    "customer_service_status_history",
+    new Set(["customer_service_id", "to_status", ""]),
+  ],
+  ["activities", new Set(["customer_service_id", "type", ""])],
+]);
 const insertableTables = new Set([
   "customers",
   "employees",
@@ -34,6 +44,7 @@ export function restrictMCPDatabase(db) {
     if (database && database !== "main") return constants.SQLITE_DENY;
     if (action === constants.SQLITE_READ)
       return readableTables.has(table) ||
+        pitchCountColumns.get(table)?.has(value) ||
         // SQLite checks this nullable foreign key when inserting a new profile.
         (table === "finance_invoices" && value === "id")
         ? constants.SQLITE_OK
@@ -83,7 +94,7 @@ export function openMCPDatabase(filename) {
       throw new Error(
         "Database schema does not match this Pitchary version. Open the database in the matching Pitchary application first.",
       );
-    for (const table of readableTables) {
+    for (const table of [...readableTables, ...pitchCountColumns.keys()]) {
       const row = db
         .prepare("SELECT type FROM sqlite_schema WHERE name=?")
         .get(table);

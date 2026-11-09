@@ -181,6 +181,51 @@ test("MCP exposes exactly three create actions and never accepts edit/delete ide
   assert.deepEqual(contents(db, "customers"), original);
 });
 
+test("restricted MCP service counts read only event keys and preserve all event write restrictions", (t) => {
+  const filename = path.join(directory(t), "pitches.sqlite");
+  const { db, crm, customer } = fixture(t, filename);
+  const service = crm.createEntity("services", { name: "Counted service" });
+  const offer = crm.createRelationship({
+    customer_id: customer.id,
+    service_id: service.id,
+    current_offered_price_minor: 10000,
+  });
+  crm.changeStatus(offer.id, { status: "pitched" });
+  crm.addActivity(offer.id, { type: "pitch", note: "Private pitch notes" });
+  crm.addActivity(offer.id, { type: "note", note: "Private general notes" });
+  crm.archive("customer_services", offer.id);
+  const history = contents(db, "customer_service_status_history");
+  const activities = contents(db, "activities");
+  const restricted = openMCPDatabase(filename);
+  t.after(() => restricted.close());
+  const tools = createMCPTools(restricted);
+  const listed = tools.call("pitchary_list_services", { search: "Counted" });
+  assert.equal(listed.isError, false);
+  assert.equal(listed.structuredContent.items[0].pitched_count, 2);
+  const created = tools.call("pitchary_create_service", {
+    name: "New service",
+  });
+  assert.equal(created.isError, false);
+  assert.equal(created.structuredContent.record.pitched_count, 0);
+  for (const sql of [
+    "SELECT current_offered_price_minor FROM customer_services",
+    "SELECT reason FROM customer_service_status_history",
+    "SELECT note FROM activities",
+    "INSERT INTO customer_services(id) VALUES('blocked')",
+    "INSERT INTO customer_service_status_history(id) VALUES('blocked')",
+    "INSERT INTO activities(id) VALUES('blocked')",
+    "UPDATE customer_services SET archived_at=NULL",
+    "UPDATE customer_service_status_history SET to_status='pitched'",
+    "UPDATE activities SET type='pitch'",
+    "DELETE FROM customer_services",
+    "DELETE FROM customer_service_status_history",
+    "DELETE FROM activities",
+  ])
+    assert.throws(() => restricted.exec(sql), /authoriz|prohibited/i, sql);
+  assert.deepEqual(contents(db, "customer_service_status_history"), history);
+  assert.deepEqual(contents(db, "activities"), activities);
+});
+
 test("MCP refuses invalid input and people without an existing active customer without partial writes", (t) => {
   const { db, customer, archived } = fixture(t);
   restrictMCPDatabase(db);

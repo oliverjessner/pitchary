@@ -433,6 +433,7 @@ export async function entityList(type, actions) {
           ]
         : []),
       tagList(r.tags) ?? "–",
+      ...(!isCustomer ? [String(r.pitched_count ?? 0)] : []),
       el("span", { class: "note-text oj-small" }, r.note || "–"),
       datetime(r.created_at),
       archiveMode
@@ -469,7 +470,7 @@ export async function entityList(type, actions) {
         )
       : table(
           title,
-          ["Name", "Tags", "Notiz", "Angelegt", "Aktionen"],
+          ["Name", "Tags", "Pitched", "Notiz", "Angelegt", "Aktionen"],
           filtered.map(renderRow),
         );
     directory.classList.add(
