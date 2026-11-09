@@ -1,4 +1,5 @@
 export default {
+  Allgemein: "General",
   Einnahmen: "Revenue",
   Ausgaben: "Expenses",
   Offen: "Open",
@@ -270,7 +271,7 @@ export default {
   OCR: "OCR",
   "Ordner jetzt einlesen": "Scan folders now",
   Einstellungen: "Settings",
-  "Rechnungsordner, Firmenangaben und automatische Erkennung.":
-    "Invoice folders, company details and automatic recognition.",
+  "Sprache, Rechnungsordner, Firmenangaben und automatische Erkennung.":
+    "Language, invoice folders, company details and automatic recognition.",
   "Version ": "Version ",
 };

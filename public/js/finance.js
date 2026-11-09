@@ -2134,6 +2134,7 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
   const [folderFields, companyFields, recognitionFields] =
     form.querySelectorAll(":scope > .oj-panel");
   const sections = [
+    { id: "general", label: t("Allgemein"), content: [languagePreferences()] },
     { id: "company", label: t("Firma"), content: [companyFields] },
     { id: "recognition", label: t("Erkennung"), content: [recognitionFields] },
     {
@@ -2144,7 +2145,7 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
   ];
   const active = sections.some((section) => section.id === params.get("tab"))
     ? params.get("tab")
-    : "company";
+    : "general";
   const tabs = el(
     "div",
     { class: "oj-tabs finance-settings-tabs", "data-oj-tabs": true },
@@ -2171,24 +2172,29 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
         ),
       ),
     ),
-    sections.map((section) =>
-      el(
-        "section",
-        {
-          class: "oj-tab-panel oj-stack",
-          role: "tabpanel",
-          id: "settings-panel-" + section.id,
-          "aria-labelledby": "settings-tab-" + section.id,
-        },
-        section.content,
-      ),
-    ),
   );
+  for (const section of sections) {
+    const content = el(
+      "section",
+      {
+        class: "oj-tab-panel oj-stack",
+        role: "tabpanel",
+        id: "settings-panel-" + section.id,
+        "aria-labelledby": "settings-tab-" + section.id,
+      },
+      section.content,
+    );
+    if (section.id === "general") tabs.append(content);
+    else form.insertBefore(content, error);
+  }
+  form.hidden = active === "general";
+  tabs.append(form);
   tabs.addEventListener("oj:change", (event) => {
     const id = event.detail?.tab?.dataset.settingsTab;
     if (!sections.some((section) => section.id === id)) return;
+    form.hidden = id === "general";
     const next = new URLSearchParams(params);
-    if (id === "company") next.delete("tab");
+    if (id === "general") next.delete("tab");
     else next.set("tab", id);
     history.replaceState(
       null,
@@ -2207,14 +2213,12 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
     (event) => revealSettingsField(event.target),
     true,
   );
-  form.prepend(tabs);
   return [
     heading(
       t("Einstellungen"),
-      t("Rechnungsordner, Firmenangaben und automatische Erkennung."),
+      t("Sprache, Rechnungsordner, Firmenangaben und automatische Erkennung."),
     ),
-    languagePreferences(),
-    form,
+    tabs,
     el(
       "p",
       { class: "finance-app-version oj-small oj-muted" },

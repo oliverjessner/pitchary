@@ -358,7 +358,7 @@
 .finance-invoice-dialog .form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.finance-settings-form {
+.finance-settings-tabs {
   max-inline-size: 60rem;
 }
 .finance-settings-tab-list {
