@@ -764,7 +764,11 @@ export async function employeeList() {
             },
             { label: "Position", key: "position" },
             { label: "E-Mail", key: "email" },
-            { label: "LinkedIn", key: "linkedin" },
+            {
+              label: "Angelegt",
+              key: "created_at",
+              value: (row) => Date.parse(row.created_at),
+            },
           ],
           filtered,
           (row) => [
@@ -784,19 +788,7 @@ export async function employeeList() {
             tagList(row.customer_tags) ?? "–",
             row.position || "–",
             row.email ? link(row.email, "mailto:" + row.email) : "–",
-            row.linkedin
-              ? el(
-                  "a",
-                  {
-                    class: "oj-link",
-                    href: row.linkedin,
-                    target: "_blank",
-                    rel: "noopener noreferrer",
-                  },
-                  "LinkedIn",
-                  icon("arrow-up-right-from-square"),
-                )
-              : "–",
+            datetime(row.created_at),
           ],
           sorting,
         )

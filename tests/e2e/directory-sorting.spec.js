@@ -45,6 +45,7 @@ const employees = [
     position: "Vertrieb 10",
     email: "z@example.test",
     linkedin: "https://www.linkedin.com/in/z/",
+    created_at: "2026-01-02T10:00:00.000Z",
   },
   {
     id: "aenne",
@@ -54,6 +55,7 @@ const employees = [
     position: "",
     email: "",
     linkedin: "",
+    created_at: "2025-12-15T10:00:00.000Z",
   },
   {
     id: "zebra2",
@@ -64,6 +66,7 @@ const employees = [
     position: "Vertrieb 2",
     email: "anna2@example.test",
     linkedin: "https://www.linkedin.com/in/anna2/",
+    created_at: "2026-11-01T10:00:00.000Z",
   },
   {
     id: "beta",
@@ -76,6 +79,7 @@ const employees = [
     position: "Änderungsmanagement",
     email: "anna10@example.test",
     linkedin: "https://www.linkedin.com/in/anna10/",
+    created_at: "2026-02-01T10:00:00.000Z",
   },
 ];
 
@@ -230,7 +234,7 @@ test("customers sort every data column in both directions and retain sorting acr
   expect(errors).toEqual([]);
 });
 
-test("people sort all contact columns with missing values last and preserve links and filters", async ({
+test("people sort contact columns and creation dates while preserving links and filters", async ({
   page,
 }, testInfo) => {
   const errors = [];
@@ -249,6 +253,20 @@ test("people sort all contact columns with missing values last and preserve link
   });
   await page.goto("/#/employees");
   const table = page.getByRole("table", { name: "Personen", exact: true });
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "Name",
+    "Unternehmen",
+    "Tags",
+    "Position",
+    "E-Mail",
+    "Angelegt",
+  ]);
+  await expect(
+    table.getByRole("columnheader", { name: "LinkedIn", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    table.getByRole("link", { name: "LinkedIn", exact: true }),
+  ).toHaveCount(0);
   await verifySorting(table, [
     [
       "Name",
@@ -276,30 +294,32 @@ test("people sort all contact columns with missing values last and preserve link
       ["Zebra 10", "beta", "Zebra 2", "Änne"],
     ],
     [
-      "LinkedIn",
+      "Angelegt",
+      ["Änne", "Zebra 10", "beta", "Zebra 2"],
       ["Zebra 2", "beta", "Zebra 10", "Änne"],
-      ["Zebra 10", "beta", "Zebra 2", "Änne"],
     ],
   ]);
-  await table.getByRole("button", { name: "LinkedIn", exact: true }).click();
+  await table.getByRole("button", { name: "Angelegt", exact: true }).click();
   const search = page.getByRole("searchbox", {
     name: "Personen suchen",
     exact: true,
   });
   await search.fill("Zebra");
-  await expect(rowNames(table)).toHaveText(["Zebra 10", "Zebra 2", "Änne"]);
+  await expect(rowNames(table)).toHaveText(["Zebra 2", "Zebra 10", "Änne"]);
+  await search.fill("linkedin.com/in/anna2");
+  await expect(rowNames(table)).toHaveText(["Zebra 2"]);
   await search.fill("Keine Treffer");
   await expect(table).toHaveCount(0);
   await search.fill("");
   await page.getByLabel("Ansicht", { exact: true }).selectOption("true");
   await expect.poll(() => archiveLoads).toBe(1);
   await expect(
-    table.getByRole("columnheader", { name: "LinkedIn", exact: true }),
+    table.getByRole("columnheader", { name: "Angelegt", exact: true }),
   ).toHaveAttribute("aria-sort", "descending");
   await expect(rowNames(table)).toHaveText([
-    "Zebra 10",
-    "beta",
     "Zebra 2",
+    "beta",
+    "Zebra 10",
     "Änne",
   ]);
   const row = table.getByRole("row").filter({ hasText: "Ähre GmbH" });
@@ -312,9 +332,7 @@ test("people sort all contact columns with missing values last and preserve link
   await expect(
     row.getByRole("link", { name: "z@example.test", exact: true }),
   ).toHaveAttribute("href", "mailto:z@example.test");
-  await expect(
-    row.getByRole("link", { name: "LinkedIn", exact: true }),
-  ).toHaveAttribute("href", "https://www.linkedin.com/in/z/");
+  await expect(row.locator("td").last()).toHaveText("02.01.2026, 11:00");
   await verifyLayout(page, "employees", testInfo);
   expect(errors).toEqual([]);
 });

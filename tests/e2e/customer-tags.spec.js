@@ -287,7 +287,7 @@ test("company and person tag filters combine OR selection with search, sorting a
     "Tags",
     "Position",
     "E-Mail",
-    "LinkedIn",
+    "Angelegt",
   ]);
   const employeeRow = table(page, "Personen")
     .getByRole("row")

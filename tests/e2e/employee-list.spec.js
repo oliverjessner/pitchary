@@ -22,6 +22,7 @@ test("person menu searches all contact fields, opens profiles and companies, and
     name: "Alex Suchkontakt " + testInfo.project.name,
     email: `personensuche-${testInfo.project.name}@example.test`,
     position: "Vertriebsleitung " + testInfo.project.name,
+    linkedin: `https://www.linkedin.com/in/personensuche-${testInfo.project.name}/`,
   });
   const archived = await create(request, "employees", {
     customer_id: customer.id,
@@ -41,11 +42,23 @@ test("person menu searches all contact fields, opens profiles and companies, and
     exact: true,
   });
   const table = page.getByRole("table", { name: "Personen", exact: true });
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "Name",
+    "Unternehmen",
+    "Tags",
+    "Position",
+    "E-Mail",
+    "Angelegt",
+  ]);
+  await expect(
+    table.getByRole("link", { name: "LinkedIn", exact: true }),
+  ).toHaveCount(0);
   for (const term of [
     employee.name,
     customer.name,
     employee.position.toUpperCase(),
     employee.email,
+    employee.linkedin,
   ]) {
     await search.fill(" " + term + " ");
     await expect(table.locator("tbody tr")).toHaveCount(1);
@@ -60,6 +73,9 @@ test("person menu searches all contact fields, opens profiles and companies, and
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     employee.name,
   );
+  await expect(
+    page.getByRole("link", { name: "LinkedIn", exact: true }),
+  ).toHaveAttribute("href", employee.linkedin);
   await expect(menu).toHaveAttribute("aria-current", "page");
   await page
     .getByRole("navigation", { name: "Brotkrumennavigation" })

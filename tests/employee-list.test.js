@@ -40,6 +40,8 @@ test("person directory includes current company names and combines search, compa
   const row = rows.find((row) => row.id === employee.id);
   assert.equal(row.customer_name, customer.name);
   assert.equal(row.customer_archived_at, null);
+  assert.equal(row.created_at, employee.created_at);
+  assert.ok(Number.isFinite(Date.parse(row.created_at)));
   for (const search of [
     "100%_Nord",
     "%_",
