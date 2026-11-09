@@ -754,7 +754,7 @@ th[aria-sort] .table-sort i {
 .employee-directory-table td:first-child {
   min-inline-size: 11rem;
 }
-.employee-directory-table td:last-child .oj-link {
+.employee-directory-table td:last-child {
   white-space: nowrap;
 }
 .employee-offers-table .oj-table {
