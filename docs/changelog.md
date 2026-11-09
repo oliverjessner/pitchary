@@ -1,5 +1,6 @@
 # 0.7.0
 
+- Abgelehnte Angebotskarten lassen sich direkt in der Pipeline archivieren.
 - Neue und bestehende Angebote erhalten ein frei bearbeitbares Angebotsdatum, das auch in der Vergangenheit liegen kann.
 - Die Oberfläche lässt sich in den Einstellungen dauerhaft zwischen Deutsch und Englisch umschalten und verwendet gemeinsame Übersetzungskataloge.
 - Die Dienstleistungstabelle lässt sich wie die Kundentabelle über ihre Spalten auf- und absteigend sortieren.
