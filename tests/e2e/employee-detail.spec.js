@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { mkdirSync } from "node:fs";
+import { expectTimelineMarkers } from "./timeline.js";
 
 async function create(request, resource, data) {
   const response = await request.post("/api/" + resource, { data });
@@ -193,9 +194,10 @@ test("employee links open personal services and history, including archives, wit
   await expect(dialog.getByLabel("Mitarbeiter", { exact: true })).toHaveValue(
     employee.id,
   );
-  await dialog
-    .getByLabel("Notiz", { exact: true })
-    .fill("Persönliches Follow-up aus der Mitarbeiteransicht");
+  const personalNote =
+    "Persönliches Follow-up aus der Mitarbeiteransicht\n" +
+    "Rücksprache".repeat(24);
+  await dialog.getByLabel("Notiz", { exact: true }).fill(personalNote);
   await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
   await expect(history.locator(".timeline li")).toHaveCount(3);
   await expect(history.locator(".timeline li").first()).toContainText(
@@ -206,6 +208,7 @@ test("employee links open personal services and history, including archives, wit
   ).activities[0];
   expect(newActivity.employee_id).toBe(employee.id);
   expect(newActivity.customer_service_id).toBe(contacted.id);
+  expect(newActivity.note).toBe(personalNote);
 
   await request.patch("/api/customer-services/" + assigned.id, {
     data: { primary_employee_id: colleague.id },
@@ -232,6 +235,7 @@ test("employee links open personal services and history, including archives, wit
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await check(page);
+    await expectTimelineMarkers(history.locator(".timeline"), 3);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
     await page.screenshot({

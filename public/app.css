@@ -597,12 +597,42 @@ img.customer-logo {
   padding: 0;
   margin: 0;
 }
-.timeline li {
+.timeline > li {
+  position: relative;
   border-inline-start: 2px solid var(--oj-border);
-  padding: 0 0 var(--oj-space-5) var(--oj-space-4);
+  padding-block: 0 var(--oj-space-4);
+  padding-inline: var(--oj-space-5) 0;
   margin-inline-start: var(--oj-space-2);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
-.timeline li:last-child {
+.timeline > li::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0.4rem;
+  inset-inline-start: calc(-1px - var(--oj-space-2) / 2);
+  inline-size: var(--oj-space-2);
+  block-size: var(--oj-space-2);
+  border-radius: var(--oj-radius-full);
+  background: var(--oj-accent);
+  box-shadow: 0 0 0 3px var(--oj-surface);
+  pointer-events: none;
+}
+.timeline > li + li {
+  padding-block-start: var(--oj-space-4);
+}
+.timeline > li + li::before {
+  inset-block-start: calc(var(--oj-space-4) + 0.4rem);
+}
+.timeline > li + li::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: var(--oj-space-5) 0;
+  border-block-start: 1px solid var(--oj-border);
+  pointer-events: none;
+}
+.timeline > li:last-child {
   padding-block-end: 0;
 }
 .timeline-title {

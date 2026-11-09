@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { mkdirSync } from "node:fs";
+import { expectTimelineMarkers } from "./timeline.js";
 test("complete customer, contact and offer workflow with persistence", async ({
   page,
   request,
@@ -82,13 +83,10 @@ test("complete customer, contact and offer workflow with persistence", async ({
   await page
     .getByRole("button", { name: "Aktivität hinzufügen", exact: true })
     .click();
-  await page
-    .getByLabel("Notiz", { exact: true })
-    .fill("Follow-up ohne Statuswechsel");
+  const followUp = "Follow-up ohne Statuswechsel\n" + "Referenz".repeat(32);
+  await page.getByLabel("Notiz", { exact: true }).fill(followUp);
   await page.getByRole("button", { name: "Speichern", exact: true }).click();
-  await expect(
-    page.getByText("Follow-up ohne Statuswechsel", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText(followUp, { exact: true })).toBeVisible();
   let data = await (await request.get("/api/customer-services/" + id)).json();
   expect(data.history).toHaveLength(2);
   expect(data.first_pitched_price_minor).toBe(120050);
@@ -160,6 +158,23 @@ test("complete customer, contact and offer workflow with persistence", async ({
     "accepted",
     "done",
   ]);
+  mkdirSync("artifacts/screenshots", { recursive: true });
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const timeline = page.locator(".timeline");
+    await expectTimelineMarkers(
+      timeline,
+      data.history.length + data.activities.length,
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    await timeline.screenshot({
+      path: `artifacts/screenshots/${testInfo.project.name}-${width}-offer-timeline-markers.png`,
+    });
+  }
   await page.getByRole("button", { name: "Archivieren", exact: true }).click();
   await page
     .getByRole("dialog")
