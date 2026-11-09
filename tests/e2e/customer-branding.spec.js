@@ -18,6 +18,19 @@ test("a customer email automatically supplies a persistent logo from the company
       name: "Kunde anlegen",
       exact: true,
     });
+    const upload = dialog.getByLabel("Logo hochladen", { exact: true });
+    const hint = dialog.getByText(
+      "Das Logo wird anhand der Website oder E-Mail-Domain automatisch gesucht.",
+      { exact: true },
+    );
+    await expect(hint).toBeVisible();
+    await expect(upload).toHaveAccessibleDescription(/Das Logo wird anhand/);
+    expect(
+      await hint.evaluate((node) => node.previousElementSibling?.textContent),
+    ).toBe("Logo hochladen");
+    expect(await hint.evaluate((node) => node.nextElementSibling?.type)).toBe(
+      "file",
+    );
     await dialog.getByLabel("Name", { exact: true }).fill(name);
     await dialog
       .getByLabel("Haupt-E-Mail", { exact: true })
