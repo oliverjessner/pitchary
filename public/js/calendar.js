@@ -1,3 +1,5 @@
+import { getLocale } from "./i18n.js";
+
 export function today() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Vienna",
@@ -13,7 +15,7 @@ export function today() {
 
 export const formatDate = (value) =>
   value
-    ? new Intl.DateTimeFormat("de-AT", {
+    ? new Intl.DateTimeFormat(getLocale(), {
         dateStyle: "medium",
         timeZone: "UTC",
       }).format(new Date(value + "T00:00:00.000Z"))

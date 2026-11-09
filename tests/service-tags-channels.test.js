@@ -336,7 +336,7 @@ test("JSON channel additions work without schema changes across offers, activiti
     createAnalytics(crm.repo)({ pitch_channel: "referral" }).summary.pitched,
     1,
   );
-  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
   assert.throws(
     () =>
       db

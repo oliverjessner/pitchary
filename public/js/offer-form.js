@@ -10,6 +10,7 @@ import {
 } from "./dom.js";
 import { customerLogo } from "./customer-branding.js";
 import { today } from "./calendar.js";
+import { t, getLocale } from "./i18n.js";
 function setText(node, value) {
   if (node.textContent !== value) node.textContent = value;
 }
@@ -38,7 +39,7 @@ export function createOfferForm({
         el(
           "div",
           {},
-          el("p", { class: "oj-small oj-muted" }, "Dienstleistung"),
+          el("p", { class: "oj-small oj-muted" }, t("Dienstleistung")),
           el("strong", {}, service.name),
         ),
         el("input", { type: "hidden", name: "service_id", value: service.id }),
@@ -46,10 +47,10 @@ export function createOfferForm({
     );
   else
     fields.push(
-      field("Dienstleistung", "service_id", {
+      field(t("Dienstleistung"), "service_id", {
         value: "",
         options: [
-          ["", "Dienstleistung auswählen"],
+          ["", t("Dienstleistung auswählen")],
           ...services.map((s) => [s.id, s.name]),
         ],
         required: true,
@@ -64,16 +65,16 @@ export function createOfferForm({
   if (batch) {
     const searchable = customers.length > 5;
     customerSearch = searchable
-      ? field("Kunden suchen", "customer_search", {
+      ? field(t("Kunden suchen"), "customer_search", {
           type: "search",
-          placeholder: "Name oder Website",
+          placeholder: t("Name oder Website"),
           autofocus: true,
         })
       : null;
     allButton = el(
       "button",
       { type: "button", class: "oj-button oj-button-ghost oj-button-compact" },
-      "Alle auswählen",
+      t("Alle auswählen"),
     );
     clearButton = el(
       "button",
@@ -82,7 +83,7 @@ export function createOfferForm({
         class: "oj-button oj-button-ghost oj-button-compact",
         disabled: true,
       },
-      "Auswahl aufheben",
+      t("Auswahl aufheben"),
     );
     customerRows = customers.map((c, i) => {
       const control = el("input", {
@@ -114,17 +115,17 @@ export function createOfferForm({
       return {
         row,
         control,
-        term: (c.name + " " + c.website).toLocaleLowerCase(),
+        term: (c.name + " " + c.website).toLocaleLowerCase(getLocale()),
       };
     });
     const noResults = el(
       "p",
       { class: "oj-small oj-muted", hidden: true },
-      "Keine passenden Kunden.",
+      t("Keine passenden Kunden."),
     );
     fields.push(
       section(
-        "Kunden",
+        t("Kunden"),
         el(
           "div",
           { class: "offer-selection-header" },
@@ -138,7 +139,7 @@ export function createOfferForm({
           "div",
           {
             class: "offer-customer-list oj-scroll-area",
-            "aria-label": "Kundenauswahl",
+            "aria-label": t("Kundenauswahl"),
           },
           customerRows.map((c) => c.row),
           noResults,
@@ -150,40 +151,42 @@ export function createOfferForm({
         const term = customerSearch
           .querySelector("input")
           .value.trim()
-          .toLocaleLowerCase();
+          .toLocaleLowerCase(getLocale());
         for (const entry of customerRows)
           entry.row.hidden = !entry.term.includes(term);
         noResults.hidden = customerRows.some((entry) => !entry.row.hidden);
-        allButton.textContent = term ? "Treffer auswählen" : "Alle auswählen";
+        allButton.textContent = term
+          ? t("Treffer auswählen")
+          : t("Alle auswählen");
       });
   } else
     fields.push(
       section(
-        "Kunde & Ansprechpartner",
+        t("Kunde & Ansprechpartner"),
         el(
           "div",
           { class: "form-grid" },
-          field("Kunde", "customer_id", {
+          field(t("Kunde"), "customer_id", {
             value: customer?.id ?? "",
             options: [
-              ["", "Kunde auswählen"],
+              ["", t("Kunde auswählen")],
               ...customers.map((c) => [c.id, c.name]),
             ],
             required: true,
             autofocus: true,
           }),
-          field("Ansprechpartner", "primary_employee_id", {
-            options: [["", "Zuerst Kunde auswählen"]],
+          field(t("Ansprechpartner"), "primary_employee_id", {
+            options: [["", t("Zuerst Kunde auswählen")]],
             disabled: true,
           }),
         ),
       ),
     );
-  const priceField = field("Angebotspreis", "price", {
+  const priceField = field(t("Angebotspreis"), "price", {
     value: "",
     required: true,
     inputmode: "decimal",
-    placeholder: "z. B. 400,00",
+    placeholder: t("z. B. 400,00"),
     maxlength: 14,
   });
   const priceError = el("p", {
@@ -194,13 +197,15 @@ export function createOfferForm({
     "p",
     { class: "oj-helper" },
     batch
-      ? "Dieser Preis gilt pro Kunde. Ohne Tausendertrennzeichen, z. B. 400,00."
-      : "Ohne Tausendertrennzeichen, z. B. 400,00.",
+      ? t(
+          "Dieser Preis gilt pro Kunde. Ohne Tausendertrennzeichen, z. B. 400,00.",
+        )
+      : t("Ohne Tausendertrennzeichen, z. B. 400,00."),
   );
   fields.push(
     section(
-      "Angebotsdetails",
-      field("Angebotsdatum", "offer_date", {
+      t("Angebotsdetails"),
+      field(t("Angebotsdatum"), "offer_date", {
         type: "date",
         value: today(),
         required: true,
@@ -209,7 +214,7 @@ export function createOfferForm({
         "div",
         { class: "offer-money-row" },
         priceField,
-        field("Währung", "currency", {
+        field(t("Währung"), "currency", {
           value: "EUR",
           options: [
             ["EUR", "EUR"],
@@ -223,11 +228,11 @@ export function createOfferForm({
       el(
         "div",
         { class: "offer-terms-row" },
-        field("Abrechnung", "billing_type", {
+        field(t("Abrechnung"), "billing_type", {
           value: "one_time",
           options: options(labels.billing),
         }),
-        field("Pitch-Kanal", "pitch_channel", {
+        field(t("Pitch-Kanal"), "pitch_channel", {
           value: "email",
           options: options(labels.channel),
         }),
@@ -272,7 +277,13 @@ export function createOfferForm({
       if (touched && priceMessage) price.setAttribute("aria-invalid", "true");
       else price.removeAttribute("aria-invalid");
       if (batch) {
-        setText(count, selected + " von " + customers.length + " ausgewählt");
+        setText(
+          count,
+          t("{selected} von {total} ausgewählt", {
+            selected,
+            total: customers.length,
+          }),
+        );
         clearButton.disabled = !selected;
         allButton.disabled = customerRows
           .filter((c) => !c.row.hidden)
@@ -284,22 +295,27 @@ export function createOfferForm({
         summaryTitle,
         selected === 0
           ? batch
-            ? "Kunden auswählen"
-            : "Kunde auswählen"
+            ? t("Kunden auswählen")
+            : t("Kunde auswählen")
           : selected === 1
-            ? "1 eigenständiges Angebot"
-            : selected + " eigenständige Angebote",
+            ? t("1 eigenständiges Angebot")
+            : t("{count} eigenständige Angebote", { count: selected }),
       );
       setText(
         summaryDetail,
         selected > 100
-          ? "Maximal 100 Kunden pro Durchgang."
+          ? t("Maximal 100 Kunden pro Durchgang.")
           : amount === null
-            ? "Angebotspreis eintragen."
-            : money(amount, currency) +
-              (batch ? " pro Kunde" : "") +
-              " · " +
-              labels.billing[billing],
+            ? t("Angebotspreis eintragen.")
+            : batch
+              ? t("{amount} pro Kunde · {billing}", {
+                  amount: money(amount, currency),
+                  billing: labels.billing[billing],
+                })
+              : t("{amount} · {billing}", {
+                  amount: money(amount, currency),
+                  billing: labels.billing[billing],
+                }),
       );
       if (!save.hasAttribute("aria-busy"))
         save.disabled =
@@ -311,12 +327,11 @@ export function createOfferForm({
         save,
         batch
           ? selected
-            ? selected +
-              " " +
-              (selected === 1 ? "Angebot" : "Angebote") +
-              " anlegen"
-            : "Angebote anlegen"
-          : "Angebot anlegen",
+            ? selected === 1
+              ? t("{count} Angebot anlegen", { count: selected })
+              : t("{count} Angebote anlegen", { count: selected })
+            : t("Angebote anlegen")
+          : t("Angebot anlegen"),
       );
     }
     form.addEventListener("input", update);

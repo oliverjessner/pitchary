@@ -1,4 +1,6 @@
 import { api } from "./api.js";
+import { t, getLocale } from "./i18n.js";
+import { languagePreferences } from "./app-settings.js";
 import { showForm } from "./dialogs.js";
 import { toast, confirmDialog } from "../vendor/oj-designsystem/index.js";
 import {
@@ -20,14 +22,14 @@ import {
 import { customerLogo } from "./customer-branding.js";
 import { restoreParams, saveFilters } from "./filter-state.js";
 
-const categories = { revenue: "Einnahmen", payable: "Ausgaben" };
-const states = { open: "Offen", paid: "Bezahlt" };
-const ingestion = {
-  pending: "Erkennung ausstehend",
-  processed: "Verarbeitet",
-  failed: "Verarbeitung fehlgeschlagen",
-  missing: "Quelldatei fehlt",
-};
+const categories = () => ({ revenue: t("Einnahmen"), payable: t("Ausgaben") });
+const states = () => ({ open: t("Offen"), paid: t("Bezahlt") });
+const ingestion = () => ({
+  pending: t("Erkennung ausstehend"),
+  processed: t("Verarbeitet"),
+  failed: t("Verarbeitung fehlgeschlagen"),
+  missing: t("Quelldatei fehlt"),
+});
 const payableTags = [
   "Device",
   "SaaS",
@@ -37,25 +39,25 @@ const payableTags = [
   "Domain",
   "Rent",
 ];
-const monthNames = [
-  "Jänner",
-  "Februar",
-  "März",
-  "April",
-  "Mai",
-  "Juni",
-  "Juli",
-  "August",
-  "September",
-  "Oktober",
-  "November",
-  "Dezember",
+const monthNames = () => [
+  t("Jänner"),
+  t("Februar"),
+  t("März"),
+  t("April"),
+  t("Mai"),
+  t("Juni"),
+  t("Juli"),
+  t("August"),
+  t("September"),
+  t("Oktober"),
+  t("November"),
+  t("Dezember"),
 ];
 const financePath = "/finance";
 let groupNumber = 0;
 
 const notice = (message, type = "success") =>
-  toast(message, { type, dismissLabel: "Schließen" });
+  toast(message, { type, dismissLabel: t("Schließen") });
 const options = (map, first) => [
   ...(first ? [["", first]] : []),
   ...Object.entries(map),
@@ -63,39 +65,52 @@ const options = (map, first) => [
 const amountText = (value) =>
   value === null || value === undefined
     ? ""
-    : `${value < 0 ? "-" : ""}${Math.trunc(Math.abs(value) / 100)},${String(Math.abs(value) % 100).padStart(2, "0")}`;
+    : new Intl.NumberFormat(getLocale(), {
+        useGrouping: false,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value / 100);
 function amountMinor(value, optional = false) {
   const normalized = String(value).trim().replace(",", ".");
   if (!normalized && optional) return null;
   if (!/^-?\d{1,11}(\.\d{1,2})?$/.test(normalized))
     throw new Error(
-      "Betrag mit maximal zwei Nachkommastellen eingeben, z. B. 1200,50. Gutschriften können negativ sein.",
+      t(
+        "Betrag mit maximal zwei Nachkommastellen eingeben, z. B. 1200,50. Gutschriften können negativ sein.",
+      ),
     );
   const sign = normalized.startsWith("-") ? -1 : 1;
   const [whole, fraction = ""] = normalized.replace(/^-/, "").split(".");
   const valueMinor =
     Number(BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"))) * sign;
   if (Math.abs(valueMinor) > 1000000000000)
-    throw new Error("Der Betrag ist zu groß.");
+    throw new Error(t("Der Betrag ist zu groß."));
   return valueMinor;
 }
 function dateLabel(value) {
   if (!value) return "–";
   const date = new Date(value.slice(0, 10) + "T12:00:00");
   return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat("de-AT", { dateStyle: "medium" }).format(date)
+    ? new Intl.DateTimeFormat(getLocale(), { dateStyle: "medium" }).format(date)
     : value;
 }
+const dayCount = (count) =>
+  count === 1 ? t("{count} Tag", { count }) : t("{count} Tage", { count });
 const daysSince = (date) =>
   !date
     ? "–"
-    : `${Math.max(0, Math.floor((Date.now() - Date.parse(date + "T00:00:00Z")) / 86400000))} Tage`;
+    : dayCount(
+        Math.max(
+          0,
+          Math.floor((Date.now() - Date.parse(date + "T00:00:00Z")) / 86400000),
+        ),
+      );
 const customerDays = (row) =>
   Number.isInteger(row.days_since_last_invoice)
-    ? `${row.days_since_last_invoice} Tage`
+    ? dayCount(row.days_since_last_invoice)
     : daysSince(row.last_invoice_date);
 const invoiceLabel = (row) =>
-  row.invoice_number || row.file_name || "Rechnung ohne Nummer";
+  row.invoice_number || row.file_name || t("Rechnung ohne Nummer");
 const currencyMetrics = (row) => row.currencies || row.stats || [];
 const currencyTotal = (row) =>
   row.total_amount_minor ?? row.lifetime_value_minor ?? 0;
@@ -113,9 +128,13 @@ const fileLink = (row) =>
           rel: "noopener",
         },
         icon("file-pdf"),
-        "PDF öffnen",
+        t("PDF öffnen"),
       )
-    : el("span", { class: "oj-small oj-muted" }, "Keine PDF-Datei verfügbar");
+    : el(
+        "span",
+        { class: "oj-small oj-muted" },
+        t("Keine PDF-Datei verfügbar"),
+      );
 function routeFilter(route, params, values) {
   const next = new URLSearchParams(params);
   for (const [key, value] of Object.entries(values))
@@ -165,9 +184,11 @@ function statusControl(row, actions) {
     {
       class: "oj-segmented finance-status",
       role: "group",
-      "aria-label": "Rechnungsstatus: " + invoiceLabel(row),
+      "aria-label": t("Rechnungsstatus: {invoice}", {
+        invoice: invoiceLabel(row),
+      }),
     },
-    Object.entries(states).map(([value, text]) =>
+    Object.entries(states()).map(([value, text]) =>
       el(
         "label",
         {},
@@ -217,7 +238,7 @@ function tagEditor(selected = []) {
     node: el(
       "fieldset",
       { class: "finance-tag-picker wide" },
-      el("legend", { class: "oj-label" }, "Ausgaben-Tags"),
+      el("legend", { class: "oj-label" }, t("Ausgaben-Tags")),
       el("div", { class: "finance-tag-options" }, choices),
     ),
     value: () =>
@@ -233,15 +254,15 @@ function moneyCell(value, currency) {
 }
 function invoiceTable(rows, actions, { sorting, onSort } = {}) {
   const heads = [
-    ["Rechnung", "invoice_number"],
-    ["Datum", "invoice_date"],
-    ["Firma", "counterparty_name"],
-    ["Betrag", "total_amount_minor"],
-    ["Status", "status"],
-    ["Datei", "file_name"],
+    [t("Rechnung"), "invoice_number"],
+    [t("Datum"), "invoice_date"],
+    [t("Firma"), "counterparty_name"],
+    [t("Betrag"), "total_amount_minor"],
+    [t("Status"), "status"],
+    [t("Datei"), "file_name"],
   ];
   const result = table(
-    "Rechnungen",
+    t("Rechnungen"),
     heads.map(([label, key]) =>
       !onSort
         ? label
@@ -251,7 +272,7 @@ function invoiceTable(rows, actions, { sorting, onSort } = {}) {
               type: "button",
               class: "finance-sort",
               onclick: () => onSort(key),
-              "aria-label": label + " sortieren",
+              "aria-label": t("{label} sortieren", { label }),
             },
             label,
             sorting.sort === key
@@ -270,7 +291,7 @@ function invoiceTable(rows, actions, { sorting, onSort } = {}) {
               { class: "oj-small finance-warning" },
               icon("triangle-exclamation"),
               " ",
-              ingestion[row.ingestion_status],
+              ingestion()[row.ingestion_status],
             )
           : null,
       ),
@@ -288,8 +309,7 @@ function invoiceTable(rows, actions, { sorting, onSort } = {}) {
           ? el(
               "p",
               { class: "oj-small finance-warning" },
-              "Überfällig seit ",
-              dateLabel(row.due_date),
+              t("Überfällig seit {date}", { date: dateLabel(row.due_date) }),
             )
           : null,
       ),
@@ -301,13 +321,13 @@ function invoiceTable(rows, actions, { sorting, onSort } = {}) {
             {
               class: "oj-link finance-file-name",
               href: `/api/finance/invoices/${row.id}/file`,
-              title: row.file_name || "PDF öffnen",
+              title: row.file_name || t("PDF öffnen"),
               target: "_blank",
               rel: "noopener",
             },
             icon("file-pdf"),
             " ",
-            row.file_name || "PDF öffnen",
+            row.file_name || t("PDF öffnen"),
           )
         : el("span", { class: "oj-small oj-muted" }, row.file_name || "–"),
     ]),
@@ -332,14 +352,14 @@ function readFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () =>
-      reject(new Error("Die PDF-Datei konnte nicht gelesen werden."));
+      reject(new Error(t("Die PDF-Datei konnte nicht gelesen werden.")));
     reader.onload = () => resolve(String(reader.result).split(",")[1]);
     reader.readAsDataURL(file);
   });
 }
 
 export function createFinanceActions(refresh, navigate) {
-  const saved = async (request, message = "Gespeichert.") => {
+  const saved = async (request, message = t("Gespeichert.")) => {
     const result = await request;
     if (message) notice(message);
     await refresh();
@@ -349,27 +369,28 @@ export function createFinanceActions(refresh, navigate) {
     financeRefresh: () => refresh(),
     financeImport: (category = "revenue") =>
       showForm(
-        "PDF importieren",
+        t("PDF importieren"),
         [
-          field("Art", "category", {
+          field(t("Art"), "category", {
             value: category,
-            options: options(categories),
+            options: options(categories()),
           }),
-          field("PDF-Datei", "file", {
+          field(t("PDF-Datei"), "file", {
             type: "file",
             accept: ".pdf,application/pdf",
             required: true,
             wide: true,
-            helper:
+            helper: t(
               "Die PDF wird lokal gespeichert. Mit einem hinterlegten OpenAI-Schlüssel werden die Rechnungsdaten automatisch erkannt.",
+            ),
           }),
         ],
         async (data, form) => {
           const file = form.elements.namedItem("file").files[0];
           if (!file || !/\.pdf$/i.test(file.name))
-            throw new Error("Bitte eine PDF-Datei auswählen.");
+            throw new Error(t("Bitte eine PDF-Datei auswählen."));
           if (file.size > 20 * 1024 * 1024)
-            throw new Error("Die PDF darf maximal 20 MiB groß sein.");
+            throw new Error(t("Die PDF darf maximal 20 MiB groß sein."));
           return api(financePath + "/import", {
             method: "POST",
             body: {
@@ -380,9 +401,9 @@ export function createFinanceActions(refresh, navigate) {
           });
         },
         {
-          submitLabel: "Importieren",
+          submitLabel: t("Importieren"),
           onSaved: (result) => navigate("/invoices/" + result.invoice.id),
-          successMessage: "PDF importiert.",
+          successMessage: t("PDF importiert."),
         },
       ),
     financePatch: (id, body) =>
@@ -391,12 +412,13 @@ export function createFinanceActions(refresh, navigate) {
       if (
         !(await confirmDialog({
           title: fieldName
-            ? "Korrektur zurücksetzen?"
-            : "Alle Korrekturen zurücksetzen?",
-          message:
+            ? t("Korrektur zurücksetzen?")
+            : t("Alle Korrekturen zurücksetzen?"),
+          message: t(
             "Die ursprünglich erkannten Rechnungsdaten werden wieder verwendet.",
-          confirmLabel: "Zurücksetzen",
-          cancelLabel: "Abbrechen",
+          ),
+          confirmLabel: t("Zurücksetzen"),
+          cancelLabel: t("Abbrechen"),
         }))
       )
         return;
@@ -405,7 +427,7 @@ export function createFinanceActions(refresh, navigate) {
           method: "POST",
           body: fieldName ? { field: fieldName } : {},
         }),
-        "Korrekturen zurückgesetzt.",
+        t("Korrekturen zurückgesetzt."),
       );
     },
     financeReprocess: (id) =>
@@ -414,38 +436,41 @@ export function createFinanceActions(refresh, navigate) {
           method: "POST",
           body: {},
         }),
-        "Rechnung neu verarbeitet. Manuelle Korrekturen bleiben erhalten.",
+        t("Rechnung neu verarbeitet. Manuelle Korrekturen bleiben erhalten."),
       ),
     financeDelete: async (row) => {
       if (
         !(await confirmDialog({
-          title: "Rechnung löschen?",
-          message: `„${invoiceLabel(row)}“ wird mit den Korrekturen und Verarbeitungsprotokollen aus Pitchary gelöscht. Die ursprüngliche PDF im überwachten Ordner bleibt erhalten.`,
-          confirmLabel: "Löschen",
-          cancelLabel: "Abbrechen",
+          title: t("Rechnung löschen?"),
+          message: t(
+            "„{invoice}“ wird mit den Korrekturen und Verarbeitungsprotokollen aus Pitchary gelöscht. Die ursprüngliche PDF im überwachten Ordner bleibt erhalten.",
+            { invoice: invoiceLabel(row) },
+          ),
+          confirmLabel: t("Löschen"),
+          cancelLabel: t("Abbrechen"),
           variant: "danger",
         }))
       )
         return;
       await api(financePath + "/invoices/" + row.id, { method: "DELETE" });
-      notice("Rechnung gelöscht.");
+      notice(t("Rechnung gelöscht."));
       navigate("/invoices");
     },
     financeProfile: (row) =>
       showForm(
-        "Rechnungsdaten des Kunden",
+        t("Rechnungsdaten des Kunden"),
         [
-          field("Kundenname", "name", {
+          field(t("Kundenname"), "name", {
             value: row.name,
             required: true,
             maxlength: 200,
           }),
-          field("Haupt-E-Mail", "general_email", {
+          field(t("Haupt-E-Mail"), "general_email", {
             type: "email",
             value: row.general_email || "",
             maxlength: 500,
           }),
-          field("Rechnungsadresse", "billing_address", {
+          field(t("Rechnungsadresse"), "billing_address", {
             type: "textarea",
             value: row.billing_address || "",
             maxlength: 2000,
@@ -458,23 +483,23 @@ export function createFinanceActions(refresh, navigate) {
       ),
     financeContact: (customerId, row) =>
       showForm(
-        row ? "Ansprechpartner bearbeiten" : "Ansprechpartner hinzufügen",
+        row ? t("Ansprechpartner bearbeiten") : t("Ansprechpartner hinzufügen"),
         [
-          field("Name", "name", {
+          field(t("Name"), "name", {
             value: row?.name || "",
             required: true,
             maxlength: 200,
           }),
-          field("E-Mail", "email", {
+          field(t("E-Mail"), "email", {
             type: "email",
             value: row?.email || "",
             maxlength: 500,
           }),
-          field("Position", "position", {
+          field(t("Position"), "position", {
             value: row?.position || "",
             maxlength: 500,
           }),
-          field("LinkedIn", "linkedin", {
+          field(t("LinkedIn"), "linkedin", {
             type: "url",
             value: row?.linkedin || "",
             maxlength: 500,
@@ -490,22 +515,24 @@ export function createFinanceActions(refresh, navigate) {
     financeArchiveContact: async (row) => {
       if (
         !(await confirmDialog({
-          title: "Ansprechpartner archivieren?",
-          message: `„${row.name}“ bleibt in historischen Vorgängen erhalten.`,
-          confirmLabel: "Archivieren",
-          cancelLabel: "Abbrechen",
+          title: t("Ansprechpartner archivieren?"),
+          message: t("„{name}“ bleibt in historischen Vorgängen erhalten.", {
+            name: row.name,
+          }),
+          confirmLabel: t("Archivieren"),
+          cancelLabel: t("Abbrechen"),
         }))
       )
         return;
       return saved(
         api("/employees/" + row.id, { method: "DELETE" }),
-        "Ansprechpartner archiviert.",
+        t("Ansprechpartner archiviert."),
       );
     },
     financeRestoreContact: (row) =>
       saved(
         api("/employees/" + row.id + "/restore", { method: "POST", body: {} }),
-        "Ansprechpartner wiederhergestellt.",
+        t("Ansprechpartner wiederhergestellt."),
       ),
     financeEnrich: (id) =>
       saved(
@@ -513,7 +540,7 @@ export function createFinanceActions(refresh, navigate) {
           method: "POST",
           body: {},
         }),
-        "Kundenangaben geprüft.",
+        t("Kundenangaben geprüft."),
       ),
     financeScan: async () => {
       const result = await api(financePath + "/scan", {
@@ -521,7 +548,15 @@ export function createFinanceActions(refresh, navigate) {
         body: {},
       });
       notice(
-        `${result.imported || 0} importiert · ${result.skipped || 0} unverändert · ${result.failed || 0} fehlgeschlagen · ${result.missing || 0} fehlende Dateien`,
+        t(
+          "{imported} importiert · {skipped} unverändert · {failed} fehlgeschlagen · {missing} fehlende Dateien",
+          {
+            imported: result.imported || 0,
+            skipped: result.skipped || 0,
+            failed: result.failed || 0,
+            missing: result.missing || 0,
+          },
+        ),
         result.failed ? "warning" : "success",
       );
       await refresh();
@@ -530,7 +565,7 @@ export function createFinanceActions(refresh, navigate) {
     financeSettingsSave: (body) =>
       saved(
         api(financePath + "/settings", { method: "PATCH", body }),
-        "Finanz-Einstellungen gespeichert.",
+        t("Finanz-Einstellungen gespeichert."),
       ),
     financeKeyTest: async (key, model) => {
       const result = await api(financePath + "/settings/test-key", {
@@ -539,8 +574,8 @@ export function createFinanceActions(refresh, navigate) {
       });
       notice(
         result.ok
-          ? "OpenAI-Schlüssel gültig."
-          : "OpenAI-Schlüssel konnte nicht bestätigt werden.",
+          ? t("OpenAI-Schlüssel gültig.")
+          : t("OpenAI-Schlüssel konnte nicht bestätigt werden."),
         result.ok ? "success" : "error",
       );
       return result;
@@ -548,17 +583,18 @@ export function createFinanceActions(refresh, navigate) {
     financeKeyRemove: async () => {
       if (
         !(await confirmDialog({
-          title: "OpenAI-Schlüssel entfernen?",
-          message:
+          title: t("OpenAI-Schlüssel entfernen?"),
+          message: t(
             "Manuelle Bearbeitung und lokal gespeicherte Rechnungen bleiben verfügbar.",
-          confirmLabel: "Entfernen",
-          cancelLabel: "Abbrechen",
+          ),
+          confirmLabel: t("Entfernen"),
+          cancelLabel: t("Abbrechen"),
         }))
       )
         return;
       return saved(
         api(financePath + "/settings/key", { method: "DELETE" }),
-        "OpenAI-Schlüssel entfernt.",
+        t("OpenAI-Schlüssel entfernt."),
       );
     },
   };
@@ -580,7 +616,7 @@ function svgNode(tag, attrs = {}, ...children) {
 function monthlyChart(rows, currency, { split = false } = {}) {
   const series = rows.filter((row) => row.currency === currency);
   if (!series.length)
-    return el("p", { class: "oj-muted" }, "Noch keine Monatswerte.");
+    return el("p", { class: "oj-muted" }, t("Noch keine Monatswerte."));
   const containerWidth =
     document.querySelector(".app-content")?.clientWidth || window.innerWidth;
   const chartWidth =
@@ -611,12 +647,18 @@ function monthlyChart(rows, currency, { split = false } = {}) {
       viewBox: `0 0 ${width} ${height}`,
       class: "finance-chart",
       role: "img",
-      "aria-label": `Einnahmen, Ausgaben und Gewinn der letzten zwölf Monate in ${currency}`,
+      "aria-label": t(
+        "Einnahmen, Ausgaben und Gewinn der letzten zwölf Monate in {currency}",
+        { currency },
+      ),
     },
     svgNode(
       "title",
       {},
-      `Monatsentwicklung in ${currency}. Die genauen Werte stehen in der Tabelle unter dem Diagramm.`,
+      t(
+        "Monatsentwicklung in {currency}. Die genauen Werte stehen in der Tabelle unter dem Diagramm.",
+        { currency },
+      ),
     ),
   );
   for (let index = 0; index <= 4; index++) {
@@ -637,7 +679,7 @@ function monthlyChart(rows, currency, { split = false } = {}) {
           "text-anchor": "end",
           class: "finance-chart-label",
         },
-        new Intl.NumberFormat("de-AT", {
+        new Intl.NumberFormat(getLocale(), {
           notation: "compact",
           maximumFractionDigits: 1,
         }).format(value / 100),
@@ -659,9 +701,9 @@ function monthlyChart(rows, currency, { split = false } = {}) {
     ),
   );
   for (const [key, label] of [
-    ["revenue", "Einnahmen"],
-    ["payable", "Ausgaben"],
-    ["profit", "Gewinn"],
+    ["revenue", t("Einnahmen")],
+    ["payable", t("Ausgaben")],
+    ["profit", t("Gewinn")],
   ]) {
     svg.append(
       svgNode("polyline", {
@@ -705,7 +747,11 @@ function monthlyChart(rows, currency, { split = false } = {}) {
             class: "finance-legend-dot finance-chart-" + key,
             "aria-hidden": "true",
           }),
-          { revenue: "Einnahmen", payable: "Ausgaben", profit: "Gewinn" }[key],
+          {
+            revenue: t("Einnahmen"),
+            payable: t("Ausgaben"),
+            profit: t("Gewinn"),
+          }[key],
         ),
       ),
     ),
@@ -713,13 +759,13 @@ function monthlyChart(rows, currency, { split = false } = {}) {
     el(
       "details",
       { class: "oj-accordion" },
-      el("summary", {}, "Monatswerte anzeigen"),
+      el("summary", {}, t("Monatswerte anzeigen")),
       el(
         "div",
         { class: "oj-accordion-body" },
         table(
-          "Monatliche Finanzwerte",
-          ["Monat", "Einnahmen", "Ausgaben", "Gewinn"],
+          t("Monatliche Finanzwerte"),
+          [t("Monat"), t("Einnahmen"), t("Ausgaben"), t("Gewinn")],
           series.map((row) => [
             row.month,
             moneyCell(row.revenue, currency),
@@ -734,7 +780,7 @@ function monthlyChart(rows, currency, { split = false } = {}) {
 function combinedAmount(group) {
   if (group.amounts.length === 1)
     return money(group.total_amount_minor, group.amounts[0].currency);
-  return new Intl.NumberFormat("de-AT", {
+  return new Intl.NumberFormat(getLocale(), {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(group.total_amount_minor / 100);
@@ -770,7 +816,11 @@ function topList(title, rows) {
             ),
           ),
         )
-      : el("p", { class: "oj-muted" }, "Noch keine Rechnungen in diesem Jahr."),
+      : el(
+          "p",
+          { class: "oj-muted" },
+          t("Noch keine Rechnungen in diesem Jahr."),
+        ),
   );
 }
 
@@ -797,14 +847,14 @@ export async function financeDashboard(
   const controls = el(
     "div",
     { class: "finance-filters" },
-    selectField("Jahr", "year", {
+    selectField(t("Jahr"), "year", {
       options: years.map((value) => [value, value]),
       value: year,
       onchange: (event) =>
         routeFilter("/dashboard", params, { year: event.target.value }),
     }),
-    selectField("Monat", "month", {
-      options: monthNames.map((label, index) => [
+    selectField(t("Monat"), "month", {
+      options: monthNames().map((label, index) => [
         String(index + 1).padStart(2, "0"),
         label,
       ]),
@@ -813,7 +863,7 @@ export async function financeDashboard(
         routeFilter("/dashboard", params, { month: event.target.value }),
     }),
     currencies.length > 1
-      ? selectField("Diagramm-Währung", "currency", {
+      ? selectField(t("Diagramm-Währung"), "currency", {
           options: currencies.map((row) => [row.currency, row.currency]),
           value: currency,
           onchange: (event) =>
@@ -826,7 +876,7 @@ export async function financeDashboard(
       "section",
       {
         class: "finance-currency-group oj-stack",
-        "aria-label": "Kennzahlen in " + row.currency,
+        "aria-label": t("Kennzahlen in {currency}", { currency: row.currency }),
       },
       currencies.length > 1
         ? el("h2", { class: "oj-heading-3" }, row.currency)
@@ -836,23 +886,35 @@ export async function financeDashboard(
         { class: "finance-kpis" },
         [
           [
-            "Einnahmen · " + monthNames[Number(month) - 1],
+            t("Einnahmen · {period}", {
+              period: monthNames()[Number(month) - 1],
+            }),
             row.month.revenue,
             "revenue",
           ],
           [
-            "Ausgaben · " + monthNames[Number(month) - 1],
+            t("Ausgaben · {period}", {
+              period: monthNames()[Number(month) - 1],
+            }),
             row.month.payable,
             "payable",
           ],
           [
-            "Gewinn · " + monthNames[Number(month) - 1],
+            t("Gewinn · {period}", { period: monthNames()[Number(month) - 1] }),
             row.month.profit,
             "profit",
           ],
-          ["Einnahmen · " + year, row.year.revenue, "revenue"],
-          ["Ausgaben · " + year, row.year.payable, "payable"],
-          ["Gewinn · " + year, row.year.profit, "profit"],
+          [
+            t("Einnahmen · {period}", { period: year }),
+            row.year.revenue,
+            "revenue",
+          ],
+          [
+            t("Ausgaben · {period}", { period: year }),
+            row.year.payable,
+            "payable",
+          ],
+          [t("Gewinn · {period}", { period: year }), row.year.profit, "profit"],
         ].map(([label, value, kind]) => {
           const card = metric(label, money(value, row.currency));
           card.classList.add("finance-metric-" + kind);
@@ -877,12 +939,16 @@ export async function financeDashboard(
     !currencies.length
       ? empty(
           data.currencies.length
-            ? "Keine Finanzwerte für diese Übersicht"
-            : "Noch keine Rechnungen",
+            ? t("Keine Finanzwerte für diese Übersicht")
+            : t("Noch keine Rechnungen"),
           data.currencies.length
-            ? "Deine gespeicherten Rechnungen findest du in der Rechnungsverwaltung."
-            : "Importiere eine PDF oder hinterlege deine Rechnungsordner in den Finanz-Einstellungen.",
-          link("Rechnungen öffnen", "#/invoices"),
+            ? t(
+                "Deine gespeicherten Rechnungen findest du in der Rechnungsverwaltung.",
+              )
+            : t(
+                "Importiere eine PDF oder hinterlege deine Rechnungsordner in den Finanz-Einstellungen.",
+              ),
+          link(t("Rechnungen öffnen"), "#/invoices"),
         )
       : null,
     currencies.length
@@ -890,7 +956,7 @@ export async function financeDashboard(
           "div",
           { class: "finance-chart-overdue" },
           panel(
-            "Monatsentwicklung · " + currency,
+            t("Monatsentwicklung · {currency}", { currency }),
             monthlyChart(data.months.filter(visibleCurrency), currency, {
               split: true,
             }),
@@ -899,14 +965,14 @@ export async function financeDashboard(
             "div",
             { class: "finance-overdue" },
             metric(
-              "Überfällige Einnahmen",
+              t("Überfällige Einnahmen"),
               overdueValue("revenue"),
-              "Offene Rechnungen vor dem heutigen Fälligkeitsdatum",
+              t("Offene Rechnungen vor dem heutigen Fälligkeitsdatum"),
             ),
             metric(
-              "Überfällige Ausgaben",
+              t("Überfällige Ausgaben"),
               overdueValue("payable"),
-              "Offene Rechnungen vor dem heutigen Fälligkeitsdatum",
+              t("Offene Rechnungen vor dem heutigen Fälligkeitsdatum"),
             ),
           ),
         )
@@ -914,8 +980,14 @@ export async function financeDashboard(
     el(
       "div",
       { class: "finance-two-columns finance-open-invoices" },
-      panel("Offene Einnahmen", invoiceTable(data.open_revenue || [], actions)),
-      panel("Offene Ausgaben", invoiceTable(data.open_payable || [], actions)),
+      panel(
+        t("Offene Einnahmen"),
+        invoiceTable(data.open_revenue || [], actions),
+      ),
+      panel(
+        t("Offene Ausgaben"),
+        invoiceTable(data.open_payable || [], actions),
+      ),
     ),
   ];
   return disposable(
@@ -924,7 +996,7 @@ export async function financeDashboard(
         "section",
         {
           class: "dashboard-finance oj-stack",
-          "aria-label": "Finanzübersicht",
+          "aria-label": t("Finanzübersicht"),
         },
         nodes,
       ),
@@ -953,7 +1025,14 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
   const content = el("div", {});
   const count = el("p", { class: "oj-small oj-muted", role: "status" });
   function renderRows(items) {
-    count.textContent = `${items.length} ${category === "payable" ? "Ausgaben" : "Einnahmen"}`;
+    count.textContent =
+      category === "payable"
+        ? items.length === 1
+          ? t("{count} Ausgabe", { count: items.length })
+          : t("{count} Ausgaben", { count: items.length })
+        : items.length === 1
+          ? t("{count} Einnahme", { count: items.length })
+          : t("{count} Einnahmen", { count: items.length });
     content.replaceChildren(
       invoiceTable(items, actions, {
         sorting: query,
@@ -970,10 +1049,10 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
   const filters = el(
     "div",
     { class: "finance-filters" },
-    field("Suchen", "search", {
+    field(t("Suchen"), "search", {
       type: "search",
       value: query.search,
-      placeholder: "Firma, Nummer oder Datei",
+      placeholder: t("Firma, Nummer oder Datei"),
       oninput: (event) => {
         clearTimeout(timer);
         const value = event.target.value;
@@ -995,17 +1074,17 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
         }, 300);
       },
     }),
-    selectField("Jahr", "year", {
+    selectField(t("Jahr"), "year", {
       options: [
-        ["", "Alle Jahre"],
+        ["", t("Alle Jahre")],
         ...(data.years || []).map((value) => [value, value]),
       ],
       value: query.year,
       onchange: (event) =>
         routeFilter("/invoices", params, { year: event.target.value }),
     }),
-    selectField("Status", "status", {
-      options: options(states, "Alle Status"),
+    selectField(t("Status"), "status", {
+      options: options(states(), t("Alle Status")),
       value: query.status,
       onchange: (event) =>
         routeFilter("/invoices", params, { status: event.target.value }),
@@ -1017,9 +1096,9 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
     {
       class: "oj-segmented finance-category",
       role: "group",
-      "aria-label": "Rechnungsart",
+      "aria-label": t("Rechnungsart"),
     },
-    Object.entries(categories).map(([value, label]) =>
+    Object.entries(categories()).map(([value, label]) =>
       el(
         "label",
         {},
@@ -1038,14 +1117,14 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
   return disposable(
     [
       heading(
-        "Rechnungen",
-        "PDFs, Zahlungsstatus und erkannte Rechnungsdaten.",
+        t("Rechnungen"),
+        t("PDFs, Zahlungsstatus und erkannte Rechnungsdaten."),
         [
-          button("PDF importieren", () => actions.financeImport(category), {
+          button(t("PDF importieren"), () => actions.financeImport(category), {
             primary: true,
             iconName: "file-arrow-up",
           }),
-          button("Ordner einlesen", () => actions.financeScan(), {
+          button(t("Ordner einlesen"), () => actions.financeScan(), {
             iconName: "folder-open",
           }),
         ],
@@ -1058,11 +1137,11 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
               "p",
               { class: "oj-small oj-muted" },
               query.customer_service_id
-                ? "Rechnungen für diesen Vorgang"
-                : "Rechnungen für diesen Kunden",
+                ? t("Rechnungen für diesen Vorgang")
+                : t("Rechnungen für diesen Kunden"),
             ),
             button(
-              "Zuordnungsfilter entfernen",
+              t("Zuordnungsfilter entfernen"),
               () =>
                 routeFilter("/invoices", params, {
                   customer_id: "",
@@ -1097,7 +1176,7 @@ async function editInvoice(row, actions) {
   )
     allCustomers.push({
       id: row.customer_id,
-      name: row.customer_name || "Archivierter Kunde",
+      name: row.customer_name || t("Archivierter Kunde"),
     });
   const allRelationships = [...relationships];
   if (
@@ -1110,69 +1189,75 @@ async function editInvoice(row, actions) {
       id: row.customer_service_id,
       customer_id: row.customer_id,
       customer_name: row.customer_name,
-      service_name: row.service_name || "Archiviertes Angebot",
+      service_name: row.service_name || t("Archiviertes Angebot"),
     });
   const tags = tagEditor(row.tags);
   const fields = [
-    selectField("Art", "category", {
+    selectField(t("Art"), "category", {
       value: row.category,
-      options: options(categories),
+      options: options(categories()),
     }),
-    field("Rechnungsnummer", "invoice_number", {
+    field(t("Rechnungsnummer"), "invoice_number", {
       value: row.invoice_number || "",
       maxlength: 200,
     }),
-    field("Rechnungsdatum", "invoice_date", {
+    field(t("Rechnungsdatum"), "invoice_date", {
       type: "date",
       value: row.invoice_date || "",
     }),
-    field("Fällig am", "due_date", { type: "date", value: row.due_date || "" }),
-    field("Firma auf der Rechnung", "counterparty_name", {
+    field(t("Fällig am"), "due_date", {
+      type: "date",
+      value: row.due_date || "",
+    }),
+    field(t("Firma auf der Rechnung"), "counterparty_name", {
       value: row.counterparty_name || "",
       maxlength: 500,
     }),
-    field("Währung", "currency", {
+    field(t("Währung"), "currency", {
       value: row.currency || "EUR",
       minlength: 3,
       maxlength: 3,
       required: true,
       pattern: "[A-Za-z]{3}",
     }),
-    field("Gesamtbetrag", "total_amount_minor", {
+    field(t("Gesamtbetrag"), "total_amount_minor", {
       value: amountText(row.total_amount_minor),
       inputmode: "decimal",
       required: true,
-      helper: "Ohne Tausendertrennzeichen. Negative Beträge für Gutschriften.",
+      helper: t(
+        "Ohne Tausendertrennzeichen. Negative Beträge für Gutschriften.",
+      ),
     }),
-    field("Netto", "net_amount_minor", {
+    field(t("Netto"), "net_amount_minor", {
       value: amountText(row.net_amount_minor),
       inputmode: "decimal",
     }),
-    field("Steuer", "tax_amount_minor", {
+    field(t("Steuer"), "tax_amount_minor", {
       value: amountText(row.tax_amount_minor),
       inputmode: "decimal",
     }),
-    selectField("Status", "status", {
+    selectField(t("Status"), "status", {
       value: row.status,
-      options: options(states),
+      options: options(states()),
     }),
-    field("Bezahlt am", "paid_at", {
+    field(t("Bezahlt am"), "paid_at", {
       type: "date",
       value: row.paid_at?.slice(0, 10) || "",
-      helper:
+      helper: t(
         "Beim Wechsel auf Bezahlt wird ohne Angabe das heutige Datum gesetzt.",
+      ),
     }),
-    selectField("CRM-Kunde", "customer_id", {
+    selectField(t("CRM-Kunde"), "customer_id", {
       value: row.customer_id || "",
       options: [
-        ["", "Keine Zuordnung"],
+        ["", t("Keine Zuordnung")],
         ...allCustomers.map((customer) => [customer.id, customer.name]),
       ],
     }),
-    selectField("Angebot / Vorgang", "customer_service_id", {
+    selectField(t("Angebot / Vorgang"), "customer_service_id", {
       value: row.customer_service_id || "",
       options: [
-        ["", "Keine Zuordnung"],
+        ["", t("Keine Zuordnung")],
         ...allRelationships
           .filter(
             (relationship) =>
@@ -1188,7 +1273,7 @@ async function editInvoice(row, actions) {
     tags.node,
   ];
   showForm(
-    "Rechnung bearbeiten",
+    t("Rechnung bearbeiten"),
     fields,
     (data) => {
       const body = {
@@ -1244,7 +1329,7 @@ async function editInvoice(row, actions) {
         updateTags();
         customer.addEventListener("change", () => {
           relationship.replaceChildren(
-            el("option", { value: "" }, "Keine Zuordnung"),
+            el("option", { value: "" }, t("Keine Zuordnung")),
             ...allRelationships
               .filter(
                 (item) =>
@@ -1276,36 +1361,43 @@ export async function invoiceDetail(id, actions) {
     api(financePath + "/invoices/" + id + "/logs"),
   ]);
   const fields = [
-    ["invoice_number", "Rechnungsnummer", row.invoice_number || "–"],
-    ["category", "Art", categories[row.category]],
-    ["invoice_date", "Rechnungsdatum", dateLabel(row.invoice_date)],
-    ["due_date", "Fällig am", dateLabel(row.due_date)],
-    ["counterparty_name", "Firma", row.counterparty_name || "–"],
+    ["invoice_number", t("Rechnungsnummer"), row.invoice_number || "–"],
+    ["category", t("Art"), categories()[row.category]],
+    ["invoice_date", t("Rechnungsdatum"), dateLabel(row.invoice_date)],
+    ["due_date", t("Fällig am"), dateLabel(row.due_date)],
+    ["counterparty_name", t("Firma"), row.counterparty_name || "–"],
     [
       "total_amount_minor",
-      "Gesamtbetrag",
+      t("Gesamtbetrag"),
       money(row.total_amount_minor, row.currency),
     ],
-    ["net_amount_minor", "Netto", money(row.net_amount_minor, row.currency)],
-    ["tax_amount_minor", "Steuer", money(row.tax_amount_minor, row.currency)],
-    ["currency", "Währung", row.currency],
-    ["paid_at", "Bezahlt am", dateLabel(row.paid_at)],
+    ["net_amount_minor", t("Netto"), money(row.net_amount_minor, row.currency)],
+    [
+      "tax_amount_minor",
+      t("Steuer"),
+      money(row.tax_amount_minor, row.currency),
+    ],
+    ["currency", t("Währung"), row.currency],
+    ["paid_at", t("Bezahlt am"), dateLabel(row.paid_at)],
     [
       "customer_id",
-      "CRM-Kunde",
+      t("CRM-Kunde"),
       row.customer_id
-        ? link(row.customer_name || "Kunde", "#/customers/" + row.customer_id)
-        : "Nicht zugeordnet",
+        ? link(
+            row.customer_name || t("Kunde"),
+            "#/customers/" + row.customer_id,
+          )
+        : t("Nicht zugeordnet"),
     ],
     [
       "customer_service_id",
-      "Angebot / Vorgang",
+      t("Angebot / Vorgang"),
       row.customer_service_id
         ? link(
-            row.service_name || row.relationship_name || "Angebot",
+            row.service_name || row.relationship_name || t("Angebot"),
             "#/relationships/" + row.customer_service_id,
           )
-        : "Nicht zugeordnet",
+        : t("Nicht zugeordnet"),
     ],
   ];
   const overrides = row.overrides || {};
@@ -1316,11 +1408,11 @@ export async function invoiceDetail(id, actions) {
   const nodes = [
     heading(
       invoiceLabel(row),
-      `${categories[row.category]} · ${row.counterparty_name || "Firma noch nicht erkannt"}`,
+      `${categories()[row.category]} · ${row.counterparty_name || t("Firma noch nicht erkannt")}`,
       [
         fileLink(row),
         button(
-          "Bearbeiten",
+          t("Bearbeiten"),
           () =>
             editInvoice(row, actions).catch((error) =>
               notice(error.message, "error"),
@@ -1329,27 +1421,31 @@ export async function invoiceDetail(id, actions) {
         ),
       ],
     ),
-    link("← Alle Rechnungen", "#/invoices"),
+    link(t("← Alle Rechnungen"), "#/invoices"),
     ["failed", "missing", "pending"].includes(row.ingestion_status)
       ? el(
           "div",
           { class: "oj-alert oj-alert-warning", role: "status" },
           icon("triangle-exclamation"),
           " ",
-          ingestion[row.ingestion_status],
+          ingestion()[row.ingestion_status],
           row.ingestion_status === "failed"
-            ? ". Du kannst die Werte manuell bearbeiten oder die Verarbeitung erneut starten."
+            ? t(
+                ". Du kannst die Werte manuell bearbeiten oder die Verarbeitung erneut starten.",
+              )
             : row.ingestion_status === "pending"
-              ? ". Ohne OpenAI-Schlüssel bleiben die lokal erkannten Angaben zur manuellen Bearbeitung verfügbar."
-              : ". Die gespeicherten Rechnungsdaten bleiben verfügbar.",
+              ? t(
+                  ". Ohne OpenAI-Schlüssel bleiben die lokal erkannten Angaben zur manuellen Bearbeitung verfügbar.",
+                )
+              : t(". Die gespeicherten Rechnungsdaten bleiben verfügbar."),
         )
       : null,
     panel(
-      "Rechnungsdaten",
+      t("Rechnungsdaten"),
       el(
         "div",
         { class: "finance-detail-status" },
-        el("span", { class: "oj-label" }, "Zahlungsstatus"),
+        el("span", { class: "oj-label" }, t("Zahlungsstatus")),
         statusControl(row, actions),
       ),
       el(
@@ -1366,7 +1462,7 @@ export async function invoiceDetail(id, actions) {
               el("span", { class: "finance-fact-value" }, value),
               Object.hasOwn(overrides, name)
                 ? button(
-                    "Korrektur zurücksetzen",
+                    t("Korrektur zurücksetzen"),
                     () => actions.financeReset(id, name),
                     { compact: true, iconName: "rotate-left" },
                   )
@@ -1379,7 +1475,7 @@ export async function invoiceDetail(id, actions) {
         ? el(
             "div",
             { class: "oj-stack" },
-            el("h3", { class: "oj-heading-4" }, "Ausgaben-Tags"),
+            el("h3", { class: "oj-heading-4" }, t("Ausgaben-Tags")),
             el(
               "div",
               { class: "finance-tag-options" },
@@ -1408,29 +1504,29 @@ export async function invoiceDetail(id, actions) {
         : null,
     ),
     panel(
-      "Erkennung",
+      t("Erkennung"),
       facts([
         [
-          "Verarbeitung",
-          ingestion[row.ingestion_status] || row.ingestion_status,
+          t("Verarbeitung"),
+          ingestion()[row.ingestion_status] || row.ingestion_status,
         ],
         [
-          "Sprache",
-          { deu: "Deutsch", eng: "Englisch" }[row.document_language] ||
+          t("Sprache"),
+          { deu: t("Deutsch"), eng: t("Englisch") }[row.document_language] ||
             row.document_language ||
             "–",
         ],
         [
-          "Konfidenz",
+          t("Konfidenz"),
           row.confidence_score === null || row.confidence_score === undefined
             ? "–"
-            : new Intl.NumberFormat("de-AT", {
+            : new Intl.NumberFormat(getLocale(), {
                 style: "percent",
                 maximumFractionDigits: 0,
               }).format(row.confidence_score),
         ],
-        ["Datei", row.file_name || "–"],
-        ["Historisch versendet am", dateLabel(row.send_date)],
+        [t("Datei"), row.file_name || "–"],
+        [t("Historisch versendet am"), dateLabel(row.send_date)],
       ]),
       row.extraction_notes
         ? el("p", { class: "note-text oj-small" }, row.extraction_notes)
@@ -1438,13 +1534,13 @@ export async function invoiceDetail(id, actions) {
       el(
         "div",
         { class: "finance-actions" },
-        button("Erneut verarbeiten", () => actions.financeReprocess(id), {
+        button(t("Erneut verarbeiten"), () => actions.financeReprocess(id), {
           disabled: !row.has_file,
           iconName: "rotate",
         }),
         Object.keys(overrides).length
           ? button(
-              "Alle Korrekturen zurücksetzen",
+              t("Alle Korrekturen zurücksetzen"),
               () => actions.financeReset(id),
               { iconName: "rotate-left" },
             )
@@ -1453,21 +1549,21 @@ export async function invoiceDetail(id, actions) {
       el(
         "details",
         { class: "oj-accordion" },
-        el("summary", {}, "Ausgelesener Text"),
+        el("summary", {}, t("Ausgelesener Text")),
         el(
           "div",
           { class: "oj-accordion-body" },
           el(
             "pre",
             { class: "finance-source-text oj-mono" },
-            row.ocr_text || "Noch kein Text gespeichert.",
+            row.ocr_text || t("Noch kein Text gespeichert."),
           ),
         ),
       ),
       el(
         "details",
         { class: "oj-accordion" },
-        el("summary", {}, "Extraktions-JSON"),
+        el("summary", {}, t("Extraktions-JSON")),
         el(
           "div",
           { class: "oj-accordion-body" },
@@ -1476,10 +1572,10 @@ export async function invoiceDetail(id, actions) {
       ),
     ),
     panel(
-      "Verarbeitungsprotokoll",
+      t("Verarbeitungsprotokoll"),
       table(
-        "Verarbeitungsprotokoll",
-        ["Zeitpunkt", "Vorgang", "Status", "Meldung"],
+        t("Verarbeitungsprotokoll"),
+        [t("Zeitpunkt"), t("Vorgang"), t("Status"), t("Meldung")],
         (logs.items || []).map((log) => [
           datetime(log.created_at),
           log.process_type,
@@ -1491,7 +1587,7 @@ export async function invoiceDetail(id, actions) {
     el(
       "div",
       { class: "finance-actions" },
-      button("Rechnung löschen", () => actions.financeDelete(row), {
+      button(t("Rechnung löschen"), () => actions.financeDelete(row), {
         danger: true,
         iconName: "trash",
       }),
@@ -1546,19 +1642,19 @@ export async function financeCustomers(
     return (
       (typeof left === "number"
         ? left - right
-        : String(left).localeCompare(String(right), "de")) *
+        : String(left).localeCompare(String(right), getLocale())) *
       (order === "asc" ? 1 : -1)
     );
   });
   const heads = [
-    ["Kunde", "name"],
-    ["Erste Rechnung", "first_invoice_date"],
-    ["Letzte Rechnung", "last_invoice_date"],
-    ["Umsatz gesamt", "lifetime_value"],
-    ["Seit letzter Rechnung", "days_since_last_invoice"],
+    [t("Kunde"), "name"],
+    [t("Erste Rechnung"), "first_invoice_date"],
+    [t("Letzte Rechnung"), "last_invoice_date"],
+    [t("Umsatz gesamt"), "lifetime_value"],
+    [t("Seit letzter Rechnung"), "days_since_last_invoice"],
   ];
   const list = table(
-    "Umsatz",
+    t("Umsatz"),
     heads.map(([label, key]) =>
       el(
         "button",
@@ -1617,7 +1713,7 @@ export async function financeCustomers(
         el(
           "td",
           { colspan: heads.length, class: "oj-muted" },
-          "Keine Kunden gefunden.",
+          t("Keine Kunden gefunden."),
         ),
       )
     : null;
@@ -1627,8 +1723,8 @@ export async function financeCustomers(
     let matches = 0;
     bodyRows.forEach((node, index) => {
       node.hidden = !rows[index].name
-        .toLocaleLowerCase()
-        .includes(value.toLocaleLowerCase());
+        .toLocaleLowerCase(getLocale())
+        .includes(value.toLocaleLowerCase(getLocale()));
       if (!node.hidden) matches++;
     });
     noResults.hidden = matches > 0;
@@ -1636,17 +1732,20 @@ export async function financeCustomers(
   searchRows(search);
   return disposable(
     [
-      heading("Umsatz", "Jahresranglisten und Rechnungsumsatz deiner Kunden."),
+      heading(
+        t("Umsatz"),
+        t("Jahresranglisten und Rechnungsumsatz deiner Kunden."),
+      ),
       el(
         "section",
         {
           class: "finance-rankings oj-stack",
-          "aria-label": "Jahresranglisten",
+          "aria-label": t("Jahresranglisten"),
         },
         el(
           "div",
           { class: "finance-ranking-year" },
-          field("Jahr", "year", {
+          field(t("Jahr"), "year", {
             options: years.map((value) => [value, value]),
             value: year,
             onchange: (event) =>
@@ -1662,29 +1761,37 @@ export async function financeCustomers(
             "div",
             { class: "finance-overall-revenue" },
             metric(
-              "Gesamtumsatz",
+              t("Gesamtumsatz"),
               combinedAmount(rankings.overall_revenue),
-              "Alle Einnahmenrechnungen, über alle Jahre" +
-                (rankings.overall_revenue.amounts.length > 1
-                  ? " · " +
-                    rankings.overall_revenue.amounts
-                      .map(({ currency }) => currency)
-                      .join(" + ") +
-                    ", ohne Währungsumrechnung"
-                  : ""),
+              rankings.overall_revenue.amounts.length > 1
+                ? t(
+                    "Alle Einnahmenrechnungen, über alle Jahre · {currencies}, ohne Währungsumrechnung",
+                    {
+                      currencies: rankings.overall_revenue.amounts
+                        .map(({ currency }) => currency)
+                        .join(" + "),
+                    },
+                  )
+                : t("Alle Einnahmenrechnungen, über alle Jahre"),
             ),
           ),
-          topList("Beste Kunden · " + year, rankings.top_revenue || []),
-          topList("Höchste Kosten · " + year, rankings.top_payable || []),
+          topList(
+            t("Beste Kunden · {year}", { year }),
+            rankings.top_revenue || [],
+          ),
+          topList(
+            t("Höchste Kosten · {year}", { year }),
+            rankings.top_payable || [],
+          ),
         ),
       ),
       el(
         "div",
         { class: "finance-filters" },
-        field("Kunden suchen", "search", {
+        field(t("Kunden suchen"), "search", {
           type: "search",
           value: search,
-          placeholder: "Kundenname",
+          placeholder: t("Kundenname"),
           oninput: (event) => {
             const value = event.target.value;
             rememberSearch("/finance-customers", params, value);
@@ -1692,13 +1799,13 @@ export async function financeCustomers(
           },
         }),
         currencies.length > 1
-          ? field("Währung", "currency", {
+          ? field(t("Währung"), "currency", {
               options: [
-                ["", "Alle Währungen"],
+                ["", t("Alle Währungen")],
                 ...currencies.map((value) => [value, value]),
               ],
               value: currency,
-              helper: "Für die Umsatzsortierung eine Währung auswählen.",
+              helper: t("Für die Umsatzsortierung eine Währung auswählen."),
               onchange: (event) =>
                 routeFilter("/finance-customers", params, {
                   currency: event.target.value,
@@ -1718,69 +1825,77 @@ export function withFinanceRefresh(nodes, actions) {
 
 export function customerFinanceSections(row, actions) {
   const enrichmentLabels = {
-    pending: "Noch nicht geprüft",
-    completed: "Ergänzt",
-    failed: "Prüfung fehlgeschlagen",
-    skipped: "Keine Angaben gefunden",
+    pending: t("Noch nicht geprüft"),
+    completed: t("Ergänzt"),
+    failed: t("Prüfung fehlgeschlagen"),
+    skipped: t("Keine Angaben gefunden"),
   };
   return [
     el(
       "div",
       { class: "finance-customer-metrics" },
-      metric("Rechnungen", row.invoice_count || 0),
-      metric("Seit letzter Rechnung", customerDays(row)),
+      metric(t("Rechnungen"), row.invoice_count || 0),
+      metric(t("Seit letzter Rechnung"), customerDays(row)),
       metric(
-        "Kundenbeziehung",
+        t("Kundenbeziehung"),
         row.invoice_count
-          ? `${row.active_months} ${row.active_months === 1 ? "Monat" : "Monate"}`
+          ? row.active_months === 1
+            ? t("{count} Monat", { count: row.active_months })
+            : t("{count} Monate", { count: row.active_months })
           : "–",
       ),
     ),
     ...currencyMetrics(row).map((stat) =>
       panel(
-        "Umsatz · " + stat.currency,
+        t("Umsatz · {currency}", { currency: stat.currency }),
         el(
           "div",
           { class: "finance-customer-metrics" },
-          metric("Umsatz gesamt", money(currencyTotal(stat), stat.currency)),
+          metric(t("Umsatz gesamt"), money(currencyTotal(stat), stat.currency)),
           metric(
-            "Pro aktivem Monat",
+            t("Pro aktivem Monat"),
             money(currencyAverage(stat), stat.currency),
           ),
-          metric("Noch offen", money(stat.open_amount_minor, stat.currency)),
+          metric(t("Noch offen"), money(stat.open_amount_minor, stat.currency)),
         ),
       ),
     ),
     panel(
-      "Rechnungsprofil",
-      button("Rechnungsdaten bearbeiten", () => actions.financeProfile(row), {
-        iconName: "pen",
-      }),
+      t("Rechnungsprofil"),
+      button(
+        t("Rechnungsdaten bearbeiten"),
+        () => actions.financeProfile(row),
+        {
+          iconName: "pen",
+        },
+      ),
       facts([
         [
-          "Rechnungsadresse",
+          t("Rechnungsadresse"),
           el("span", { class: "note-text" }, row.billing_address || "–"),
         ],
-        ["Haupt-E-Mail", row.general_email || "–"],
-        ["Erste Rechnung", dateLabel(row.first_invoice_date)],
-        ["Letzte Rechnung", dateLabel(row.last_invoice_date)],
+        [t("Haupt-E-Mail"), row.general_email || "–"],
+        [t("Erste Rechnung"), dateLabel(row.first_invoice_date)],
+        [t("Letzte Rechnung"), dateLabel(row.last_invoice_date)],
         [
-          "Automatische Ergänzung",
-          enrichmentLabels[row.enrichment_status] || "Noch nicht geprüft",
+          t("Automatische Ergänzung"),
+          enrichmentLabels[row.enrichment_status] || t("Noch nicht geprüft"),
         ],
       ]),
       button(
-        "Angaben aus Rechnung ergänzen",
+        t("Angaben aus Rechnung ergänzen"),
         () => actions.financeEnrich(row.id),
         { iconName: "wand-magic-sparkles", disabled: !row.latest_invoice_id },
       ),
       el(
         "p",
         { class: "oj-small oj-muted" },
-        "Ergänzt fehlende Adresse und E-Mail aus der letzten Rechnung. Vorhandene Angaben bleiben erhalten.",
+        t(
+          "Ergänzt fehlende Adresse und E-Mail aus der letzten Rechnung. Vorhandene Angaben bleiben erhalten.",
+        ),
       ),
     ),
-    panel("Rechnungen", invoiceTable(row.invoices || [], actions)),
+    panel(t("Rechnungen"), invoiceTable(row.invoices || [], actions)),
   ];
 }
 
@@ -1800,16 +1915,17 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
   const save = el(
     "button",
     { type: "submit", class: "oj-button oj-button-primary" },
-    "Einstellungen speichern",
+    t("Einstellungen speichern"),
   );
-  const keyField = field("Neuer OpenAI-Schlüssel", "openai_api_key", {
+  const keyField = field(t("Neuer OpenAI-Schlüssel"), "openai_api_key", {
     type: "password",
     autocomplete: "off",
     placeholder: row.openai_api_key_present
-      ? "Gespeicherten Schlüssel ersetzen"
+      ? t("Gespeicherten Schlüssel ersetzen")
       : "sk-…",
-    helper:
+    helper: t(
       "Der Schlüssel bleibt auf deinem Rechner und wird nicht an den Browser zurückgegeben.",
+    ),
   });
   const form = el(
     "form",
@@ -1827,7 +1943,7 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
             body.company_address = row.company_address || "";
           if (!body.openai_api_key) delete body.openai_api_key;
           await api(financePath + "/settings", { method: "PATCH", body });
-          notice("Finanz-Einstellungen gespeichert.");
+          notice(t("Finanz-Einstellungen gespeichert."));
           await actions.financeRefresh();
         } catch (err) {
           error.textContent = err.message;
@@ -1843,47 +1959,51 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
       },
     },
     panel(
-      "Rechnungsordner",
+      t("Rechnungsordner"),
       el(
         "p",
         { class: "oj-small oj-muted" },
-        "Absolute Ordnerpfade auf diesem Rechner. PDFs werden beim Start und bei Änderungen eingelesen, bis zu zwei Unterordner tief.",
+        t(
+          "Absolute Ordnerpfade auf diesem Rechner. PDFs werden beim Start und bei Änderungen eingelesen, bis zu zwei Unterordner tief.",
+        ),
       ),
       el(
         "div",
         { class: "finance-form-grid" },
-        field("Einnahmen-Ordner", "revenue_folder", {
+        field(t("Einnahmen-Ordner"), "revenue_folder", {
           value: row.revenue_folder || "",
-          placeholder: "/Users/…/Rechnungen/Einnahmen",
+          placeholder: t("/Users/…/Rechnungen/Einnahmen"),
           wide: true,
         }),
-        field("Ausgaben-Ordner", "payable_folder", {
+        field(t("Ausgaben-Ordner"), "payable_folder", {
           value: row.payable_folder || "",
-          placeholder: "/Users/…/Rechnungen/Ausgaben",
+          placeholder: t("/Users/…/Rechnungen/Ausgaben"),
           wide: true,
         }),
       ),
     ),
     panel(
-      "Eigene Firma",
+      t("Eigene Firma"),
       el(
         "p",
         { class: "oj-small oj-muted" },
-        "Diese Angaben werden vor der automatischen Erkennung aus dem Rechnungstext entfernt, damit die Kundenangaben erkannt werden.",
+        t(
+          "Diese Angaben werden vor der automatischen Erkennung aus dem Rechnungstext entfernt, damit die Kundenangaben erkannt werden.",
+        ),
       ),
       el(
         "div",
         { class: "finance-form-grid" },
-        field("Firmenname", "company_name", {
+        field(t("Firmenname"), "company_name", {
           value: row.company_name || "",
           maxlength: 200,
         }),
-        field("Firmen-E-Mail", "company_email", {
+        field(t("Firmen-E-Mail"), "company_email", {
           type: "email",
           value: row.company_email || "",
           maxlength: 200,
         }),
-        field("Firmenadresse", "company_address", {
+        field(t("Firmenadresse"), "company_address", {
           type: "text",
           value: addressValue,
           maxlength: 2000,
@@ -1892,53 +2012,60 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
       ),
     ),
     panel(
-      "Automatische Erkennung",
+      t("Automatische Erkennung"),
       el(
         "p",
         { class: "oj-small" },
-        "OpenAI: ",
+        t("OpenAI: "),
         row.openai_api_key_error
           ? el(
               "span",
               { class: "oj-badge oj-badge-warning" },
-              "Erneut einrichten",
+              t("Erneut einrichten"),
             )
           : row.openai_api_key_present
             ? el(
                 "span",
                 { class: "oj-badge oj-badge-success" },
-                "Gespeichert · •••• " + (row.openai_api_key_last4 || ""),
+                t("Gespeichert · •••• {last4}", {
+                  last4: row.openai_api_key_last4 || "",
+                }),
               )
             : el(
                 "span",
                 { class: "oj-badge oj-badge-neutral" },
-                "Nicht konfiguriert",
+                t("Nicht konfiguriert"),
               ),
       ),
       row.openai_api_key_error
         ? el(
             "p",
             { class: "oj-alert oj-alert-warning", role: "status" },
-            "Der gespeicherte Schlüssel ist auf dieser Datenbank nicht lesbar. Bitte erneut eingeben.",
+            t(
+              "Der gespeicherte Schlüssel ist auf dieser Datenbank nicht lesbar. Bitte erneut eingeben.",
+            ),
           )
         : null,
       keyField,
-      field("Erkennungsmodell", "model", {
+      field(t("Erkennungsmodell"), "model", {
         value: row.model || "gpt-4o-mini",
         options: models.map(({ id, label }) => [id, label]),
-        helper:
+        helper: t(
           "Wird für die Rechnungserkennung und das Ergänzen der Kundendaten verwendet.",
+        ),
       }),
       el(
         "p",
         { class: "oj-small oj-muted" },
-        "Nur beim Import, erneuten Verarbeiten oder Ergänzen der Kundendaten wird der bereinigte Rechnungstext an OpenAI gesendet. Rechnungen lassen sich jederzeit manuell bearbeiten.",
+        t(
+          "Nur beim Import, erneuten Verarbeiten oder Ergänzen der Kundendaten wird der bereinigte Rechnungstext an OpenAI gesendet. Rechnungen lassen sich jederzeit manuell bearbeiten.",
+        ),
       ),
       el(
         "div",
         { class: "finance-actions" },
         button(
-          "Schlüssel prüfen",
+          t("Schlüssel prüfen"),
           async (event) => {
             const control = event.currentTarget;
             control.disabled = true;
@@ -1959,7 +2086,7 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
           },
         ),
         row.openai_api_key_present
-          ? button("Schlüssel entfernen", () => actions.financeKeyRemove(), {
+          ? button(t("Schlüssel entfernen"), () => actions.financeKeyRemove(), {
               danger: true,
               iconName: "trash",
             })
@@ -1979,17 +2106,17 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
   const tools = row.tools || {},
     watcher = row.watcher || {};
   const watcherStatus = panel(
-    "Ordnerüberwachung",
+    t("Ordnerüberwachung"),
     facts([
-      ["Status", watcher.running ? "Aktiv" : "Keine Ordner aktiv"],
+      [t("Status"), watcher.running ? t("Aktiv") : t("Keine Ordner aktiv")],
       [
-        "Letzter Scan",
-        watcher.last_scan ? datetime(watcher.last_scan) : "Noch kein Scan",
+        t("Letzter Scan"),
+        watcher.last_scan ? datetime(watcher.last_scan) : t("Noch kein Scan"),
       ],
-      ["PDF-Text", tools.text ? "Verfügbar" : "Nicht verfügbar"],
-      ["OCR", tools.ocr ? "Verfügbar" : "Nicht verfügbar"],
+      [t("PDF-Text"), tools.text ? t("Verfügbar") : t("Nicht verfügbar")],
+      [t("OCR"), tools.ocr ? t("Verfügbar") : t("Nicht verfügbar")],
       [
-        "Erkennungsmodell",
+        t("Erkennungsmodell"),
         models.find(({ id }) => id === row.model)?.label || "GPT-4o Mini",
       ],
     ]),
@@ -2000,18 +2127,18 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
           watcher.error,
         )
       : null,
-    button("Ordner jetzt einlesen", () => actions.financeScan(), {
+    button(t("Ordner jetzt einlesen"), () => actions.financeScan(), {
       iconName: "folder-open",
     }),
   );
   const [folderFields, companyFields, recognitionFields] =
     form.querySelectorAll(":scope > .oj-panel");
   const sections = [
-    { id: "company", label: "Firma", content: [companyFields] },
-    { id: "recognition", label: "Erkennung", content: [recognitionFields] },
+    { id: "company", label: t("Firma"), content: [companyFields] },
+    { id: "recognition", label: t("Erkennung"), content: [recognitionFields] },
     {
       id: "watcher",
-      label: "Ordnerüberwachung",
+      label: t("Ordnerüberwachung"),
       content: [folderFields, watcherStatus],
     },
   ];
@@ -2026,7 +2153,7 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
       {
         class: "oj-tab-list finance-settings-tab-list",
         role: "tablist",
-        "aria-label": "Einstellungen",
+        "aria-label": t("Einstellungen"),
       },
       sections.map((section) =>
         el(
@@ -2083,14 +2210,15 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
   form.prepend(tabs);
   return [
     heading(
-      "Einstellungen",
-      "Rechnungsordner, Firmenangaben und automatische Erkennung.",
+      t("Einstellungen"),
+      t("Rechnungsordner, Firmenangaben und automatische Erkennung."),
     ),
+    languagePreferences(),
     form,
     el(
       "p",
       { class: "finance-app-version oj-small oj-muted" },
-      "Version ",
+      t("Version "),
       row.app_version || "–",
     ),
   ];

@@ -1,3 +1,4 @@
+import { t, getLocale, localizedMessage } from "./i18n.js";
 import { api } from "./api.js";
 import { formatDate } from "./calendar.js";
 import {
@@ -39,16 +40,26 @@ import {
 const employeeLink = (name, id, fallback = "–") =>
   id && name ? link(name, "#/employees/" + id) : (name ?? fallback);
 const tagNames = (tags = []) => tags.map((tag) => tag.name).join(", ");
+const priceChangeText = (event, currency) =>
+  t(
+    event.price_field === "accepted_price_minor"
+      ? "Vereinbart: {previous} → {next}"
+      : "Angebot: {previous} → {next}",
+    {
+      previous: money(event.previous_price_minor, currency),
+      next: money(event.new_price_minor, currency),
+    },
+  );
 function offerTable(rows) {
   return table(
-    "Angebote",
+    t("Angebote"),
     [
-      "Dienstleistung / Kunde",
-      "Status",
-      "Angebotspreis",
-      "Vereinbart",
-      "Ansprechpartner",
-      "Aktuelle Phase",
+      t("Dienstleistung / Kunde"),
+      t("Status"),
+      t("Angebotspreis"),
+      t("Vereinbart"),
+      t("Ansprechpartner"),
+      t("Aktuelle Phase"),
     ],
     rows.map((r) => [
       el(
@@ -59,7 +70,7 @@ function offerTable(rows) {
           "div",
           { class: "oj-small oj-muted" },
           r.customer_name,
-          r.archived_at ? " · Archiviert" : "",
+          r.archived_at ? " · " + t("Archiviert") : "",
         ),
       ),
       statusBadge(r.status),
@@ -106,10 +117,13 @@ function timeline(row, { newestFirst = false, showService = false } = {}) {
     events.map((event) => {
       let title, note;
       if (event.kind === "status") {
-        title =
-          (event.from_status
-            ? labels.status[event.from_status] + " → "
-            : "Angelegt · ") + labels.status[event.to_status];
+        title = event.from_status
+          ? labels.status[event.from_status] +
+            " → " +
+            labels.status[event.to_status]
+          : t("Angelegt · {status}", {
+              status: labels.status[event.to_status],
+            });
         note = event.reason;
         if (note?.startsWith("{")) {
           try {
@@ -124,12 +138,7 @@ function timeline(row, { newestFirst = false, showService = false } = {}) {
         note = event.note;
         if (event.type === "price_change")
           title +=
-            (event.price_field === "accepted_price_minor"
-              ? " · Vereinbart: "
-              : " · Angebot: ") +
-            money(event.previous_price_minor, event.currency ?? row.currency) +
-            " → " +
-            money(event.new_price_minor, event.currency ?? row.currency);
+            " · " + priceChangeText(event, event.currency ?? row.currency);
       }
       return el(
         "li",
@@ -155,7 +164,9 @@ function timeline(row, { newestFirst = false, showService = false } = {}) {
                 event.service_name,
                 "#/relationships/" + event.customer_service_id,
               ),
-              event.relationship_archived_at ? " · Archiviertes Angebot" : null,
+              event.relationship_archived_at
+                ? " · " + t("Archiviertes Angebot")
+                : null,
             )
           : null,
         el("p", { class: "timeline-title" }, title),
@@ -168,16 +179,16 @@ function statusActions(row, actions, { card = false } = {}) {
   return (transitions[row.status] ?? []).map((to, index) => {
     const action = button(
       to === "pitched" && ["rejected", "ghosted"].includes(row.status)
-        ? "Wieder aufnehmen"
+        ? t("Wieder aufnehmen")
         : to === "pitched"
-          ? "Pitch erfassen"
+          ? t("Pitch erfassen")
           : to === "accepted"
-            ? "Zusage erfassen"
+            ? t("Zusage erfassen")
             : to === "ghosted"
-              ? "Als Ghosted markieren"
+              ? t("Als Ghosted markieren")
               : to === "done"
-                ? "Als erledigt markieren"
-                : "Ablehnen",
+                ? t("Als erledigt markieren")
+                : t("Ablehnen"),
       () => actions.status(row, to),
       {
         primary: card ? index === 0 : !["rejected", "ghosted"].includes(to),
@@ -193,7 +204,7 @@ function pipelineCard(row, actions) {
   const controls = row.archived_at
     ? [
         button(
-          "Wiederherstellen",
+          t("Wiederherstellen"),
           () => actions.archive("customer-services", row, true),
           { iconName: "rotate-left" },
         ),
@@ -201,10 +212,14 @@ function pipelineCard(row, actions) {
     : statusActions(row, actions, { card: true });
   if (!row.archived_at && row.status === "rejected")
     controls.push(
-      button("Archivieren", () => actions.archive("customer-services", row), {
-        compact: true,
-        iconName: "box-archive",
-      }),
+      button(
+        t("Archivieren"),
+        () => actions.archive("customer-services", row),
+        {
+          compact: true,
+          iconName: "box-archive",
+        },
+      ),
     );
   if (row.archived_at) controls[0].classList.add("offer-card-next");
   return el(
@@ -244,7 +259,7 @@ function pipelineCard(row, actions) {
         { class: "oj-small oj-muted" },
         labels.billing[row.billing_type] +
           " · " +
-          (won ? "Vereinbart" : "Angebotspreis"),
+          (won ? t("Vereinbart") : t("Angebotspreis")),
       ),
     ),
     el(
@@ -257,14 +272,18 @@ function pipelineCard(row, actions) {
         employeeLink(
           row.employee_name,
           row.primary_employee_id,
-          "Kein Ansprechpartner",
+          t("Kein Ansprechpartner"),
         ),
       ),
       el(
         "p",
         {},
         icon("clock"),
-        el("span", {}, age(row.status_since) + " im Status"),
+        el(
+          "span",
+          {},
+          t("{duration} im Status", { duration: age(row.status_since) }),
+        ),
       ),
     ),
     controls.length
@@ -296,12 +315,12 @@ function activityList(items) {
 }
 function entityState(row, type, actions) {
   return row.archived_at
-    ? [button("Wiederherstellen", () => actions.archive(type, row, true))]
+    ? [button(t("Wiederherstellen"), () => actions.archive(type, row, true))]
     : [
-        button("Bearbeiten", () => actions.entity(type, row), {
+        button(t("Bearbeiten"), () => actions.entity(type, row), {
           iconName: "pen",
         }),
-        button("Archivieren", () => actions.archive(type, row), {
+        button(t("Archivieren"), () => actions.archive(type, row), {
           iconName: "box-archive",
         }),
       ];
@@ -314,30 +333,30 @@ export async function dashboard(actions, params) {
   const s = analytics.summary;
   const finances = await financeDashboard(actions, params);
   const content = [
-    heading("Dashboard"),
+    heading(t("Dashboard")),
     ...finances,
     el(
       "div",
       { class: "metrics-grid dashboard-metrics" },
       metric(
-        "Angebote gesamt",
+        t("Angebote gesamt"),
         s.created,
-        "Alle Vorgänge, einschließlich Archiv",
+        t("Alle Vorgänge, einschließlich Archiv"),
       ),
-      metric("Tatsächlich gepitcht", s.pitched),
-      metric("Gewonnene Angebote", s.won, "Angenommen und erledigt"),
+      metric(t("Tatsächlich gepitcht"), s.pitched),
+      metric(t("Gewonnene Angebote"), s.won, t("Angenommen und erledigt")),
       metric(
-        "Abschlussquote",
+        t("Abschlussquote"),
         percent(s.win_rate),
-        "Unter entschiedenen Angeboten",
+        t("Unter entschiedenen Angeboten"),
       ),
     ),
     rows.length
-      ? panel("Neueste Angebote", offerTable(rows.slice(0, 6)))
+      ? panel(t("Neueste Angebote"), offerTable(rows.slice(0, 6)))
       : empty(
-          "Dein CRM ist bereit",
-          "Lege zuerst einen Kunden und eine Dienstleistung an.",
-          button("Kunde anlegen", () => actions.entity("customers"), {
+          t("Dein CRM ist bereit"),
+          t("Lege zuerst einen Kunden und eine Dienstleistung an."),
+          button(t("Kunde anlegen"), () => actions.entity("customers"), {
             primary: true,
           }),
         ),
@@ -348,32 +367,32 @@ export async function dashboard(actions, params) {
 export async function entityList(type, actions) {
   const saved = readFilters(type);
   const isCustomer = type === "customers";
-  const title = isCustomer ? "Kunden" : "Dienstleistungen";
+  const title = isCustomer ? t("Kunden") : t("Dienstleistungen");
   const sorting = { sort: "name", order: "asc" };
   let archiveMode = saved.archived === "true";
-  const search = field("Suchen", "search", {
+  const search = field(t("Suchen"), "search", {
       type: "search",
       value: typeof saved.search === "string" ? saved.search : "",
       placeholder: isCustomer
-        ? "Name, Website, E-Mail, Notiz oder Tag"
-        : "Dienstleistung, URL, Notiz oder Tag",
+        ? t("Name, Website, E-Mail, Notiz oder Tag")
+        : t("Dienstleistung, URL, Notiz oder Tag"),
     }),
-    archived = selectField("Ansicht", "archived", {
+    archived = selectField(t("Ansicht"), "archived", {
       value: String(archiveMode),
       options: [
-        ["false", "Aktiv"],
-        ["true", "Archiviert"],
+        ["false", t("Aktiv")],
+        ["true", t("Archiviert")],
       ],
     }),
     customerType = isCustomer
-      ? selectField("Status", "customer_type", {
+      ? selectField(t("Status"), "customer_type", {
           value: ["customer", "lead"].includes(saved.customer_type)
             ? saved.customer_type
             : "",
           options: [
-            ["", "Alle"],
-            ["customer", "Kunden"],
-            ["lead", "Leads"],
+            ["", t("Alle")],
+            ["customer", t("Kunden")],
+            ["lead", t("Leads")],
           ],
         })
       : null,
@@ -389,13 +408,15 @@ export async function entityList(type, actions) {
     selectedTags(tags, saved),
     {
       description: isCustomer
-        ? "Zeigt Unternehmen mit mindestens einem ausgewählten Tag."
-        : "Zeigt Dienstleistungen mit mindestens einem ausgewählten Tag.",
+        ? t("Zeigt Unternehmen mit mindestens einem ausgewählten Tag.")
+        : t("Zeigt Dienstleistungen mit mindestens einem ausgewählten Tag."),
     },
   );
   let generation = 0;
   function render() {
-    const term = search.querySelector("input").value.toLocaleLowerCase();
+    const term = search
+      .querySelector("input")
+      .value.toLocaleLowerCase(getLocale());
     const selectedType = customerType?.querySelector("select").value;
     const selectedTags = tagSelection.value();
     saveSelection();
@@ -417,10 +438,15 @@ export async function entityList(type, actions) {
           " " +
           (r.tags ?? []).map((tag) => tag.name).join(" ")
         )
-          .toLocaleLowerCase()
+          .toLocaleLowerCase(getLocale())
           .includes(term),
     );
-    count.textContent = `${filtered.length} ${title}`;
+    count.textContent = t(
+      isCustomer ? "{count} Kunden" : "{count} Dienstleistungen",
+      {
+        count: filtered.length,
+      },
+    );
     const renderRow = (r) => [
       isCustomer ? customerIdentity(r) : link(r.name, "#/" + type + "/" + r.id),
       ...(isCustomer
@@ -433,10 +459,10 @@ export async function entityList(type, actions) {
                   (r.customer_type === "customer" ? "success" : "neutral"),
                 title:
                   r.customer_type === "customer"
-                    ? "Bereits eine Einnahmenrechnung gestellt"
-                    : "Noch keine Einnahmenrechnung gestellt",
+                    ? t("Bereits eine Einnahmenrechnung gestellt")
+                    : t("Noch keine Einnahmenrechnung gestellt"),
               },
-              r.customer_type === "customer" ? "Kunde" : "Lead",
+              r.customer_type === "customer" ? t("Kunde") : t("Lead"),
             ),
           ]
         : []),
@@ -445,44 +471,44 @@ export async function entityList(type, actions) {
       el("span", { class: "note-text oj-small" }, r.note || "–"),
       datetime(r.created_at),
       archiveMode
-        ? button("Wiederherstellen", () => actions.archive(type, r, true), {
+        ? button(t("Wiederherstellen"), () => actions.archive(type, r, true), {
             compact: true,
           })
-        : button("Bearbeiten", () => actions.entity(type, r), {
+        : button(t("Bearbeiten"), () => actions.entity(type, r), {
             compact: true,
           }),
     ];
     const directory = sortableTable(
       title,
       [
-        { label: "Name", key: "name" },
+        { label: t("Name"), key: "name" },
         ...(isCustomer
           ? [
               {
-                label: "Status",
+                label: t("Status"),
                 key: "customer_type",
                 value: (row) =>
-                  row.customer_type === "customer" ? "Kunde" : "Lead",
+                  row.customer_type === "customer" ? t("Kunde") : t("Lead"),
               },
             ]
           : []),
-        { label: "Tags", key: "tags", value: (row) => tagNames(row.tags) },
+        { label: t("Tags"), key: "tags", value: (row) => tagNames(row.tags) },
         ...(!isCustomer
           ? [
               {
-                label: "Pitched",
+                label: t("Pitched"),
                 key: "pitched_count",
                 value: (row) => row.pitched_count ?? 0,
               },
             ]
           : []),
-        { label: "Notiz", key: "note" },
+        { label: t("Notiz"), key: "note" },
         {
-          label: "Angelegt",
+          label: t("Angelegt"),
           key: "created_at",
           value: (row) => Date.parse(row.created_at),
         },
-        { label: "Aktionen" },
+        { label: t("Aktionen") },
       ],
       filtered,
       renderRow,
@@ -518,7 +544,7 @@ export async function entityList(type, actions) {
         el(
           "p",
           { class: "oj-alert oj-alert-danger", role: "alert" },
-          error.message,
+          localizedMessage(error.message),
         ),
       );
     }
@@ -528,14 +554,14 @@ export async function entityList(type, actions) {
     heading(
       title,
       isCustomer
-        ? "Kunden und ihre Ansprechpartner an einem Ort."
-        : "Wiederverwendbare Leistungen mit eigenständigen Angeboten.",
+        ? t("Kunden und ihre Ansprechpartner an einem Ort.")
+        : t("Wiederverwendbare Leistungen mit eigenständigen Angeboten."),
       [
-        button("Tags verwalten", () => actions.manageTags(type), {
+        button(t("Tags verwalten"), () => actions.manageTags(type), {
           iconName: "tags",
         }),
         button(
-          isCustomer ? "Kunde anlegen" : "Dienstleistung anlegen",
+          isCustomer ? t("Kunde anlegen") : t("Dienstleistung anlegen"),
           () => actions.entity(type),
           { primary: true, iconName: "plus" },
         ),
@@ -565,14 +591,16 @@ export async function customerDetail(id, actions) {
   ]);
   const employees = [...row.employees, ...row.archived_employees];
   const contactsTable = table(
-    "Mitarbeiter",
-    ["Name", "E-Mail", "LinkedIn", "Position", "Aktionen"],
+    t("Mitarbeiter"),
+    [t("Name"), t("E-Mail"), t("LinkedIn"), t("Position"), t("Aktionen")],
     employees.map((e) => [
       el(
         "div",
         {},
         employeeLink(e.name, e.id),
-        e.archived_at ? el("span", { class: "oj-badge" }, "Archiviert") : null,
+        e.archived_at
+          ? el("span", { class: "oj-badge" }, t("Archiviert"))
+          : null,
       ),
       e.email ? link(e.email, "mailto:" + e.email) : "–",
       e.linkedin
@@ -584,7 +612,7 @@ export async function customerDetail(id, actions) {
               target: "_blank",
               rel: "noopener noreferrer",
             },
-            "LinkedIn",
+            t("LinkedIn"),
             icon("arrow-up-right-from-square"),
           )
         : "–",
@@ -594,15 +622,15 @@ export async function customerDetail(id, actions) {
         { class: "section-actions" },
         e.archived_at
           ? button(
-              "Wiederherstellen",
+              t("Wiederherstellen"),
               () => actions.archive("employees", e, true),
               { compact: true },
             )
           : [
-              button("Bearbeiten", () => actions.entity("employees", e), {
+              button(t("Bearbeiten"), () => actions.entity("employees", e), {
                 compact: true,
               }),
-              button("Archivieren", () => actions.archive("employees", e), {
+              button(t("Archivieren"), () => actions.archive("employees", e), {
                 compact: true,
               }),
             ],
@@ -613,7 +641,7 @@ export async function customerDetail(id, actions) {
   const content = [
     heading(
       row.name,
-      row.archived_at ? "Archivierter Kunde" : "Kundendetails",
+      row.archived_at ? t("Archivierter Kunde") : t("Kundendetails"),
       entityState(row, "customers", actions),
     ),
     row.website || row.has_logo
@@ -624,27 +652,29 @@ export async function customerDetail(id, actions) {
           customerWebsite(row),
         )
       : null,
-    row.note ? panel("Notiz", el("p", { class: "note-text" }, row.note)) : null,
+    row.note
+      ? panel(t("Notiz"), el("p", { class: "note-text" }, row.note))
+      : null,
     panel(
-      "Tags",
+      t("Tags"),
       !row.archived_at
         ? button(
-            "Tags bearbeiten",
+            t("Tags bearbeiten"),
             () => actions.assignTags(row, "customers"),
             { iconName: "tags" },
           )
         : null,
       tagList(row.tags) ??
-        el("p", { class: "oj-muted" }, "Noch keine Tags zugewiesen."),
+        el("p", { class: "oj-muted" }, t("Noch keine Tags zugewiesen.")),
     ),
     panel(
-      "Mitarbeiter",
+      t("Mitarbeiter"),
       !row.archived_at
         ? el(
             "div",
             { class: "section-actions" },
             button(
-              "Mitarbeiter anlegen",
+              t("Mitarbeiter anlegen"),
               () => actions.entity("employees", { customer_id: row.id }),
               { primary: true, iconName: "plus" },
             ),
@@ -653,12 +683,12 @@ export async function customerDetail(id, actions) {
       contactsTable,
     ),
     panel(
-      "Angebote & Beziehungshistorie",
+      t("Angebote & Beziehungshistorie"),
       !row.archived_at
         ? el(
             "div",
             { class: "section-actions" },
-            button("Neues Angebot", () => actions.offer({ customer: row }), {
+            button(t("Neues Angebot"), () => actions.offer({ customer: row }), {
               primary: true,
               iconName: "plus",
             }),
@@ -667,13 +697,15 @@ export async function customerDetail(id, actions) {
       el(
         "p",
         { class: "oj-small oj-muted" },
-        "Jedes Angebot führt einen eigenen Verlauf. Öffne eine Dienstleistung für die vollständige Timeline.",
+        t(
+          "Jedes Angebot führt einen eigenen Verlauf. Öffne eine Dienstleistung für die vollständige Timeline.",
+        ),
       ),
       offerTable(row.relationships),
     ),
     row.relationships.length
       ? panel(
-          "Bisheriger Beziehungsverlauf",
+          t("Bisheriger Beziehungsverlauf"),
           row.relationships.map((r) =>
             el(
               "details",
@@ -690,7 +722,7 @@ export async function customerDetail(id, actions) {
               el(
                 "div",
                 { class: "oj-accordion-body oj-stack" },
-                link("Angebot öffnen", "#/relationships/" + r.id),
+                link(t("Angebot öffnen"), "#/relationships/" + r.id),
                 timeline(r),
               ),
             ),
@@ -704,16 +736,16 @@ export async function customerDetail(id, actions) {
 export async function employeeList() {
   const saved = readFilters("employees");
   const sorting = { sort: "name", order: "asc" };
-  const search = field("Personen suchen", "search", {
+  const search = field(t("Personen suchen"), "search", {
     type: "search",
     value: typeof saved.search === "string" ? saved.search : "",
-    placeholder: "Name, Unternehmen, Position, E-Mail oder Tag",
+    placeholder: t("Name, Unternehmen, Position, E-Mail oder Tag"),
   });
-  const archived = selectField("Ansicht", "archived", {
+  const archived = selectField(t("Ansicht"), "archived", {
     value: saved.archived === "true" ? "true" : "false",
     options: [
-      ["false", "Aktiv"],
-      ["true", "Archiviert"],
+      ["false", t("Aktiv")],
+      ["true", t("Archiviert")],
     ],
   });
   const input = search.querySelector("input");
@@ -729,8 +761,9 @@ export async function employeeList() {
     () => render(),
     selectedTags(tags, saved),
     {
-      description:
+      description: t(
         "Zeigt Personen, deren Unternehmen mindestens einen ausgewählten Tag hat.",
+      ),
     },
   );
   let generation = 0;
@@ -745,7 +778,7 @@ export async function employeeList() {
   function render() {
     saveSelection();
     if (loading) return;
-    const term = input.value.trim().toLocaleLowerCase("de-AT");
+    const term = input.value.trim().toLocaleLowerCase(getLocale());
     const selectedTags = tagSelection.value();
     const filtered = rows.filter(
       (row) =>
@@ -762,25 +795,30 @@ export async function employeeList() {
           ...(row.customer_tags ?? []).map((tag) => tag.name),
         ]
           .join(" ")
-          .toLocaleLowerCase("de-AT")
+          .toLocaleLowerCase(getLocale())
           .includes(term),
     );
-    count.textContent = `${filtered.length} ${filtered.length === 1 ? "Person" : "Personen"}`;
+    count.textContent = t(
+      filtered.length === 1 ? "{count} Person" : "{count} Personen",
+      {
+        count: filtered.length,
+      },
+    );
     const directory = filtered.length
       ? sortableTable(
-          "Personen",
+          t("Personen"),
           [
-            { label: "Name", key: "name" },
-            { label: "Unternehmen", key: "customer_name" },
+            { label: t("Name"), key: "name" },
+            { label: t("Unternehmen"), key: "customer_name" },
             {
-              label: "Tags",
+              label: t("Tags"),
               key: "customer_tags",
               value: (row) => tagNames(row.customer_tags),
             },
-            { label: "Position", key: "position" },
-            { label: "E-Mail", key: "email" },
+            { label: t("Position"), key: "position" },
+            { label: t("E-Mail"), key: "email" },
             {
-              label: "Angelegt",
+              label: t("Angelegt"),
               key: "created_at",
               value: (row) => Date.parse(row.created_at),
             },
@@ -796,7 +834,7 @@ export async function employeeList() {
                 ? el(
                     "p",
                     { class: "oj-small oj-muted" },
-                    "Archiviertes Unternehmen",
+                    t("Archiviertes Unternehmen"),
                   )
                 : null,
             ),
@@ -809,16 +847,18 @@ export async function employeeList() {
         )
       : empty(
           term || selectedTags.length
-            ? "Keine Personen gefunden"
+            ? t("Keine Personen gefunden")
             : archiveSelect.value === "true"
-              ? "Keine archivierten Personen"
-              : "Noch keine Personen",
+              ? t("Keine archivierten Personen")
+              : t("Noch keine Personen"),
           term || selectedTags.length
-            ? "Versuche einen anderen Suchbegriff oder ändere die Tag-Auswahl."
-            : "Ansprechpartner legst du beim jeweiligen Kunden an.",
+            ? t(
+                "Versuche einen anderen Suchbegriff oder ändere die Tag-Auswahl.",
+              )
+            : t("Ansprechpartner legst du beim jeweiligen Kunden an."),
           term || selectedTags.length
             ? null
-            : link("Zu den Kunden", "#/customers"),
+            : link(t("Zu den Kunden"), "#/customers"),
         );
     if (filtered.length) directory.classList.add("employee-directory-table");
     content.replaceChildren(directory);
@@ -828,7 +868,7 @@ export async function employeeList() {
     const token = ++generation;
     loading = true;
     content.setAttribute("aria-busy", "true");
-    count.textContent = "Personen werden geladen…";
+    count.textContent = t("Personen werden geladen…");
     content.replaceChildren();
     try {
       const data = await api("/employees", {
@@ -840,14 +880,14 @@ export async function employeeList() {
       render();
     } catch (error) {
       if (token !== generation) return;
-      count.textContent = "Personen konnten nicht geladen werden.";
+      count.textContent = t("Personen konnten nicht geladen werden.");
       content.replaceChildren(
         el(
           "p",
           { class: "oj-alert oj-alert-danger", role: "alert" },
-          error.message,
+          localizedMessage(error.message),
         ),
-        button("Erneut laden", load),
+        button(t("Erneut laden"), load),
       );
     } finally {
       if (token === generation) content.setAttribute("aria-busy", "false");
@@ -858,8 +898,10 @@ export async function employeeList() {
   render();
   const result = [
     heading(
-      "Personen",
-      "Alle Ansprechpartner durchsuchen. Öffne eine Person für Kontaktdaten, Angebote und Aktivitäten.",
+      t("Personen"),
+      t(
+        "Alle Ansprechpartner durchsuchen. Öffne eine Person für Kontaktdaten, Angebote und Aktivitäten.",
+      ),
     ),
     el("div", { class: "filters" }, search, tagSelection.node, archived),
     count,
@@ -880,14 +922,14 @@ export async function employeeDetail(id, actions) {
       (activityCounts.get(activity.customer_service_id) ?? 0) + 1,
     );
   const offers = table(
-    "Dienstleistungen & Angebote",
+    t("Dienstleistungen & Angebote"),
     [
-      "Dienstleistung / Angebot",
-      "Bezug zur Person",
-      "Status",
-      "Preis",
-      "Aktivitäten",
-      "Aktionen",
+      t("Dienstleistung / Angebot"),
+      t("Bezug zur Person"),
+      t("Status"),
+      t("Preis"),
+      t("Aktivitäten"),
+      t("Aktionen"),
     ],
     row.relationships.map((r) => [
       el(
@@ -895,14 +937,17 @@ export async function employeeDetail(id, actions) {
         { class: "oj-stack service-identity" },
         link(r.service_name, "#/services/" + r.service_id),
         tagList(r.service_tags),
-        link("Angebot " + r.id.slice(0, 8), "#/relationships/" + r.id),
+        link(
+          t("Angebot {id}", { id: r.id.slice(0, 8) }),
+          "#/relationships/" + r.id,
+        ),
         r.archived_at
-          ? el("span", { class: "oj-small oj-muted" }, "Archiviert")
+          ? el("span", { class: "oj-small oj-muted" }, t("Archiviert"))
           : null,
       ),
       r.primary_employee_id === row.id
-        ? "Ansprechpartner"
-        : "Kontaktaktivitäten",
+        ? t("Ansprechpartner")
+        : t("Kontaktaktivitäten"),
       statusBadge(r.status),
       el(
         "div",
@@ -920,13 +965,15 @@ export async function employeeDetail(id, actions) {
           { class: "oj-small oj-muted" },
           labels.billing[r.billing_type] +
             " · " +
-            (r.accepted_price_minor === null ? "Angebotspreis" : "Vereinbart"),
+            (r.accepted_price_minor === null
+              ? t("Angebotspreis")
+              : t("Vereinbart")),
         ),
       ),
       activityCounts.get(r.id) ?? 0,
       !row.archived_at && !r.archived_at
         ? button(
-            "Aktivität hinzufügen",
+            t("Aktivität hinzufügen"),
             () => actions.activity(r, { employeeId: row.id }),
             { compact: true, iconName: "plus" },
           )
@@ -937,11 +984,11 @@ export async function employeeDetail(id, actions) {
   return [
     el(
       "nav",
-      { class: "oj-breadcrumb", "aria-label": "Brotkrumennavigation" },
+      { class: "oj-breadcrumb", "aria-label": t("Brotkrumennavigation") },
       el(
         "ol",
         {},
-        el("li", {}, link("Personen", "#/employees")),
+        el("li", {}, link(t("Personen"), "#/employees")),
         el("li", {}, link(row.customer.name, "#/customers/" + row.customer_id)),
         el("li", {}, el("span", { "aria-current": "page" }, row.name)),
       ),
@@ -950,21 +997,21 @@ export async function employeeDetail(id, actions) {
       row.name,
       row.customer.name +
         " · " +
-        (row.archived_at ? "Archivierter Mitarbeiter" : "Mitarbeiter"),
+        (row.archived_at ? t("Archivierter Mitarbeiter") : t("Mitarbeiter")),
       entityState(row, "employees", actions),
     ),
     panel(
-      "Kontaktdaten",
+      t("Kontaktdaten"),
       facts([
         [
-          "Unternehmen",
+          t("Unternehmen"),
           link(row.customer.name, "#/customers/" + row.customer_id),
         ],
-        ["Unternehmenstags", tagList(row.customer.tags) ?? "–"],
-        ["Position", row.position || "–"],
-        ["E-Mail", row.email ? link(row.email, "mailto:" + row.email) : "–"],
+        [t("Unternehmenstags"), tagList(row.customer.tags) ?? "–"],
+        [t("Position"), row.position || "–"],
+        [t("E-Mail"), row.email ? link(row.email, "mailto:" + row.email) : "–"],
         [
-          "LinkedIn",
+          t("LinkedIn"),
           row.linkedin
             ? el(
                 "a",
@@ -974,7 +1021,7 @@ export async function employeeDetail(id, actions) {
                   target: "_blank",
                   rel: "noopener noreferrer",
                 },
-                "LinkedIn",
+                t("LinkedIn"),
                 icon("arrow-up-right-from-square"),
               )
             : "–",
@@ -985,41 +1032,51 @@ export async function employeeDetail(id, actions) {
       "div",
       { class: "metrics-grid" },
       metric(
-        "Dienstleistungen",
+        t("Dienstleistungen"),
         new Set(row.relationships.map((r) => r.service_id)).size,
       ),
       metric(
-        "Angebote",
+        t("Angebote"),
         row.relationships.length,
-        "Einschließlich archivierter Angebote",
+        t("Einschließlich archivierter Angebote"),
       ),
       metric(
-        "Erledigte Angebote",
+        t("Erledigte Angebote"),
         row.relationships.filter((r) => r.status === "done").length,
       ),
-      metric("Aktivitäten", row.activities.length, "Mit dieser Person erfasst"),
+      metric(
+        t("Aktivitäten"),
+        row.activities.length,
+        t("Mit dieser Person erfasst"),
+      ),
     ),
     panel(
-      "Dienstleistungen & Angebote",
+      t("Dienstleistungen & Angebote"),
       el(
         "p",
         { class: "oj-small oj-muted" },
-        "Angebote, bei denen diese Person Ansprechpartner ist oder an einer erfassten Aktivität beteiligt war. Öffne ein Angebot für seine vollständige Historie.",
+        t(
+          "Angebote, bei denen diese Person Ansprechpartner ist oder an einer erfassten Aktivität beteiligt war. Öffne ein Angebot für seine vollständige Historie.",
+        ),
       ),
       row.relationships.length
         ? offers
         : el(
             "p",
             { class: "oj-muted" },
-            "Mit dieser Person sind noch keine Dienstleistungen oder Angebote verknüpft.",
+            t(
+              "Mit dieser Person sind noch keine Dienstleistungen oder Angebote verknüpft.",
+            ),
           ),
     ),
     panel(
-      "Aktivitäten mit dieser Person",
+      t("Aktivitäten mit dieser Person"),
       el(
         "p",
         { class: "oj-small oj-muted" },
-        "Persönlich zugeordnete Kontakte und Notizen, neueste zuerst. Allgemeine Angebotsereignisse findest du in der Angebotshistorie.",
+        t(
+          "Persönlich zugeordnete Kontakte und Notizen, neueste zuerst. Allgemeine Angebotsereignisse findest du in der Angebotshistorie.",
+        ),
       ),
       row.activities.length
         ? timeline(
@@ -1029,7 +1086,7 @@ export async function employeeDetail(id, actions) {
         : el(
             "p",
             { class: "oj-muted" },
-            "Noch keine Aktivitäten mit dieser Person erfasst.",
+            t("Noch keine Aktivitäten mit dieser Person erfasst."),
           ),
     ),
   ];
@@ -1039,12 +1096,12 @@ export async function serviceDetail(id, actions) {
   return [
     heading(
       row.name,
-      row.archived_at ? "Archivierte Dienstleistung" : "Dienstleistung",
+      row.archived_at ? t("Archivierte Dienstleistung") : t("Dienstleistung"),
       entityState(row, "services", actions),
     ),
     row.url
       ? panel(
-          "URL",
+          t("URL"),
           el(
             "a",
             {
@@ -1055,18 +1112,18 @@ export async function serviceDetail(id, actions) {
             },
             row.url,
             icon("arrow-up-right-from-square"),
-            el("span", { class: "oj-sr-only" }, " (öffnet in neuem Tab)"),
+            el("span", { class: "oj-sr-only" }, t(" (öffnet in neuem Tab)")),
           ),
         )
       : null,
     panel(
-      "Beschreibung",
-      el("p", { class: "note-text" }, row.note || "Noch keine Notiz."),
+      t("Beschreibung"),
+      el("p", { class: "note-text" }, row.note || t("Noch keine Notiz.")),
     ),
     panel(
-      "Tags",
+      t("Tags"),
       !row.archived_at
-        ? button("Tags bearbeiten", () => actions.assignTags(row), {
+        ? button(t("Tags bearbeiten"), () => actions.assignTags(row), {
             iconName: "tags",
           })
         : null,
@@ -1085,19 +1142,23 @@ export async function serviceDetail(id, actions) {
               ),
             ),
           )
-        : el("p", { class: "oj-muted" }, "Noch keine Tags zugewiesen."),
+        : el("p", { class: "oj-muted" }, t("Noch keine Tags zugewiesen.")),
     ),
     panel(
-      "Kundenbeziehungen",
+      t("Kundenbeziehungen"),
       !row.archived_at
         ? el(
             "div",
             { class: "section-actions" },
-            button("Angebot anlegen", () => actions.offer({ service: row }), {
-              primary: true,
-              iconName: "plus",
-            }),
-            button("Mehreren Kunden anbieten", () =>
+            button(
+              t("Angebot anlegen"),
+              () => actions.offer({ service: row }),
+              {
+                primary: true,
+                iconName: "plus",
+              },
+            ),
+            button(t("Mehreren Kunden anbieten"), () =>
               actions.offer({ service: row, batch: true }),
             ),
           )
@@ -1111,22 +1172,33 @@ export async function serviceTagManagement(actions, type = "services") {
   return [
     el(
       "nav",
-      { class: "oj-breadcrumb", "aria-label": "Brotkrumennavigation" },
-      link(type === "customers" ? "Kunden" : "Dienstleistungen", "#/" + type),
+      { class: "oj-breadcrumb", "aria-label": t("Brotkrumennavigation") },
+      link(
+        type === "customers" ? t("Kunden") : t("Dienstleistungen"),
+        "#/" + type,
+      ),
     ),
     heading(
-      "Tags",
-      "Gemeinsame Tags für Unternehmen und Dienstleistungen anlegen und bearbeiten.",
+      t("Tags"),
+      t(
+        "Gemeinsame Tags für Unternehmen und Dienstleistungen anlegen und bearbeiten.",
+      ),
       [
-        button("Tag anlegen", () => actions.tag(), {
+        button(t("Tag anlegen"), () => actions.tag(), {
           primary: true,
           iconName: "plus",
         }),
       ],
     ),
     table(
-      "Tags",
-      ["Tag", "Notiz", "Unternehmen", "Dienstleistungen", "Aktionen"],
+      t("Tags"),
+      [
+        t("Tag"),
+        t("Notiz"),
+        t("Unternehmen"),
+        t("Dienstleistungen"),
+        t("Aktionen"),
+      ],
       tags.map((tag) => [
         tagBadge(tag),
         el("span", { class: "note-text oj-small" }, tag.note || "–"),
@@ -1135,8 +1207,8 @@ export async function serviceTagManagement(actions, type = "services") {
         el(
           "div",
           { class: "section-actions" },
-          button("Bearbeiten", () => actions.tag(tag), { compact: true }),
-          button("Löschen", () => actions.deleteTag(tag), {
+          button(t("Bearbeiten"), () => actions.tag(tag), { compact: true }),
+          button(t("Löschen"), () => actions.deleteTag(tag), {
             compact: true,
             danger: true,
           }),
@@ -1173,24 +1245,24 @@ export async function pipeline(actions, params) {
     },
     selectedTags(tags, savedFilters),
   );
-  const search = field("Suchen", "search", {
+  const search = field(t("Suchen"), "search", {
       type: "search",
       value: typeof savedFilters.search === "string" ? savedFilters.search : "",
-      placeholder: "Kunde oder Dienstleistung",
+      placeholder: t("Kunde oder Dienstleistung"),
     }),
-    status = field("Status", "status", {
+    status = field(t("Status"), "status", {
       value:
         typeof requestedStatus === "string" &&
         Object.hasOwn(labels.status, requestedStatus)
           ? requestedStatus
           : "",
-      options: options(labels.status, "Alle Status"),
+      options: options(labels.status, t("Alle Status")),
     }),
-    archive = field("Ansicht", "archived", {
+    archive = field(t("Ansicht"), "archived", {
       value: savedFilters.archived === "true" ? "true" : "false",
       options: [
-        ["false", "Aktive Angebote"],
-        ["true", "Archivierte Angebote"],
+        ["false", t("Aktive Angebote")],
+        ["true", t("Archivierte Angebote")],
       ],
     }),
     board = el("div", {
@@ -1198,7 +1270,7 @@ export async function pipeline(actions, params) {
       class: "pipeline-board",
       tabindex: 0,
       role: "region",
-      "aria-label": "Pipeline nach Status",
+      "aria-label": t("Pipeline nach Status"),
     });
   const count = el("p", { class: "oj-small oj-muted" });
   const scrollPhase = (direction) => {
@@ -1227,14 +1299,18 @@ export async function pipeline(actions, params) {
       },
       icon(iconName),
     );
-  const previous = scrollButton("Vorherige Phasen anzeigen", "arrow-left", -1);
-  const next = scrollButton("Nächste Phasen anzeigen", "arrow-right", 1);
+  const previous = scrollButton(
+    t("Vorherige Phasen anzeigen"),
+    "arrow-left",
+    -1,
+  );
+  const next = scrollButton(t("Nächste Phasen anzeigen"), "arrow-right", 1);
   const scrollControls = el(
     "div",
     {
       class: "pipeline-scroll-controls",
       role: "group",
-      "aria-label": "Pipeline scrollen",
+      "aria-label": t("Pipeline scrollen"),
     },
     previous,
     next,
@@ -1281,7 +1357,9 @@ export async function pipeline(actions, params) {
   };
   let generation = 0;
   function render() {
-    const term = search.querySelector("input").value.toLowerCase(),
+    const term = search
+        .querySelector("input")
+        .value.toLocaleLowerCase(getLocale()),
       selected = status.querySelector("select").value,
       selectedTags = new Set(tagSelection.value());
     const phases = Object.entries(labels.status).filter(
@@ -1293,9 +1371,18 @@ export async function pipeline(actions, params) {
         (!selected || r.status === selected) &&
         (!selectedTags.size ||
           r.service_tags.some((tag) => selectedTags.has(tag.id))) &&
-        (r.customer_name + " " + r.service_name).toLowerCase().includes(term),
+        (r.customer_name + " " + r.service_name)
+          .toLocaleLowerCase(getLocale())
+          .includes(term),
     );
-    count.textContent = `${matches.length} ${matches.length === 1 ? "Angebot" : "Angebote"} · ${phases.length} ${phases.length === 1 ? "Phase" : "Phasen"}`;
+    count.textContent = t("{offers} · {phases}", {
+      offers: t(matches.length === 1 ? "{count} Angebot" : "{count} Angebote", {
+        count: matches.length,
+      }),
+      phases: t(phases.length === 1 ? "{count} Phase" : "{count} Phasen", {
+        count: phases.length,
+      }),
+    });
     board.replaceChildren(
       ...phases.map(([s, label]) => {
         const list = matches.filter((r) => r.status === s);
@@ -1319,7 +1406,7 @@ export async function pipeline(actions, params) {
                 { class: "pipeline-cards" },
                 list.map((r) => pipelineCard(r, actions)),
               )
-            : el("p", { class: "oj-small oj-muted" }, "Keine Angebote."),
+            : el("p", { class: "oj-small oj-muted" }, t("Keine Angebote.")),
         );
       }),
     );
@@ -1358,7 +1445,9 @@ export async function pipeline(actions, params) {
         render();
       }
     } catch (error) {
-      board.replaceChildren(el("p", { role: "alert" }, error.message));
+      board.replaceChildren(
+        el("p", { role: "alert" }, localizedMessage(error.message)),
+      );
       updateAfterRender();
     }
   });
@@ -1370,14 +1459,16 @@ export async function pipeline(actions, params) {
       {
         class: "pipeline-controls",
         role: "region",
-        "aria-label": "Pipeline-Steuerung",
+        "aria-label": t("Pipeline-Steuerung"),
         tabindex: 0,
       },
       heading(
-        "Pipeline",
-        "Jeder Auftrag ist ein eigener Vorgang. Follow-ups gehören zum bestehenden Angebot.",
+        t("Pipeline"),
+        t(
+          "Jeder Auftrag ist ein eigener Vorgang. Follow-ups gehören zum bestehenden Angebot.",
+        ),
         [
-          button("Neues Angebot", () => actions.offer(), {
+          button(t("Neues Angebot"), () => actions.offer(), {
             primary: true,
             compact: true,
             iconName: "plus",
@@ -1407,8 +1498,8 @@ export async function pipeline(actions, params) {
 export async function relationshipDetail(id, actions) {
   const r = await api("/customer-services/" + id);
   const phasesTable = table(
-    "Statusphasen",
-    ["Status", "Kunde", "Beginn", "Dauer"],
+    t("Statusphasen"),
+    [t("Status"), t("Kunde"), t("Beginn"), t("Dauer")],
     r.phases.map((p) => [
       statusBadge(p.status),
       el(
@@ -1424,13 +1515,13 @@ export async function relationshipDetail(id, actions) {
   return [
     el(
       "nav",
-      { class: "oj-breadcrumb", "aria-label": "Brotkrumennavigation" },
+      { class: "oj-breadcrumb", "aria-label": t("Brotkrumennavigation") },
       el(
         "ol",
         {},
-        el("li", {}, link("Kunden", "#/customers")),
+        el("li", {}, link(t("Kunden"), "#/customers")),
         el("li", {}, link(r.customer_name, "#/customers/" + r.customer_id)),
-        el("li", {}, el("span", { "aria-current": "page" }, "Angebot")),
+        el("li", {}, el("span", { "aria-current": "page" }, t("Angebot"))),
       ),
     ),
     heading(
@@ -1438,22 +1529,22 @@ export async function relationshipDetail(id, actions) {
       r.customer_name +
         " · " +
         (r.archived_at
-          ? "Archiviertes Angebot"
-          : "Angebot " + r.id.slice(0, 8)),
+          ? t("Archiviertes Angebot")
+          : t("Angebot {id}", { id: r.id.slice(0, 8) })),
       [
         ...(r.archived_at
           ? [
-              button("Wiederherstellen", () =>
+              button(t("Wiederherstellen"), () =>
                 actions.archive("customer-services", r, true),
               ),
             ]
           : [
-              button("Bearbeiten", () => actions.relationship(r)),
-              button("Archivieren", () =>
+              button(t("Bearbeiten"), () => actions.relationship(r)),
+              button(t("Archivieren"), () =>
                 actions.archive("customer-services", r),
               ),
             ]),
-        button("Löschen", () => actions.deleteRelationship(r), {
+        button(t("Löschen"), () => actions.deleteRelationship(r), {
           danger: true,
           iconName: "trash",
         }),
@@ -1464,7 +1555,7 @@ export async function relationshipDetail(id, actions) {
             href: "#/invoices?customer_service_id=" + id,
           },
           icon("file-invoice"),
-          "Rechnungen",
+          t("Rechnungen"),
         ),
       ],
     ),
@@ -1475,43 +1566,47 @@ export async function relationshipDetail(id, actions) {
         "div",
         { class: "oj-stack" },
         panel(
-          "Angebotsdetails",
+          t("Angebotsdetails"),
           facts([
-            ["Status", statusBadge(r.status)],
+            [t("Status"), statusBadge(r.status)],
             [
-              "Angebotsdatum",
+              t("Angebotsdatum"),
               el("time", { datetime: r.offer_date }, formatDate(r.offer_date)),
             ],
-            ["Verweildauer", age(r.status_since)],
+            [t("Verweildauer"), age(r.status_since)],
             [
-              "Ursprünglicher Pitch-Preis",
+              t("Ursprünglicher Pitch-Preis"),
               money(r.first_pitched_price_minor, r.currency),
             ],
             [
-              "Aktueller Angebotspreis",
+              t("Aktueller Angebotspreis"),
               money(r.current_offered_price_minor, r.currency),
             ],
-            ["Vereinbarter Preis", money(r.accepted_price_minor, r.currency)],
-            ["Abrechnung", labels.billing[r.billing_type]],
-            ["Ursprünglicher Pitch-Kanal", labels.channel[r.pitch_channel]],
             [
-              "Ansprechpartner",
+              t("Vereinbarter Preis"),
+              money(r.accepted_price_minor, r.currency),
+            ],
+            [t("Abrechnung"), labels.billing[r.billing_type]],
+            [t("Ursprünglicher Pitch-Kanal"), labels.channel[r.pitch_channel]],
+            [
+              t("Ansprechpartner"),
               employeeLink(r.employee_name, r.primary_employee_id),
             ],
-            ["Kunde", link(r.customer_name, "#/customers/" + r.customer_id)],
+            [t("Kunde"), link(r.customer_name, "#/customers/" + r.customer_id)],
             [
-              "Dienstleistung",
+              t("Dienstleistung"),
               link(r.service_name, "#/services/" + r.service_id),
             ],
-            ["Erster Pitch", datetime(r.first_pitch_at)],
-            ["Erste Zusage", datetime(r.first_acceptance_at)],
+            [t("Erster Pitch"), datetime(r.first_pitch_at)],
+            [t("Erste Zusage"), datetime(r.first_acceptance_at)],
           ]),
           r.rejection_reason
             ? el(
                 "p",
                 { class: "oj-alert oj-alert-warning note-text" },
-                "Absage: " +
-                  labels.reason[JSON.parse(r.rejection_reason).code] +
+                t("Absage: {reason}", {
+                  reason: labels.reason[JSON.parse(r.rejection_reason).code],
+                }) +
                   (JSON.parse(r.rejection_reason).note
                     ? " · " + JSON.parse(r.rejection_reason).note
                     : ""),
@@ -1522,21 +1617,23 @@ export async function relationshipDetail(id, actions) {
                 "div",
                 { class: "section-actions" },
                 statusActions(r, actions),
-                button("Preis ändern", () => actions.prices(r)),
-                button("Aktivität hinzufügen", () => actions.activity(r), {
+                button(t("Preis ändern"), () => actions.prices(r)),
+                button(t("Aktivität hinzufügen"), () => actions.activity(r), {
                   iconName: "plus",
                 }),
               )
             : null,
         ),
-        panel("Statusphasen", phasesTable),
+        panel(t("Statusphasen"), phasesTable),
       ),
       panel(
-        "Timeline",
+        t("Timeline"),
         el(
           "p",
           { class: "oj-small oj-muted" },
-          "Statuswechsel, Kontakte und Preisänderungen in zeitlicher Reihenfolge.",
+          t(
+            "Statuswechsel, Kontakte und Preisänderungen in zeitlicher Reihenfolge.",
+          ),
         ),
         timeline(r),
       ),
@@ -1554,36 +1651,45 @@ async function filterBar(view, onApply, { dates = true } = {}) {
     ]);
   const customers = [
     ...activeCustomers,
-    ...archivedCustomers.map((r) => ({ ...r, name: r.name + " (archiviert)" })),
+    ...archivedCustomers.map((r) => ({
+      ...r,
+      name: t("{name} (archiviert)", { name: r.name }),
+    })),
   ];
   const services = [
     ...activeServices,
-    ...archivedServices.map((r) => ({ ...r, name: r.name + " (archiviert)" })),
+    ...archivedServices.map((r) => ({
+      ...r,
+      name: t("{name} (archiviert)", { name: r.name }),
+    })),
   ];
   const fields = [
     ...(dates
       ? [
-          field("Von", "from", { type: "date" }),
-          field("Bis", "to", { type: "date" }),
+          field(t("Von"), "from", { type: "date" }),
+          field(t("Bis"), "to", { type: "date" }),
         ]
       : []),
-    field("Kunde", "customer_id", {
-      options: [["", "Alle Kunden"], ...customers.map((c) => [c.id, c.name])],
-    }),
-    field("Dienstleistung", "service_id", {
+    field(t("Kunde"), "customer_id", {
       options: [
-        ["", "Alle Dienstleistungen"],
+        ["", t("Alle Kunden")],
+        ...customers.map((c) => [c.id, c.name]),
+      ],
+    }),
+    field(t("Dienstleistung"), "service_id", {
+      options: [
+        ["", t("Alle Dienstleistungen")],
         ...services.map((s) => [s.id, s.name]),
       ],
     }),
-    field("Pitch-Kanal", "pitch_channel", {
-      options: options(labels.channel, "Alle Kanäle"),
+    field(t("Pitch-Kanal"), "pitch_channel", {
+      options: options(labels.channel, t("Alle Kanäle")),
     }),
   ];
   const submit = el(
       "button",
       { class: "oj-button oj-button-primary", type: "submit" },
-      "Filtern",
+      t("Filtern"),
     ),
     error = el("p", {
       class: "oj-helper oj-helper-error",
@@ -1609,7 +1715,7 @@ async function filterBar(view, onApply, { dates = true } = {}) {
     try {
       await onApply(Object.fromEntries(new FormData(form)));
     } catch (err) {
-      error.textContent = err.message;
+      error.textContent = localizedMessage(err.message);
       error.hidden = false;
     }
   }
@@ -1626,7 +1732,7 @@ async function filterBar(view, onApply, { dates = true } = {}) {
       await onApply(query);
       saveFilters(view, query);
     } catch (err) {
-      error.textContent = err.message;
+      error.textContent = localizedMessage(err.message);
       error.hidden = false;
     } finally {
       submit.disabled = false;
@@ -1641,14 +1747,14 @@ export async function activities(actions) {
   function render() {
     content.replaceChildren(
       table(
-        "Aktivitäten",
+        t("Aktivitäten"),
         [
-          "Zeitpunkt",
-          "Aktivität",
-          "Kunde / Dienstleistung",
-          "Kanal",
-          "Mitarbeiter",
-          "Notiz",
+          t("Zeitpunkt"),
+          t("Aktivität"),
+          t("Kunde / Dienstleistung"),
+          t("Kanal"),
+          t("Mitarbeiter"),
+          t("Notiz"),
         ],
         items.map((a) => [
           datetime(a.occurred_at),
@@ -1665,13 +1771,7 @@ export async function activities(actions) {
             "p",
             { class: "note-text" },
             a.type === "price_change"
-              ? (a.price_field === "accepted_price_minor"
-                  ? "Vereinbart: "
-                  : "Angebot: ") +
-                  money(a.previous_price_minor, a.currency) +
-                  " → " +
-                  money(a.new_price_minor, a.currency) +
-                  (a.note ? " · " + a.note : "")
+              ? priceChangeText(a, a.currency) + (a.note ? " · " + a.note : "")
               : a.note,
           ),
         ]),
@@ -1685,14 +1785,16 @@ export async function activities(actions) {
   });
   return [
     heading(
-      "Aktivitäten",
-      "Alle Kontakt- und Preisereignisse. Datumsfilter beziehen sich auf den Aktivitätszeitpunkt.",
+      t("Aktivitäten"),
+      t(
+        "Alle Kontakt- und Preisereignisse. Datumsfilter beziehen sich auf den Aktivitätszeitpunkt.",
+      ),
       [
         button(
-          "Aktivität hinzufügen",
+          t("Aktivität hinzufügen"),
           () => {
             if (!rows.length) return;
-            const choice = field("Angebot", "relationship_id", {
+            const choice = field(t("Angebot"), "relationship_id", {
               value: rows[0].id,
               options: rows.map((r) => [
                 r.id,
@@ -1705,11 +1807,11 @@ export async function activities(actions) {
             });
             import("./dialogs.js").then(({ showForm }) =>
               showForm(
-                "Angebot auswählen",
+                t("Angebot auswählen"),
                 [choice],
                 (data) => rows.find((r) => r.id === data.relationship_id),
                 {
-                  submitLabel: "Weiter",
+                  submitLabel: t("Weiter"),
                   onSaved: (r) => actions.activity(r),
                   successMessage: null,
                 },
@@ -1724,8 +1826,10 @@ export async function activities(actions) {
     rows.length || items.length
       ? content
       : empty(
-          "Noch keine Aktivitäten",
-          "Erstelle ein Angebot, um Kontakte und Preisänderungen zu erfassen.",
+          t("Noch keine Aktivitäten"),
+          t(
+            "Erstelle ein Angebot, um Kontakte und Preisänderungen zu erfassen.",
+          ),
         ),
   ];
 }
@@ -1735,14 +1839,14 @@ function performance(title, rows, channel = false) {
     table(
       title,
       [
-        channel ? "Kanal" : "Name",
-        "Angelegt",
-        "Gepitcht",
-        "Ghosted",
-        "Gewonnen",
-        "Abgelehnt",
-        "Abschlussquote",
-        "Pitch → Zusage",
+        channel ? t("Kanal") : t("Name"),
+        t("Angelegt"),
+        t("Gepitcht"),
+        t("Ghosted"),
+        t("Gewonnen"),
+        t("Abgelehnt"),
+        t("Abschlussquote"),
+        t("Pitch → Zusage"),
       ],
       rows.map((r) => [
         channel ? labels.channel[r.name] : r.name,
@@ -1769,38 +1873,40 @@ function analyticsContent(a) {
     el(
       "div",
       { class: "metrics-grid" },
-      metric("Angelegt", s.created),
-      metric("Gepitcht", s.pitched),
-      metric("Ghosted", s.ghosted, "Keine Rückmeldung"),
-      metric("Gewonnen", s.won, "Angenommen + erledigt"),
-      metric("Abgelehnt", s.rejected),
-      metric("Abschlussquote", percent(s.win_rate)),
-      metric("Noch unentschieden", s.undecided),
+      metric(t("Angelegt"), s.created),
+      metric(t("Gepitcht"), s.pitched),
+      metric(t("Ghosted"), s.ghosted, t("Keine Rückmeldung")),
+      metric(t("Gewonnen"), s.won, t("Angenommen + erledigt")),
+      metric(t("Abgelehnt"), s.rejected),
+      metric(t("Abschlussquote"), percent(s.win_rate)),
+      metric(t("Noch unentschieden"), s.undecided),
       metric(
-        "Pitch → Zusage",
+        t("Pitch → Zusage"),
         duration(
           s.avg_pitch_to_accept_days === null
             ? null
             : s.avg_pitch_to_accept_days * 86400000,
         ),
-        "Mittelwert · erste Zusage",
+        t("Mittelwert · erste Zusage"),
       ),
     ),
     panel(
-      "Auftragswerte",
+      t("Auftragswerte"),
       el(
         "p",
         { class: "oj-small oj-muted" },
-        "Währungen und Abrechnungsmodelle werden getrennt ausgewertet. Wiederkehrende Beträge beziehen sich auf die jeweilige Periode; keine Hochrechnung auf einen Gesamtumsatz.",
+        t(
+          "Währungen und Abrechnungsmodelle werden getrennt ausgewertet. Wiederkehrende Beträge beziehen sich auf die jeweilige Periode; keine Hochrechnung auf einen Gesamtumsatz.",
+        ),
       ),
       table(
-        "Auftragswerte",
+        t("Auftragswerte"),
         [
-          "Währung",
-          "Abrechnung",
-          "Aktuell angeboten",
-          "Ursprünglich gepitcht",
-          "Vereinbart (gewonnen)",
+          t("Währung"),
+          t("Abrechnung"),
+          t("Aktuell angeboten"),
+          t("Ursprünglich gepitcht"),
+          t("Vereinbart (gewonnen)"),
         ],
         a.values.map((v) => [
           v.currency,
@@ -1811,18 +1917,18 @@ function analyticsContent(a) {
         ]),
       ),
     ),
-    performance("Performance je Dienstleistung", a.by_service),
-    performance("Performance je Kunde", a.by_customer),
+    performance(t("Performance je Dienstleistung"), a.by_service),
+    performance(t("Performance je Kunde"), a.by_customer),
     performance(
-      "Performance je ursprünglichem Pitch-Kanal",
+      t("Performance je ursprünglichem Pitch-Kanal"),
       a.by_channel,
       true,
     ),
     panel(
-      "Ablehnungsgründe",
+      t("Ablehnungsgründe"),
       table(
-        "Ablehnungsgründe",
-        ["Grund", "Angebote"],
+        t("Ablehnungsgründe"),
+        [t("Grund"), t("Angebote")],
         a.rejection_reasons.map((r) => [labels.reason[r.code], r.count]),
       ),
     ),
@@ -1841,8 +1947,10 @@ export async function analytics() {
     );
   return [
     heading(
-      "Analytics",
-      "Auswertungen nach Anlagedatum des Angebots (UTC). Jeder Vorgang zählt pro Kennzahl einmal.",
+      t("Analytics"),
+      t(
+        "Auswertungen nach Anlagedatum des Angebots (UTC). Jeder Vorgang zählt pro Kennzahl einmal.",
+      ),
     ),
     filters,
     content,

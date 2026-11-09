@@ -1,3 +1,5 @@
+import { t, getLanguage, localizedMessage } from "./i18n.js";
+
 export async function api(path, { method = "GET", body, query } = {}) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query ?? {}))
@@ -7,13 +9,18 @@ export async function api(path, { method = "GET", body, query } = {}) {
     "/api" + path + (params.size ? "?" + params : ""),
     {
       method,
-      headers: body ? { "Content-Type": "application/json" } : {},
+      headers: {
+        "Accept-Language": getLanguage(),
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
       ...(body ? { body: JSON.stringify(body) } : {}),
     },
   );
   const result = await response.json();
   if (!response.ok) {
-    const error = new Error(result.error?.message ?? "Anfrage fehlgeschlagen.");
+    const error = new Error(
+      localizedMessage(result.error?.message ?? t("Anfrage fehlgeschlagen.")),
+    );
     error.fields = result.error?.fields;
     throw error;
   }

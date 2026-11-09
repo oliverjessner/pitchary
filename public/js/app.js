@@ -1,8 +1,18 @@
+import { t } from "./i18n.js";
 import { initOJ, toast } from "../vendor/oj-designsystem/index.js";
 import { el, heading, button } from "./dom.js";
 import { createActions } from "./dialogs.js";
 import * as views from "./views.js";
 import * as financeViews from "./finance.js";
+for (const node of document.querySelectorAll("[data-i18n]"))
+  node.textContent = t(node.dataset.i18n);
+for (const node of document.querySelectorAll("[data-i18n-aria-label]"))
+  node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+const description = document.querySelector('meta[name="description"]');
+if (description)
+  description.content = t(
+    "Pitchary – Kunden, Angebote und Finanzen lokal verwalten.",
+  );
 const main = document.querySelector("#main");
 let cleanup = () => {},
   generation = 0,
@@ -25,7 +35,7 @@ function revealPipelineNavigation(token) {
       )
         return;
       const current = document.querySelector(
-        'nav[aria-label="Hauptnavigation"] a[aria-current="page"]',
+        '.oj-sidebar-nav a[aria-current="page"]',
       );
       if (!current) return;
       const nav = current.parentElement,
@@ -56,7 +66,10 @@ function safeActions(actions) {
         Promise.resolve()
           .then(() => fn(...args))
           .catch((error) =>
-            toast(error.message, { type: "error", dismissLabel: "Schließen" }),
+            toast(error.message, {
+              type: "error",
+              dismissLabel: t("Schließen"),
+            }),
           ),
     ]),
   );
@@ -125,8 +138,8 @@ async function render(focus = true) {
       content = await financeViews.financeSettings(guarded, params);
     else
       content = [
-        heading("Seite nicht gefunden"),
-        button("Zum Dashboard", () => navigate("/dashboard")),
+        heading(t("Seite nicht gefunden")),
+        button(t("Zum Dashboard"), () => navigate("/dashboard")),
       ];
     if (token !== generation) {
       content.dispose?.();
@@ -139,16 +152,14 @@ async function render(focus = true) {
       content.dispose?.();
       cleanupOJ();
     };
-    document
-      .querySelectorAll('nav[aria-label="Hauptnavigation"] a')
-      .forEach((a) => {
-        if (
-          a.hash ===
-          "#/" + (section === "relationships" ? "pipeline" : section)
-        )
-          a.setAttribute("aria-current", "page");
-        else a.removeAttribute("aria-current");
-      });
+    document.querySelectorAll(".oj-sidebar-nav a").forEach((a) => {
+      if (
+        a.hash ===
+        "#/" + (section === "relationships" ? "pipeline" : section)
+      )
+        a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
     document.title =
       (main.querySelector("h1")?.textContent ?? "CRM") + " · Pitchary";
     if (focus) main.querySelector("h1")?.focus({ preventScroll: true });
@@ -161,13 +172,13 @@ async function render(focus = true) {
     if (token !== generation) return;
     cleanup();
     main.replaceChildren(
-      heading("Ansicht konnte nicht geladen werden"),
+      heading(t("Ansicht konnte nicht geladen werden")),
       el(
         "p",
         { class: "oj-alert oj-alert-danger", role: "alert" },
         error.message,
       ),
-      button("Erneut laden", () => render()),
+      button(t("Erneut laden"), () => render()),
     );
     cleanup = initOJ(main);
   } finally {

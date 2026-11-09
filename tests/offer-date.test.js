@@ -210,7 +210,7 @@ test("migration 013 backfills all existing offer dates without changing archived
   crm.addActivity(archived.id, { type: "note", note: "Keep me" });
   crm.archive("customer_services", archived.id);
   db.exec(
-    "ALTER TABLE customer_services DROP COLUMN offer_date; PRAGMA user_version=12;",
+    "ALTER TABLE customer_services DROP COLUMN offer_date; DROP TABLE app_settings; PRAGMA user_version=12;",
   );
   const tables = [
     "customers",
@@ -228,7 +228,7 @@ test("migration 013 backfills all existing offer dates without changing archived
   db.close();
   db = openDatabase(filename);
   t.after(() => db.close());
-  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
   for (const [table, rows] of before) {
     const actual = db
       .prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`)

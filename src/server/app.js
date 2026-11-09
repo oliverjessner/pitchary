@@ -13,6 +13,8 @@ import { registerFinanceProcessingAPI } from "../api/finance-processing-routes.j
 import { createCustomerMerge } from "../business/customer-merge.js";
 import { registerCustomerAliases } from "../api/customer-aliases.js";
 import { createCustomerLogoDiscovery } from "../business/customer-logo-discovery.js";
+import { createAppSettings } from "../business/app-settings.js";
+import { translateMessage } from "../../public/js/translate.js";
 export async function buildApp({
   databasePath,
   db,
@@ -25,6 +27,7 @@ export async function buildApp({
   const database = db ?? openDatabase(databasePath);
   const app = Fastify({ logger, bodyLimit: 131072 });
   app.decorate("crm", createCRM(database, { clock }));
+  app.decorate("appSettings", createAppSettings(database, { clock }));
   const customerLogos = createCustomerLogoDiscovery(
     app.crm,
     customerLogoOptions,
@@ -103,22 +106,38 @@ export async function buildApp({
   });
   app.setErrorHandler((error, request, reply) => {
     const status = error.status ?? error.statusCode ?? 500;
+    const language = /^en\b/i.test(request.headers["accept-language"] ?? "")
+      ? "en"
+      : "de";
     if (status >= 500) request.log.error(error);
     reply.code(status).send({
       error: {
         code:
           error.code ??
           (error.validation ? "invalid_request" : "internal_error"),
-        message:
+        message: translateMessage(
           status >= 500
             ? "Interner Fehler. Bitte Serverprotokoll prüfen."
             : error.message,
-        ...(error.fields ? { fields: error.fields } : {}),
+          language,
+        ),
+        ...(error.fields
+          ? {
+              fields: Object.fromEntries(
+                Object.entries(error.fields).map(([key, value]) => [
+                  key,
+                  translateMessage(value, language),
+                ]),
+              ),
+            }
+          : {}),
         ...(error.validation ? { details: error.validation } : {}),
       },
     });
   });
   await registerAPI(app, app.crm);
+  app.get("/api/settings", () => app.appSettings.get());
+  app.patch("/api/settings", (request) => app.appSettings.save(request.body));
   await registerFinanceAPI(app, finance);
   await registerFinanceProcessingAPI(app, finance, settings, processor);
   await app.register(fastifyStatic, {
@@ -128,7 +147,13 @@ export async function buildApp({
   });
   app.setNotFoundHandler((request, reply) =>
     reply.code(404).send({
-      error: { code: "not_found", message: "Endpunkt nicht gefunden." },
+      error: {
+        code: "not_found",
+        message: translateMessage(
+          "Endpunkt nicht gefunden.",
+          /^en\b/i.test(request.headers["accept-language"] ?? "") ? "en" : "de",
+        ),
+      },
     }),
   );
   return app;

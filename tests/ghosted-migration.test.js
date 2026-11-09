@@ -57,7 +57,7 @@ test("migration 004 preserves schema 3 rows, logos, archives, history and databa
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
     assert.equal(db.prepare("PRAGMA foreign_keys").get().foreign_keys, 1);
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
     assert.equal(

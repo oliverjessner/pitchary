@@ -1,5 +1,6 @@
 import { createMultiselect } from "../vendor/oj-designsystem/index.js";
 import { el, icon } from "./dom.js";
+import { t, getLocale } from "./i18n.js";
 let pickerNumber = 0;
 export function tagBadge(tag) {
   const badge = el(
@@ -44,13 +45,15 @@ export function tagPicker(tags, selected = []) {
     node: el(
       "fieldset",
       { class: "tag-picker wide" },
-      el("legend", { class: "oj-label" }, "Tags"),
+      el("legend", { class: "oj-label" }, t("Tags")),
       tags.length
         ? el("div", { class: "service-tag-options" }, choices)
         : el(
             "p",
             { class: "oj-small oj-muted" },
-            "Noch keine Tags vorhanden. Lege sie über „Tags verwalten“ bei Kunden oder Dienstleistungen an.",
+            t(
+              "Noch keine Tags vorhanden. Lege sie über „Tags verwalten“ bei Kunden oder Dienstleistungen an.",
+            ),
           ),
     ),
     value: () =>
@@ -66,24 +69,26 @@ export function tagFilter(
   } = {},
 ) {
   const picker = createMultiselect({
-    label: "Tags",
+    label: t("Tags"),
     options: tags.map((tag) => ({ value: tag.id, label: tag.name })),
     value: selected,
-    description,
+    description: t(description),
     labels: {
-      placeholder: "Alle Tags",
-      search: "Tags suchen",
-      searchPlaceholder: "Tag finden",
-      reset: "Auswahl zurücksetzen",
-      empty: "Noch keine Tags vorhanden.",
-      noResults: "Keine Tags gefunden.",
+      placeholder: t("Alle Tags"),
+      search: t("Tags suchen"),
+      searchPlaceholder: t("Tag finden"),
+      reset: t("Auswahl zurücksetzen"),
+      empty: t("Noch keine Tags vorhanden."),
+      noResults: t("Keine Tags gefunden."),
     },
     formatSelection: (options) =>
       options.length === 0
-        ? "Alle Tags"
+        ? t("Alle Tags")
         : options.length === 1
           ? options[0].label
-          : `${options.length} Tags ausgewählt`,
+          : t("{count} Tags ausgewählt", {
+              count: new Intl.NumberFormat(getLocale()).format(options.length),
+            }),
   });
   const change = (event) => onChange(event.detail.value);
   picker.node.addEventListener("oj:change", change);

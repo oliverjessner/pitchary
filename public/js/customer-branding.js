@@ -1,4 +1,5 @@
 import { el, icon, link } from "./dom.js";
+import { t } from "./i18n.js";
 let editorNumber = 0;
 export function customerLogo(row, { large = false } = {}) {
   const frame = el(
@@ -9,7 +10,7 @@ export function customerLogo(row, { large = false } = {}) {
   if (row.logo_url) {
     const image = el("img", {
       src: row.logo_url,
-      alt: "Logo von " + row.name,
+      alt: t("Logo von {name}", { name: row.name }),
       width: large ? 64 : 36,
       height: large ? 64 : 36,
       decoding: "async",
@@ -32,7 +33,7 @@ export function customerWebsite(row) {
     },
     new URL(row.website).host,
     icon("arrow-up-right-from-square"),
-    el("span", { class: "oj-sr-only" }, " (öffnet in neuem Tab)"),
+    el("span", { class: "oj-sr-only" }, t(" (öffnet in neuem Tab)")),
   );
 }
 export function customerIdentity(row) {
@@ -69,7 +70,7 @@ export function logoEditor(row) {
     { class: "customer-logo-preview" },
     row?.logo_url
       ? customerLogo(row, { large: true })
-      : el("span", { class: "oj-small oj-muted" }, "Noch kein Logo."),
+      : el("span", { class: "oj-small oj-muted" }, t("Noch kein Logo.")),
   );
   const message = el("p", {
     id: id + "-error",
@@ -94,14 +95,14 @@ export function logoEditor(row) {
           el(
             "span",
             { class: "oj-small oj-muted" },
-            "Logo wird beim Speichern entfernt.",
+            t("Logo wird beim Speichern entfernt."),
           ),
         );
         remove.disabled = true;
         revokePreview();
       },
     },
-    "Logo entfernen",
+    t("Logo entfernen"),
   );
   function revokePreview() {
     if (previewUrl) {
@@ -121,9 +122,9 @@ export function logoEditor(row) {
       let url;
       try {
         if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
-          throw new Error("Bitte ein PNG-, JPEG- oder WebP-Logo auswählen.");
+          throw new Error(t("Bitte ein PNG-, JPEG- oder WebP-Logo auswählen."));
         if (!file.size || file.size > 1048576)
-          throw new Error("Das Logo darf maximal 1 MiB groß sein.");
+          throw new Error(t("Das Logo darf maximal 1 MiB groß sein."));
         url = URL.createObjectURL(file);
         try {
           const image = new Image();
@@ -136,14 +137,14 @@ export function logoEditor(row) {
             image.naturalHeight > 4096
           )
             throw new Error(
-              "Das Logo darf maximal 4096 × 4096 Pixel groß sein.",
+              t("Das Logo darf maximal 4096 × 4096 Pixel groß sein."),
             );
         } catch (err) {
           URL.revokeObjectURL(url);
           throw new Error(
             err.message.includes("4096")
               ? err.message
-              : "Die Datei lässt sich nicht als Bild öffnen.",
+              : t("Die Datei lässt sich nicht als Bild öffnen."),
           );
         }
         if (token !== generation) {
@@ -154,7 +155,7 @@ export function logoEditor(row) {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result.split(",")[1]);
           reader.onerror = () =>
-            reject(new Error("Die Logo-Datei konnte nicht gelesen werden."));
+            reject(new Error(t("Die Logo-Datei konnte nicht gelesen werden.")));
           reader.readAsDataURL(file);
         });
         if (token !== generation) {
@@ -168,7 +169,7 @@ export function logoEditor(row) {
           el("img", {
             class: "customer-logo customer-logo-large",
             src: url,
-            alt: "Vorschau des Kundenlogos",
+            alt: t("Vorschau des Kundenlogos"),
             width: 64,
             height: 64,
           }),
@@ -188,19 +189,21 @@ export function logoEditor(row) {
   const node = el(
     "div",
     { class: "oj-field wide" },
-    el("label", { class: "oj-label", for: id }, "Logo hochladen"),
+    el("label", { class: "oj-label", for: id }, t("Logo hochladen")),
     !row?.id
       ? el(
           "p",
           { class: "oj-helper", id: id + "-auto" },
-          "Das Logo wird anhand der Website oder E-Mail-Domain automatisch gesucht.",
+          t(
+            "Das Logo wird anhand der Website oder E-Mail-Domain automatisch gesucht.",
+          ),
         )
       : null,
     input,
     el(
       "p",
       { class: "oj-helper", id: id + "-help" },
-      "PNG, JPEG oder WebP · maximal 1 MiB und 4096 × 4096 Pixel.",
+      t("PNG, JPEG oder WebP · maximal 1 MiB und 4096 × 4096 Pixel."),
     ),
     message,
     el("div", { class: "oj-cluster" }, preview, remove),
