@@ -755,6 +755,10 @@ test("finance settings preserve company data and mask keys without a migration c
     await expect(address).toHaveAttribute("type", "text");
     await expect(address).toHaveValue("Originalgasse 7, 1010 Wien");
     const companyTab = page.getByRole("tab", { name: "Firma", exact: true });
+    const generalTab = page.getByRole("tab", {
+      name: "Allgemein",
+      exact: true,
+    });
     const recognitionTab = page.getByRole("tab", {
       name: "Erkennung",
       exact: true,
@@ -763,18 +767,32 @@ test("finance settings preserve company data and mask keys without a migration c
       name: "Ordnerüberwachung",
       exact: true,
     });
-    await expect(page.getByRole("tab")).toHaveCount(3);
-    await expect(companyTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab")).toHaveCount(4);
+    await expect(generalTab).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tabpanel")).toHaveCount(1);
+    await expect(
+      page
+        .getByRole("tabpanel", { name: "Allgemein", exact: true })
+        .getByLabel("Sprache der Oberfläche", { exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".finance-settings-form")).toBeHidden();
+    await expect(page.locator("form form")).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Ordnerüberwachung", exact: true }),
     ).toBeHidden();
-    await companyTab.focus();
+    await generalTab.focus();
+    await generalTab.press("ArrowRight");
+    await expect(companyTab).toBeFocused();
+    await expect(companyTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".finance-settings-form")).toBeVisible();
     await companyTab.press("ArrowRight");
     await expect(recognitionTab).toBeFocused();
     await expect(recognitionTab).toHaveAttribute("aria-selected", "true");
     await recognitionTab.press("Home");
-    await expect(companyTab).toBeFocused();
+    await expect(generalTab).toBeFocused();
+    await expect(generalTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".finance-settings-form")).toBeHidden();
+    await companyTab.click();
     const companyEmail = page.getByLabel("Firmen-E-Mail", { exact: true });
     await companyEmail.fill("not-an-email");
     await companyTab.focus();
@@ -924,4 +942,93 @@ test("finance settings preserve company data and mask keys without a migration c
       },
     });
   }
+});
+
+test("general settings keep language and finance forms separate across tabs and deep links", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const general = page.locator("#settings-panel-general");
+  const finance = page.locator(".finance-settings-form");
+  for (const [query, active] of [
+    ["", "general"],
+    ["?tab=general", "general"],
+    ["?tab=company", "company"],
+    ["?tab=recognition", "recognition"],
+    ["?tab=watcher", "watcher"],
+  ]) {
+    await page.goto("/#/finance-settings" + query);
+    for (let pass = 0; pass < 2; pass++) {
+      if (pass) await page.reload();
+      await expect(page.locator("#main")).toHaveAttribute("aria-busy", "false");
+      await expect(page.locator(`#settings-tab-${active}`)).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await expect(page.getByRole("tabpanel")).toHaveCount(1);
+      await expect(page.getByRole("tabpanel")).toHaveAttribute(
+        "id",
+        `settings-panel-${active}`,
+      );
+      if (active === "general") {
+        await expect(
+          general.getByLabel("Sprache der Oberfläche", { exact: true }),
+        ).toBeVisible();
+        await expect(finance).toBeHidden();
+      } else {
+        await expect(general).toBeHidden();
+        await expect(finance).toBeVisible();
+        await expect(
+          finance.getByRole("button", {
+            name: "Einstellungen speichern",
+            exact: true,
+          }),
+        ).toBeVisible();
+      }
+      await expect(page).toHaveURL(
+        new RegExp("#\\/finance-settings" + query.replace("?", "\\?") + "$"),
+      );
+    }
+  }
+  await expect(page.locator("form form")).toHaveCount(0);
+  expect(
+    await general
+      .locator('[name="language"]')
+      .evaluate(
+        (control) =>
+          control.form !== null &&
+          control.form !== document.querySelector(".finance-settings-form"),
+      ),
+  ).toBe(true);
+  for (const id of ["company", "recognition", "watcher"])
+    await expect(
+      page.locator(`#settings-panel-${id} [name="language"]`),
+    ).toHaveCount(0);
+
+  const companyTab = page.locator("#settings-tab-company");
+  const generalTab = page.locator("#settings-tab-general");
+  await companyTab.click();
+  const companyName = page.getByLabel("Firmenname", { exact: true });
+  const originalName = await companyName.inputValue();
+  await companyName.fill("Unsaved company tab value");
+  await generalTab.click();
+  await expect(page).toHaveURL(/#\/finance-settings$/);
+  await expect(finance).toBeHidden();
+  await companyTab.click();
+  await expect(page).toHaveURL(/#\/finance-settings\?tab=company$/);
+  await expect(companyName).toHaveValue("Unsaved company tab value");
+  await companyName.fill(originalName);
+
+  await page.setViewportSize({ width: 320, height: 1000 });
+  await companyTab.focus();
+  await companyTab.press("Home");
+  await expect(generalTab).toBeFocused();
+  await expect(generalTab).toHaveAttribute("aria-selected", "true");
+  await expect(finance).toBeHidden();
+  await expect(page.getByRole("tab")).toHaveCount(4);
+  for (const tab of await page.getByRole("tab").all())
+    await expect(tab).toBeVisible();
+  await check(page);
+  expect(errors).toEqual([]);
 });

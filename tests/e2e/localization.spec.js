@@ -16,10 +16,12 @@ async function setLanguage(request, language) {
 }
 
 async function saveLanguage(page, language, label, button) {
-  await page.getByLabel(label, { exact: true }).selectOption(language);
+  const general = page.locator("#settings-panel-general");
+  await expect(general).toBeVisible();
+  await general.getByLabel(label, { exact: true }).selectOption(language);
   await Promise.all([
     page.waitForEvent("load"),
-    page.getByRole("button", { name: button, exact: true }).click(),
+    general.getByRole("button", { name: button, exact: true }).click(),
   ]);
   await expect(page.locator("html")).toHaveAttribute("lang", language);
 }
@@ -133,8 +135,27 @@ test("language selection persists and translates every screen and form without c
       "Einstellungen",
     );
     await expect(
-      page.getByLabel("Sprache der Oberfläche", { exact: true }),
+      page.getByRole("tab", { name: "Allgemein", exact: true }),
+    ).toHaveAttribute("aria-selected", "true");
+    await expect(
+      page
+        .getByRole("tabpanel", { name: "Allgemein", exact: true })
+        .getByLabel("Sprache der Oberfläche", { exact: true }),
     ).toHaveValue("de");
+    await expect(page.locator("form form")).toHaveCount(0);
+    expect(
+      await page
+        .getByLabel("Sprache der Oberfläche", { exact: true })
+        .evaluate(
+          (control) =>
+            control.form !== null &&
+            control.form !== document.querySelector(".finance-settings-form"),
+        ),
+    ).toBe(true);
+    for (const id of ["company", "recognition", "watcher"])
+      await expect(
+        page.locator(`#settings-panel-${id} [name="language"]`),
+      ).toHaveCount(0);
     await saveLanguage(
       page,
       "en",
@@ -146,7 +167,12 @@ test("language selection persists and translates every screen and form without c
       "Settings",
     );
     await expect(
-      page.getByLabel("Interface language", { exact: true }),
+      page.getByRole("tab", { name: "General", exact: true }),
+    ).toHaveAttribute("aria-selected", "true");
+    await expect(
+      page
+        .getByRole("tabpanel", { name: "General", exact: true })
+        .getByLabel("Interface language", { exact: true }),
     ).toHaveValue("en");
     expect(await (await request.get("/api/settings")).json()).toEqual({
       language: "en",

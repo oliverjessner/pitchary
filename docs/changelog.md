@@ -1,5 +1,6 @@
 # 0.7.0
 
+- Die Sprachwahl befindet sich im neuen Einstellungs-Tab „Allgemein“.
 - Die Oberfläche lässt sich in den Einstellungen dauerhaft zwischen Deutsch und Englisch umschalten und verwendet gemeinsame Übersetzungskataloge.
 - Die Personenübersicht zeigt statt der LinkedIn-Spalte das sortierbare Anlegedatum.
 - Abgelehnte Angebotskarten lassen sich direkt in der Pipeline archivieren.
