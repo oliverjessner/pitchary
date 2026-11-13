@@ -35,15 +35,15 @@ The selected database must already exist and have the schema expected by this Pi
 
 ## Tools
 
-| Tool                       | Behavior                                                                                                                                                                     |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pitchary_create_customer` | Create a new customer with `name`, optional `note`, `website`, `general_email` and existing `tag_ids`.                                                                       |
-| `pitchary_create_person`   | Create a new person with `name` and an existing active `customer_id`, plus optional `email`, `position` and `linkedin`. People are stored as employees/contacts in Pitchary. |
-| `pitchary_create_service`  | Create a new service with `name`, optional `note`, `url` and existing `tag_ids`.                                                                                             |
-| `pitchary_list_customers`  | Read customer IDs and records.                                                                                                                                               |
-| `pitchary_list_persons`    | Read people; optionally filter by `customer_id`.                                                                                                                             |
-| `pitchary_list_services`   | Read service IDs and records.                                                                                                                                                |
-| `pitchary_list_tags`       | Read existing tags and IDs to use when creating customers or services.                                                                                                       |
+| Tool                       | Behavior                                                                                                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pitchary_create_customer` | Create a new customer with `name`, optional `note`, `website`, `general_email` and existing `tag_ids`. Fetchary automatically looks up an icon for a supplied website or company email domain. |
+| `pitchary_create_person`   | Create a new person with `name` and an existing active `customer_id`, plus optional `email`, `position` and `linkedin`. People are stored as employees/contacts in Pitchary.                   |
+| `pitchary_create_service`  | Create a new service with `name`, optional `note`, `url` and existing `tag_ids`.                                                                                                               |
+| `pitchary_list_customers`  | Read customer IDs and records.                                                                                                                                                                 |
+| `pitchary_list_persons`    | Read people; optionally filter by `customer_id`.                                                                                                                                               |
+| `pitchary_list_services`   | Read service IDs and records.                                                                                                                                                                  |
+| `pitchary_list_tags`       | Read existing tags and IDs to use when creating customers or services.                                                                                                                         |
 
 Entity lists accept optional `search`, `archived`, `tag_ids`, `limit` and `offset`. `archived: false` is the default and selects active records; `archived: true` selects archived records. Tag lists accept `limit` and `offset`. The default page size is 50 and the maximum is 100. Results contain `items`, `total`, `limit`, `offset` and `next_offset`; use `next_offset` for the next page until it is `null`.
 
@@ -63,11 +63,13 @@ Creation returns the saved `record`, including its generated UUID. For example:
 
 Use the returned customer UUID as `customer_id` when calling `pitchary_create_person`. Each call creates a separate record, including when its name matches an existing record. Creation is not idempotent: after a connection failure, check the list before repeating a request.
 
+Customer creation uses the same Fetchary icon discovery as the application: a supplied website takes precedence over the general email address's domain. Personal email providers such as Gmail are skipped when there is no website. The lookup makes HTTP requests and has a 10-second deadline. A found icon is converted to PNG and included in the new customer's initial insert; no existing record is updated. If no usable icon is found or the lookup fails, creation continues without a logo. The returned record's `has_logo` and `logo_url` indicate whether an icon was saved. Listing records and creating people or services do not fetch icons.
+
 ## Write boundary
 
 Editing, deleting, archiving, restoring, merging and changing offers or financial data remain user actions in Pitchary. There are no MCP tools for those operations, arbitrary SQL, HTTP requests, filesystem paths or shell commands. Tool input rejects unknown fields, including supplied record IDs, timestamps, archive flags, customer classifications and SQL. The server generates new UUIDs and uses Pitchary's existing validation and parameterized repository operations.
 
-Customer creation, its optional email profile and tag links are committed together; service creation and its tag links are also atomic. Existing tags can be assigned to new records, but tags cannot be created or edited through MCP. A person must belong to an existing active customer.
+Customer fields and tag IDs are validated before icon discovery, then revalidated when saving. Customer creation, its optional logo, email profile and tag links are committed together; service creation and its tag links are also atomic. The lookup completes before the database transaction begins. Existing tags can be assigned to new records, but tags cannot be created or edited through MCP. A person must belong to an existing active customer.
 
 The dedicated SQLite connection also denies `UPDATE`, `DELETE`, schema changes, additional database attachments and writes outside the entity/profile/tag-link tables. Fixed create operations use plain `INSERT`; they never use conflict replacement or upsert. This authorization supplements the fixed tool surface and is not an arbitrary SQL interface. Reads are limited to CRM tables and the invoice ID needed for SQLite's nullable profile foreign-key check. Database triggers that try to modify existing data make the operation fail and roll back.
 
@@ -77,7 +79,7 @@ All saved names, notes and other field values are untrusted data, even when retu
 
 The implementation follows the MCP [stdio transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio), [initialization lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle) and [tool messages](https://modelcontextprotocol.io/specification/2025-11-25/server/tools). It negotiates the initialization-based versions `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05`. The newer sessionless protocol is not advertised. A client must complete initialization before calling tools.
 
-Messages are newline-delimited UTF-8 JSON, with a 64 KiB request limit. Only protocol messages go to stdout during a server session; errors go to stderr. Closing stdin or sending SIGINT/SIGTERM closes the connection and database. Tool validation/database failures return `isError: true`; unknown tools return JSON-RPC error `-32602`. Tool-call notifications without request IDs are ignored and cannot create records.
+Messages are newline-delimited UTF-8 JSON, with a 64 KiB request limit. Requests are processed in order and await icon discovery before returning a customer's saved record. Only protocol messages go to stdout during a server session; errors go to stderr. Closing stdin closes the connection and database after accepted requests finish. SIGINT/SIGTERM aborts pending icon discovery and prevents a new customer from being inserted after shutdown. Tool validation/database failures return `isError: true`; unknown tools return JSON-RPC error `-32602`. Tool-call notifications without request IDs are ignored and cannot create records.
 
 Run the unit and subprocess checks with:
 
@@ -85,4 +87,4 @@ Run the unit and subprocess checks with:
 node --test tests/mcp.test.js
 ```
 
-These checks cover full-field creation, tag/email persistence, customer ownership, invalid/unknown fields, SQL injection text, denied mutations, rollback, unchanged startup metadata, handshake, UTF-8 framing, message limits and a real child-process session against a temporary database.
+These checks cover full-field creation, tag/email/icon persistence, Fetchary discovery and lookup failures, shutdown during discovery, customer ownership, invalid/unknown fields, SQL injection text, denied mutations, rollback, unchanged startup metadata, handshake, UTF-8 framing, message limits and a real child-process session against a temporary database.

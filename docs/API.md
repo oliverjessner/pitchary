@@ -75,6 +75,8 @@ Für Logos sind `image/png`, `image/jpeg` und `image/webp` bis 1 MiB erlaubt. Ba
 
 Kundenantworten enthalten `website`, `has_logo`, `logo_mime` und `logo_url`; Bildbytes erscheinen nicht in JSON-Listen. `logo_url` verweist auf den lokalen Bildendpunkt. Dieser liefert bei fehlendem Logo **404** und bleibt auch für archivierte Kunden lesbar. Archivierte Kunden können erst nach Wiederherstellung bearbeitet werden.
 
+`POST /customers/:id/logo/refetch` startet ohne Request-Body einen erneuten Fetchary-Abruf, auch wenn bereits ein Icon gespeichert ist. Als Quelle dient die Website, andernfalls die allgemeine Firmen-E-Mail-Domain; persönliche E-Mail-Anbieter ohne Website werden übersprungen. Die Antwort **200** enthält `{record, refreshed}`: `record` ist der aktuelle Kundendatensatz, `refreshed: true` bestätigt ein neu gespeichertes PNG-Icon. Ohne verwendbares Icon oder bei einem Abruffehler bleibt das vorhandene Logo erhalten und `refreshed` ist `false`. Ein während des Abrufs manuell geändertes oder entferntes Logo, eine geänderte Website/E-Mail oder eine Archivierung wird nicht überschrieben. Fehlende Kunden liefern **404**, bereits archivierte Kunden vor einem Abruf **409**. Dieser explizite Benutzer-Endpunkt wird durch den Button „Icon neu laden“ in der Kundenansicht aufgerufen; er erweitert nicht die Schreibrechte des MCP.
+
 Angebotslisten und -details enthalten `customer_logo_url` für das aktuelle Kundenlogo, auch in Kunden-/Dienstleistungsdetails und bei archivierten Angeboten. Ohne Logo ist der Wert `null`. Der Versionsparameter folgt Änderungen am Kunden, damit ein ersetztes Logo beim nächsten Laden sofort erscheint; Bildbytes werden ausschließlich über den Bildendpunkt geladen.
 
 Mitarbeiter (Kundenzuordnung ist später nicht veränderbar):

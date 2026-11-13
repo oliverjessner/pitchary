@@ -3,6 +3,187 @@ import AxeBuilder from "@axe-core/playwright";
 import { mkdirSync } from "node:fs";
 import { demoCustomerLogo } from "../../scripts/demo-assets.js";
 import { logoFormats } from "../fixtures/logo-formats.js";
+
+test("customer icon refetch replaces an existing logo through Fetchary and persists on narrow screens", async ({
+  page,
+  request,
+}, testInfo) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  for (const width of [1440, 320]) {
+    const response = await request.post("/api/customers", {
+      data: {
+        name: `Icon erneut laden ${testInfo.project.name} ${width}`,
+        website: "https://auto-logo.example/",
+        logo: logoFormats.jpeg,
+      },
+    });
+    expect(response.ok()).toBe(true);
+    const customer = await response.json();
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/#/customers/" + customer.id);
+    const image = page.getByAltText("Logo von " + customer.name);
+    await expect(image).toBeVisible();
+    await expect(image).toHaveAttribute("src", customer.logo_url);
+    const refreshedResponse = page.waitForResponse(
+      (result) =>
+        new URL(result.url()).pathname ===
+          `/api/customers/${customer.id}/logo/refetch` &&
+        result.request().method() === "POST",
+    );
+    await page
+      .getByRole("button", { name: "Icon neu laden", exact: true })
+      .click();
+    const refreshed = await refreshedResponse;
+    expect(refreshed.ok()).toBe(true);
+    expect(refreshed.request().postData()).toBeNull();
+    const result = await refreshed.json();
+    expect(result.refreshed).toBe(true);
+    expect(result.record.has_logo).toBe(true);
+    expect(result.record.logo_url).not.toBe(customer.logo_url);
+    await expect(image).toHaveAttribute("src", result.record.logo_url);
+    await expect
+      .poll(() => image.evaluate((node) => node.naturalWidth))
+      .toBe(64);
+    await expect(
+      page.getByRole("status").filter({ hasText: "Icon wurde neu geladen." }),
+    ).toBeVisible();
+    const storedImage = await request.get(`/api/customers/${customer.id}/logo`);
+    expect(storedImage.headers()["content-type"]).toBe("image/png");
+    expect(await storedImage.body()).not.toEqual(
+      Buffer.from(logoFormats.jpeg.data_base64, "base64"),
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+    await page.reload();
+    await expect(image).toHaveAttribute("src", result.record.logo_url);
+    await expect(image).toBeVisible();
+  }
+  expect(errors).toEqual([]);
+});
+
+test("customer icon refetch prevents duplicate clicks, preserves the logo on failure and allows retry", async ({
+  page,
+  request,
+}, testInfo) => {
+  const response = await request.post("/api/customers", {
+    data: {
+      name: "Icon Wiederholungsversuch " + testInfo.project.name,
+      website: "https://auto-logo.example/",
+      logo: logoFormats.jpeg,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  const customer = await response.json();
+  const endpoint = `/api/customers/${customer.id}/logo/refetch`;
+  const started = Promise.withResolvers();
+  const finished = Promise.withResolvers();
+  let requests = 0;
+  await page.route("**" + endpoint, async (route) => {
+    requests++;
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postData()).toBeNull();
+    if (requests === 1) {
+      started.resolve();
+      await finished.promise;
+      await route.fulfill({
+        json: { record: customer, refreshed: false },
+      });
+    } else if (requests === 2) {
+      await route.fulfill({
+        status: 503,
+        json: { error: { message: "Icon-Dienst nicht erreichbar." } },
+      });
+    } else await route.continue();
+  });
+  await page.goto("/#/customers/" + customer.id);
+  const image = page.getByAltText("Logo von " + customer.name);
+  const refetch = page.getByRole("button", {
+    name: "Icon neu laden",
+    exact: true,
+  });
+  await expect(image).toBeVisible();
+  await refetch.click();
+  await started.promise;
+  const loading = page.getByRole("button", {
+    name: "Icon wird geladen …",
+    exact: true,
+  });
+  await expect(loading).toBeDisabled();
+  await expect(loading).toHaveAttribute("aria-busy", "true");
+  await loading.evaluate((node) => node.click());
+  expect(requests).toBe(1);
+  finished.resolve();
+  await expect(refetch).toBeEnabled();
+  await expect(refetch).toHaveAttribute("aria-busy", "false");
+  await expect(
+    page.getByRole("status").filter({
+      hasText: "Kein neues Icon gefunden. Das bisherige Icon bleibt erhalten.",
+    }),
+  ).toBeVisible();
+  await expect(image).toHaveAttribute("src", customer.logo_url);
+  await refetch.click();
+  await expect(
+    page.getByRole("status").filter({
+      hasText: "Icon konnte nicht neu geladen werden. Bitte erneut versuchen.",
+    }),
+  ).toBeVisible();
+  await expect(refetch).toBeEnabled();
+  await expect(image).toHaveAttribute("src", customer.logo_url);
+  const preservedImage = await request.get(
+    `/api/customers/${customer.id}/logo`,
+  );
+  expect(await preservedImage.body()).toEqual(
+    Buffer.from(logoFormats.jpeg.data_base64, "base64"),
+  );
+  await refetch.click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Icon wurde neu geladen." }),
+  ).toBeVisible();
+  await expect(refetch).toBeEnabled();
+  await expect(image).not.toHaveAttribute("src", customer.logo_url);
+  expect(requests).toBe(3);
+});
+
+test("customer icon refetch explains missing sources and is unavailable for archived customers", async ({
+  page,
+  request,
+}, testInfo) => {
+  const response = await request.post("/api/customers", {
+    data: { name: "Icon ohne Quelle " + testInfo.project.name },
+  });
+  expect(response.ok()).toBe(true);
+  const customer = await response.json();
+  await page.goto("/#/customers/" + customer.id);
+  const refetch = page.getByRole("button", {
+    name: "Icon neu laden",
+    exact: true,
+  });
+  const missingSource =
+    "Füge eine Website oder Firmen-E-Mail hinzu, um das Icon neu zu laden.";
+  await expect(refetch).toBeDisabled();
+  await expect(refetch).toHaveAttribute("title", missingSource);
+  await expect(page.getByText(missingSource, { exact: true })).toBeVisible();
+  expect((await request.delete("/api/customers/" + customer.id)).ok()).toBe(
+    true,
+  );
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: customer.name, exact: true }),
+  ).toBeVisible();
+  await expect(refetch).toHaveCount(0);
+});
+
 test("a customer email automatically supplies a persistent logo from the company HTML", async ({
   page,
   request,

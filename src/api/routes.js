@@ -30,6 +30,9 @@ export async function registerAPI(app, crm) {
       .header("Content-Disposition", "inline")
       .send(image.data);
   });
+  app.post("/api/customers/:id/logo/refetch", { schema }, (request) =>
+    app.customerLogoDiscovery.refetch(request.params.id),
+  );
   for (const name of ["customers", "employees", "services"]) {
     app.get(`/api/${name}`, (request) => crm.listEntities(name, request.query));
     app.get(`/api/${name}/:id`, { schema }, (request) =>

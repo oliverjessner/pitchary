@@ -18,7 +18,7 @@ const error = (id, code, message) => ({
 
 export function createMCPSession(tools) {
   let state = "new";
-  return (request) => {
+  return async (request) => {
     if (
       !record(request) ||
       request.jsonrpc !== "2.0" ||
@@ -76,7 +76,7 @@ export function createMCPSession(tools) {
       )
         return error(id, -32602, "Invalid tools/call parameters");
       try {
-        return result(tools.call(params.name, params.arguments));
+        return result(await tools.call(params.name, params.arguments));
       } catch (exception) {
         return error(
           id,
@@ -114,7 +114,7 @@ export async function runMCPStdio({ input, output, tools }) {
       await write(error(null, -32700, "Parse error"));
       return;
     }
-    await write(session(request));
+    await write(await session(request));
   };
   for await (const chunk of input) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);

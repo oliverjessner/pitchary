@@ -592,6 +592,10 @@ img.customer-logo {
 .customer-profile {
   gap: var(--oj-space-4);
 }
+.customer-profile-website {
+  min-width: 0;
+  max-width: 100%;
+}
 .timeline {
   list-style: none;
   padding: 0;

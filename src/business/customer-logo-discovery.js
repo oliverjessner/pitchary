@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { extractIco, isIco, parseIco } from "@oliverj/tinyico";
 import { createWebFetch } from "./web-fetch.js";
 import { logo, maxLogoBytes } from "./customer-branding.js";
+import { AppError } from "./validation.js";
 
 const personalDomains = new Set([
   "gmail.com",
@@ -140,6 +141,51 @@ export function createCustomerLogoDiscovery(
         // An unavailable website must not prevent saving a customer.
         return crm.entity("customers", id);
       }
+    },
+    async refetch(id) {
+      const before = crm.entity("customers", id);
+      if (before.archived_at)
+        throw new AppError(
+          409,
+          "archived",
+          "Archivierte Datensätze können nicht verändert werden.",
+        );
+      if (!siteFor(before) || controller.signal.aborted)
+        return { record: before, refreshed: false };
+      const previousImage = crm.repo.customerLogo(id);
+      const previousBytes = previousImage.logo_data
+        ? Buffer.from(previousImage.logo_data)
+        : null;
+      let found;
+      try {
+        found = await (suppliedDiscover || discover)(before);
+        if (found) logo(found);
+      } catch {
+        // A failed refresh must retain the customer's current logo.
+        return { record: crm.entity("customers", id), refreshed: false };
+      }
+      const current = crm.entity("customers", id);
+      const currentImage = crm.repo.customerLogo(id);
+      const unchangedImage = previousBytes
+        ? currentImage.logo_data &&
+          previousBytes.equals(Buffer.from(currentImage.logo_data))
+        : !currentImage.logo_data;
+      if (
+        !found ||
+        controller.signal.aborted ||
+        current.archived_at ||
+        current.updated_at !== before.updated_at ||
+        current.website !== before.website ||
+        current.general_email !== before.general_email ||
+        current.has_logo !== before.has_logo ||
+        currentImage.logo_mime !== previousImage.logo_mime ||
+        !unchangedImage
+      )
+        return { record: current, refreshed: false };
+      return {
+        record: crm.updateEntity("customers", id, { logo: found }),
+        refreshed: true,
+      };
     },
     close() {
       controller.abort();

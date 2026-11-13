@@ -115,6 +115,186 @@ test("customer email edits use the same finance profile and invalid emails roll 
   assert.equal(app.crm.listEntities("customers").length, before);
 });
 
+test("explicit icon refetch calls Fetchary again and replaces an existing customer logo", async (t) => {
+  const { app, requests } = await setup(t);
+  const previousBytes = await sharp({
+    create: { width: 8, height: 8, channels: 4, background: "#ff6b35" },
+  })
+    .png()
+    .toBuffer();
+  const row = app.crm.createEntity("customers", {
+    name: "Refresh existing logo",
+    website: "https://auto-logo.example/",
+    general_email: "office@auto-logo.example",
+    note: "Preserve customer fields",
+    logo: {
+      mime_type: "image/png",
+      data_base64: previousBytes.toString("base64"),
+    },
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/customers/${row.id}/logo/refetch`,
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().refreshed, true);
+  const record = response.json().record;
+  assert.equal(record.id, row.id);
+  assert.equal(record.name, row.name);
+  assert.equal(record.note, row.note);
+  assert.equal(record.website, row.website);
+  assert.equal(record.general_email, row.general_email);
+  assert.equal(record.has_logo, true);
+  assert.ok(requests.some(({ url }) => url === row.website));
+  const image = app.crm.customerLogo(row.id);
+  assert.notDeepEqual(image.data, previousBytes);
+  assert.deepEqual(
+    await sharp(image.data).raw().toBuffer(),
+    await sharp(Buffer.from(demoCustomerLogo.data_base64, "base64"))
+      .raw()
+      .toBuffer(),
+  );
+  const binary = await app.inject({ url: record.logo_url });
+  assert.equal(binary.statusCode, 200);
+  assert.match(binary.headers["content-type"], /^image\/png/);
+  assert.deepEqual(binary.rawPayload, image.data);
+});
+
+test("explicit icon refetch preserves existing logo bytes and metadata when discovery fails or finds no usable icon", async (t) => {
+  for (const outcome of [
+    null,
+    new Error("Website unavailable"),
+    new DOMException("Timed out", "TimeoutError"),
+    { mime_type: "image/png", data_base64: "bm90IGFuIGltYWdl" },
+  ]) {
+    const { app } = await setup(t, {
+      discover: async () => {
+        if (outcome instanceof Error) throw outcome;
+        return outcome;
+      },
+    });
+    const row = app.crm.createEntity("customers", {
+      name: "Keep current logo",
+      website: "https://auto-logo.example/",
+      logo: demoCustomerLogo,
+    });
+    const before = app.crm.entity("customers", row.id);
+    const beforeImage = app.crm.customerLogo(row.id);
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/customers/${row.id}/logo/refetch`,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().refreshed, false);
+    assert.deepEqual(response.json().record, before);
+    assert.deepEqual(app.crm.entity("customers", row.id), before);
+    assert.deepEqual(app.crm.customerLogo(row.id), beforeImage);
+  }
+});
+
+test("explicit icon refetch skips absent sources and rejects missing or archived customers before lookup", async (t) => {
+  let lookups = 0;
+  const { app, requests } = await setup(t, {
+    discover: async () => {
+      lookups++;
+      return demoCustomerLogo;
+    },
+  });
+  for (const general_email of ["", "person@gmail.com"]) {
+    const row = app.crm.createEntity("customers", {
+      name: "No company source",
+      general_email,
+      logo: demoCustomerLogo,
+    });
+    const before = app.crm.entity("customers", row.id);
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/customers/${row.id}/logo/refetch`,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().refreshed, false);
+    assert.deepEqual(response.json().record, before);
+  }
+  const archived = app.crm.createEntity("customers", {
+    name: "Archived icon",
+    website: "https://auto-logo.example/",
+  });
+  app.crm.archive("customers", archived.id);
+  for (const [id, status] of [
+    [archived.id, 409],
+    ["00000000-0000-4000-8000-000000000000", 404],
+    ["invalid", 400],
+  ]) {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/customers/${id}/logo/refetch`,
+    });
+    assert.equal(response.statusCode, status);
+  }
+  assert.equal(lookups, 0);
+  assert.equal(requests.length, 0);
+});
+
+test("explicit icon refetch cannot overwrite concurrent manual edits even when timestamps match", async (t) => {
+  const replacementBytes = await sharp({
+    create: { width: 12, height: 12, channels: 4, background: "#4d8dff" },
+  })
+    .png()
+    .toBuffer();
+  const replacement = {
+    mime_type: "image/png",
+    data_base64: replacementBytes.toString("base64"),
+  };
+  for (const action of ["manual", "remove", "email", "website", "archive"]) {
+    const started = Promise.withResolvers();
+    const finished = Promise.withResolvers();
+    const { app } = await setup(t, {
+      discover: async () => {
+        started.resolve();
+        return finished.promise;
+      },
+    });
+    const row = app.crm.createEntity("customers", {
+      name: "Concurrent " + action,
+      website: "https://auto-logo.example/",
+      general_email: "office@auto-logo.example",
+      logo: demoCustomerLogo,
+    });
+    const refetching = app.inject({
+      method: "POST",
+      url: `/api/customers/${row.id}/logo/refetch`,
+    });
+    await started.promise;
+    if (action === "manual")
+      app.crm.updateEntity("customers", row.id, { logo: replacement });
+    if (action === "remove")
+      app.crm.updateEntity("customers", row.id, { logo: null });
+    if (action === "email")
+      app.crm.updateEntity("customers", row.id, {
+        general_email: "changed@company.example",
+      });
+    if (action === "website")
+      app.crm.updateEntity("customers", row.id, {
+        website: "https://changed.example/",
+      });
+    if (action === "archive") app.crm.archive("customers", row.id);
+    app.database
+      .prepare("UPDATE customers SET updated_at=? WHERE id=?")
+      .run(row.updated_at, row.id);
+    const current = app.crm.entity("customers", row.id);
+    const currentImage = current.has_logo ? app.crm.customerLogo(row.id) : null;
+    finished.resolve(action === "manual" ? demoCustomerLogo : replacement);
+    const response = await refetching;
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().refreshed, false);
+    assert.deepEqual(response.json().record, current);
+    assert.deepEqual(app.crm.entity("customers", row.id), current);
+    if (currentImage)
+      assert.deepEqual(app.crm.customerLogo(row.id), currentImage);
+    else assert.equal(app.crm.entity("customers", row.id).has_logo, false);
+  }
+});
+
 test("Fetchary chooses the largest real manifest icon after page and manifest redirects", async (t) => {
   const image = async (size, color) =>
     sharp({

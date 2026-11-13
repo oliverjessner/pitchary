@@ -9,7 +9,7 @@ import {
 import {
   customerIdentity,
   customerLogo,
-  customerWebsite,
+  customerProfile,
 } from "./customer-branding.js";
 import { tagBadge, tagList, tagFilter } from "./service-tags.js";
 import { readFilters, saveFilters, selectedTags } from "./filter-state.js";
@@ -644,14 +644,7 @@ export async function customerDetail(id, actions) {
       row.archived_at ? t("Archivierter Kunde") : t("Kundendetails"),
       entityState(row, "customers", actions),
     ),
-    row.website || row.has_logo
-      ? el(
-          "div",
-          { class: "customer-profile oj-cluster" },
-          customerLogo(row, { large: true }),
-          customerWebsite(row),
-        )
-      : null,
+    customerProfile(row),
     row.note
       ? panel(t("Notiz"), el("p", { class: "note-text" }, row.note))
       : null,

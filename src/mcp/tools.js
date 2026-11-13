@@ -1,4 +1,6 @@
 import { createCRM } from "../business/crm.js";
+import { logo } from "../business/customer-branding.js";
+import { createCustomerLogoDiscovery } from "../business/customer-logo-discovery.js";
 import { createRepository } from "../database/repository.js";
 import { AppError, allowedKeys, invalid } from "../business/validation.js";
 
@@ -33,7 +35,7 @@ const createDefinitions = [
     name: "pitchary_create_customer",
     title: "Create customer",
     description:
-      "Create one new customer. Existing customers cannot be changed, merged, archived or deleted through this MCP.",
+      "Create one new customer. When a website or company email domain is supplied, Fetchary looks up its icon and saves a found logo with the new record. Lookup failures do not prevent creation. Existing customers cannot be changed, merged, archived or deleted through this MCP.",
     table: "customers",
     inputSchema: object(
       {
@@ -186,8 +188,10 @@ function insertOnlyRepository(db) {
   };
 }
 
-export function createMCPTools(db) {
+export function createMCPTools(db, { logoDiscovery } = {}) {
   const crm = createCRM(db, { repository: insertOnlyRepository(db) });
+  const customerLogos = logoDiscovery ?? createCustomerLogoDiscovery(crm);
+  let closed = false;
   const tools = new Map(
     definitions.map((definition) => [definition.name, definition]),
   );
@@ -203,17 +207,39 @@ export function createMCPTools(db) {
           idempotentHint: !createDefinitions.some(
             ({ name }) => name === definition.name,
           ),
-          openWorldHint: false,
+          openWorldHint: definition.name === "pitchary_create_customer",
         },
       }));
     },
-    call(name, args = {}) {
+    close() {
+      if (closed) return;
+      closed = true;
+      customerLogos.close?.();
+    },
+    async call(name, args = {}) {
       const definition = tools.get(name);
       if (!definition) throw new UnknownToolError("Unknown tool.");
       try {
+        if (closed) throw new Error("MCP tools are closed.");
         validate(args, definition.inputSchema);
+        let creation = args;
+        if (name === "pitchary_create_customer") {
+          const { values } = crm.prepareEntityCreation("customers", args);
+          if (values.website || values.general_email) {
+            try {
+              const found = await customerLogos.discover(values);
+              if (found) {
+                logo(found);
+                creation = { ...args, logo: found };
+              }
+            } catch {
+              // Saving a new customer must also work without an available icon.
+            }
+          }
+        }
+        if (closed) throw new Error("MCP tools are closed.");
         const data = createDefinitions.includes(definition)
-          ? { record: crm.createEntity(definition.table, args) }
+          ? { record: crm.createEntity(definition.table, creation) }
           : page(
               definition.table
                 ? crm.listEntities(definition.table, args)

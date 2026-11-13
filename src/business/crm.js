@@ -142,6 +142,15 @@ export function createCRM(
     }
     return out;
   }
+  function prepareEntityCreation(table, data) {
+    return {
+      values: entityData(table, data, true),
+      tagIds:
+        table === "services" || table === "customers"
+          ? serviceTags.validateTagIds(data.tag_ids ?? [])
+          : null,
+    };
+  }
   function event(id, from, to, reason, occurred, recorded) {
     repo.insert("customer_service_status_history", {
       id: idFactory(),
@@ -203,6 +212,7 @@ export function createCRM(
   }
   const crm = {
     repo,
+    prepareEntityCreation,
     ...serviceTags,
     listEntities(table, filters = {}) {
       const tagIds = serviceTags.validateTagIds(
@@ -281,12 +291,9 @@ export function createCRM(
     },
     createEntity(table, data) {
       const save = () => {
-        const { general_email, ...values } = entityData(table, data, true),
+        const { values: prepared, tagIds } = prepareEntityCreation(table, data);
+        const { general_email, ...values } = prepared,
           at = now();
-        const tagIds =
-          table === "services" || table === "customers"
-            ? serviceTags.validateTagIds(data.tag_ids ?? [])
-            : null;
         const id = idFactory();
         repo.insert(table, {
           id,

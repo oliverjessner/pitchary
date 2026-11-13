@@ -1,4 +1,5 @@
-import { el, icon, link } from "./dom.js";
+import { el, icon, link, button } from "./dom.js";
+import { api } from "./api.js";
 import { t } from "./i18n.js";
 let editorNumber = 0;
 export function customerLogo(row, { large = false } = {}) {
@@ -42,6 +43,86 @@ export function customerIdentity(row) {
     { class: "customer-identity" },
     customerLogo(row),
     el("div", { class: "oj-stack" }, link(row.name, "#/customers/" + row.id)),
+  );
+}
+export function customerProfile(row) {
+  if (row.archived_at && !row.website && !row.has_logo) return null;
+  let logo = customerLogo(row, { large: true });
+  const website = el(
+    "span",
+    { class: "customer-profile-website", hidden: !row.website },
+    customerWebsite(row),
+  );
+  const identity = el("div", { class: "oj-cluster" }, logo, website);
+  if (row.archived_at)
+    return el("div", { class: "customer-profile oj-stack" }, identity);
+  const hint = t(
+    "Füge eine Website oder Firmen-E-Mail hinzu, um das Icon neu zu laden.",
+  );
+  const hintId = "customer-icon-hint-" + row.id;
+  const label = el("span", {}, t("Icon neu laden"));
+  const message = el("p", {
+    class: "oj-helper",
+    role: "status",
+    "aria-live": "polite",
+    hidden: true,
+  });
+  const refetch = button(
+    label,
+    async () => {
+      if (refetch.disabled) return;
+      refetch.disabled = true;
+      refetch.setAttribute("aria-busy", "true");
+      label.textContent = t("Icon wird geladen …");
+      message.hidden = true;
+      message.classList.remove("oj-helper-error");
+      try {
+        const result = await api("/customers/" + row.id + "/logo/refetch", {
+          method: "POST",
+        });
+        const previousLogo = row.logo_url;
+        Object.assign(row, result.record);
+        if (result.refreshed || row.logo_url !== previousLogo) {
+          const next = customerLogo(row, { large: true });
+          logo.replaceWith(next);
+          logo = next;
+        }
+        website.replaceChildren(...[customerWebsite(row)].filter(Boolean));
+        website.hidden = !row.website;
+        message.textContent = result.refreshed
+          ? t("Icon wurde neu geladen.")
+          : row.has_logo
+            ? t("Kein neues Icon gefunden. Das bisherige Icon bleibt erhalten.")
+            : t("Kein Icon gefunden.");
+      } catch {
+        message.textContent = t(
+          "Icon konnte nicht neu geladen werden. Bitte erneut versuchen.",
+        );
+        message.classList.add("oj-helper-error");
+      } finally {
+        message.hidden = false;
+        refetch.disabled = Boolean(
+          row.archived_at || (!row.website && !row.general_email),
+        );
+        refetch.setAttribute("aria-busy", "false");
+        label.textContent = t("Icon neu laden");
+      }
+    },
+    { iconName: "rotate-right", disabled: !row.website && !row.general_email },
+  );
+  if (refetch.disabled) {
+    refetch.title = hint;
+    refetch.setAttribute("aria-describedby", hintId);
+  }
+  identity.append(refetch);
+  return el(
+    "div",
+    { class: "customer-profile oj-stack" },
+    identity,
+    refetch.disabled
+      ? el("p", { class: "oj-helper", id: hintId }, hint)
+      : null,
+    message,
   );
 }
 export function logoEditor(row) {

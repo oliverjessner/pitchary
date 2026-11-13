@@ -2,6 +2,16 @@ export default {
   "Logo von {name}": "Logo of {name}",
   " (öffnet in neuem Tab)": " (opens in a new tab)",
   "Noch kein Logo.": "No logo yet.",
+  "Icon neu laden": "Refetch icon",
+  "Icon wird geladen …": "Loading icon …",
+  "Icon wurde neu geladen.": "Icon reloaded.",
+  "Kein neues Icon gefunden. Das bisherige Icon bleibt erhalten.":
+    "No new icon found. The existing icon has been kept.",
+  "Kein Icon gefunden.": "No icon found.",
+  "Icon konnte nicht neu geladen werden. Bitte erneut versuchen.":
+    "The icon could not be reloaded. Please try again.",
+  "Füge eine Website oder Firmen-E-Mail hinzu, um das Icon neu zu laden.":
+    "Add a website or company email address to reload the icon.",
   "Logo wird beim Speichern entfernt.":
     "The logo will be removed when you save.",
   "Logo entfernen": "Remove logo",

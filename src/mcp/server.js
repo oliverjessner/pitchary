@@ -32,20 +32,26 @@ export async function main(args = process.argv.slice(2)) {
     return;
   }
   const db = openMCPDatabase(databasePath);
-  const stop = () => process.stdin.destroy();
+  let tools;
+  const stop = () => {
+    tools?.close();
+    process.stdin.destroy();
+  };
   const brokenPipe = () => stop();
   for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, stop);
   process.stdout.on("error", brokenPipe);
   try {
+    tools = createMCPTools(db);
     await runMCPStdio({
       input: process.stdin,
       output: process.stdout,
-      tools: createMCPTools(db),
+      tools,
     });
   } finally {
     for (const signal of ["SIGINT", "SIGTERM"])
       process.removeListener(signal, stop);
     process.stdout.removeListener("error", brokenPipe);
+    tools?.close();
     db.close();
   }
 }
