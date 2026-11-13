@@ -2,7 +2,7 @@
   <img src="src-tauri/icons/128x128.png" alt="Pitchary app icon" width="128" height="128">
 </p>
 
-# Pitchary 🎯
+# Pitchary 🧮
 
 [![Dependabot Updates](https://github.com/oliverjessner/pitchary/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/oliverjessner/pitchary/actions/workflows/dependabot/dependabot-updates) [![CI](https://github.com/oliverjessner/pitchary/actions/workflows/ci.yml/badge.svg)](https://github.com/oliverjessner/pitchary/actions/workflows/ci.yml)
 
