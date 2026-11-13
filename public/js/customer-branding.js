@@ -46,7 +46,8 @@ export function customerIdentity(row) {
   );
 }
 export function customerProfile(row) {
-  if (row.archived_at && !row.website && !row.has_logo) return null;
+  if (row.archived_at && !row.website && !row.has_logo)
+    return { node: null, refetchButton: null };
   let logo = customerLogo(row, { large: true });
   const website = el(
     "span",
@@ -55,7 +56,10 @@ export function customerProfile(row) {
   );
   const identity = el("div", { class: "oj-cluster" }, logo, website);
   if (row.archived_at)
-    return el("div", { class: "customer-profile oj-stack" }, identity);
+    return {
+      node: el("div", { class: "customer-profile oj-stack" }, identity),
+      refetchButton: null,
+    };
   const hint = t(
     "Füge eine Website oder Firmen-E-Mail hinzu, um das Icon neu zu laden.",
   );
@@ -114,16 +118,18 @@ export function customerProfile(row) {
     refetch.title = hint;
     refetch.setAttribute("aria-describedby", hintId);
   }
-  identity.append(refetch);
-  return el(
-    "div",
-    { class: "customer-profile oj-stack" },
-    identity,
-    refetch.disabled
-      ? el("p", { class: "oj-helper", id: hintId }, hint)
-      : null,
-    message,
-  );
+  return {
+    node: el(
+      "div",
+      { class: "customer-profile oj-stack" },
+      identity,
+      refetch.disabled
+        ? el("p", { class: "oj-helper", id: hintId }, hint)
+        : null,
+      message,
+    ),
+    refetchButton: refetch,
+  };
 }
 export function logoEditor(row) {
   const id = "customer-logo-" + ++editorNumber;

@@ -589,6 +589,9 @@ export async function customerDetail(id, actions) {
     api("/customers/" + id),
     api("/finance/customers/" + id),
   ]);
+  const profile = customerProfile(row);
+  const controls = entityState(row, "customers", actions);
+  if (profile.refetchButton) controls.splice(1, 0, profile.refetchButton);
   const employees = [...row.employees, ...row.archived_employees];
   const contactsTable = table(
     t("Mitarbeiter"),
@@ -642,9 +645,9 @@ export async function customerDetail(id, actions) {
     heading(
       row.name,
       row.archived_at ? t("Archivierter Kunde") : t("Kundendetails"),
-      entityState(row, "customers", actions),
+      controls,
     ),
-    customerProfile(row),
+    profile.node,
     row.note
       ? panel(t("Notiz"), el("p", { class: "note-text" }, row.note))
       : null,

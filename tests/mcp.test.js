@@ -209,7 +209,9 @@ test("restricted MCP service counts read only event keys and preserve all event 
   const restricted = openMCPDatabase(filename);
   t.after(() => restricted.close());
   const tools = offlineTools(restricted);
-  const listed = await tools.call("pitchary_list_services", { search: "Counted" });
+  const listed = await tools.call("pitchary_list_services", {
+    search: "Counted",
+  });
   assert.equal(listed.isError, false);
   assert.equal(listed.structuredContent.items[0].pitched_count, 2);
   const created = await tools.call("pitchary_create_service", {
@@ -274,7 +276,10 @@ test("MCP refuses invalid input and people without an existing active customer w
       linkedin: "https://linkedin.com.example.org/in/person",
     },
   ])
-    assert.equal((await tools.call("pitchary_create_person", args)).isError, true);
+    assert.equal(
+      (await tools.call("pitchary_create_person", args)).isError,
+      true,
+    );
   assert.equal(contents(db, "customers").length, 2);
   assert.equal(contents(db, "employees").length, 0);
   assert.equal(contents(db, "finance_customer_profiles").length, 0);
@@ -312,7 +317,10 @@ test("MCP discovers a customer icon before the atomic INSERT without changing ex
   assert.equal(record.has_logo, true);
   assert.match(record.logo_url, new RegExp(`/api/customers/${record.id}/logo`));
   assert.equal(record.general_email, "hello@brand.example");
-  assert.deepEqual(record.tags.map(({ id }) => id), [tag.id]);
+  assert.deepEqual(
+    record.tags.map(({ id }) => id),
+    [tag.id],
+  );
   assert.equal(lookups, 1);
   const persisted = db
     .prepare("SELECT logo_data,logo_mime FROM customers WHERE id=?")
@@ -322,7 +330,10 @@ test("MCP discovers a customer icon before the atomic INSERT without changing ex
     Buffer.from(persisted.logo_data),
     Buffer.from(demoCustomerLogo.data_base64, "base64"),
   );
-  assert.deepEqual(contents(db, "customers").slice(0, original.length), original);
+  assert.deepEqual(
+    contents(db, "customers").slice(0, original.length),
+    original,
+  );
   assert.equal(contents(db, "customers").length, original.length + 1);
   assert.equal(contents(db, "finance_customer_profiles").length, 1);
   assert.equal(contents(db, "customer_tag_assignments").length, 1);
@@ -372,7 +383,8 @@ test("MCP uses Fetchary with the website or company email domain and skips perso
     assert.equal(result.isError, false);
     assert.equal(result.structuredContent.record.has_logo, true);
     assert.equal(
-      db.prepare("SELECT logo_mime FROM customers WHERE id=?")
+      db
+        .prepare("SELECT logo_mime FROM customers WHERE id=?")
         .get(result.structuredContent.record.id).logo_mime,
       "image/png",
     );
@@ -432,7 +444,10 @@ test("MCP saves each customer once when logo discovery finds nothing, times out,
     assert.equal(contents(db, "customer_tag_assignments").length, index + 1);
   }
   assert.equal(lookups, outcomes.length);
-  assert.deepEqual(contents(db, "customers").slice(0, original.length), original);
+  assert.deepEqual(
+    contents(db, "customers").slice(0, original.length),
+    original,
+  );
 });
 
 test("MCP validates customer input before discovery and keeps other tools free of network lookups", async (t) => {
@@ -776,12 +791,18 @@ test(
     finished.resolve(demoCustomerLogo);
     await running;
     assert.deepEqual(whileDiscovering, original);
-    assert.deepEqual(pendingMessages.map(({ id }) => id), [1]);
+    assert.deepEqual(
+      pendingMessages.map(({ id }) => id),
+      [1],
+    );
     const messages = stdout
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    assert.deepEqual(messages.map(({ id }) => id), [1, 2, 3]);
+    assert.deepEqual(
+      messages.map(({ id }) => id),
+      [1, 2, 3],
+    );
     const created = messages[1].result;
     assert.equal(created.isError, false);
     assert.equal(created.structuredContent.record.has_logo, true);
