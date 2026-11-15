@@ -9,9 +9,10 @@ import {
   existsSync,
 } from "node:fs";
 import path from "node:path";
-import { capture, run, sha256 } from "./desktop-common.js";
+import { capture, root, run, sha256 } from "./desktop-common.js";
+import { ensureCompatibleLz4 } from "./bundle-lz4.js";
 
-export function bundleTools(directory) {
+export async function bundleTools(directory) {
   const bin = path.join(directory, "bin"),
     lib = path.join(directory, "lib"),
     notices = path.join(directory, "licenses");
@@ -59,6 +60,10 @@ export function bundleTools(directory) {
     return destination;
   }
   const prefix = capture("brew", ["--prefix"]);
+  const hostVersion = capture("sw_vers", ["-productVersion"]);
+  const minimumSystemVersion = JSON.parse(
+    readFileSync(path.join(root, "src-tauri/tauri.conf.json"), "utf8"),
+  ).bundle.macOS.minimumSystemVersion;
   for (const name of ["pdftotext", "pdftoppm", "pdfinfo", "tesseract"])
     copy(path.join(prefix, "bin", name), path.join(bin, name));
   function resolveDependency(dependency, source) {
@@ -98,8 +103,14 @@ export function bundleTools(directory) {
       .slice(1)
       .map((line) => line.trim().split(" ")[0]);
     for (const dependency of dependencies) {
-      const resolved = resolveDependency(dependency, source);
+      let resolved = resolveDependency(dependency, source);
       if (!resolved || realpathSync(resolved) === source) continue;
+      if (path.basename(dependency) === "liblz4.1.dylib")
+        resolved = await ensureCompatibleLz4(resolved, {
+          hostVersion,
+          minimumSystemVersion,
+          licenseDirectory: path.join(notices, "lz4"),
+        });
       const bundled = copy(resolved, path.join(lib, path.basename(dependency)));
       const relative = path.relative(path.dirname(destination), bundled);
       run(

@@ -15,14 +15,18 @@ import {
   target,
   version,
   nativeFiles,
-  minimumMacOS,
+  assertMacOSCompatibility,
+  compareMacOSVersions,
 } from "./desktop-common.js";
 
 assertPlatform();
 syncVersions();
 run(process.execPath, ["scripts/prepare-desktop.js"]);
 const inputsHash = sourceHash();
-const minimumSystemVersion = minimumMacOS(path.join(root, "src-tauri/runtime"));
+const minimumSystemVersion = assertMacOSCompatibility(
+  path.join(root, "src-tauri/runtime"),
+  capture("sw_vers", ["-productVersion"]),
+);
 const buildConfig = path.join(
   root,
   "artifacts/desktop-cache/build-config.json",
@@ -32,17 +36,31 @@ writeFileSync(
   JSON.stringify({ bundle: { macOS: { minimumSystemVersion } } }),
 );
 // Tauri assembles the app; signing is done after all bundled native modules.
-run(path.join(root, "node_modules/.bin/tauri"), [
-  "build",
-  "--bundles",
-  "app",
-  "--no-sign",
-  "--config",
-  buildConfig,
-  "--",
-  "--locked",
-]);
+run(
+  path.join(root, "node_modules/.bin/tauri"),
+  [
+    "build",
+    "--bundles",
+    "app",
+    "--no-sign",
+    "--config",
+    buildConfig,
+    "--",
+    "--locked",
+  ],
+  { env: { ...process.env, MACOSX_DEPLOYMENT_TARGET: minimumSystemVersion } },
+);
 if (!existsSync(appPath)) throw new Error(`App missing: ${appPath}`);
+assertMacOSCompatibility(path.join(appPath, "Contents"), minimumSystemVersion);
+const declaredMinimum = capture("/usr/libexec/PlistBuddy", [
+  "-c",
+  "Print :LSMinimumSystemVersion",
+  path.join(appPath, "Contents/Info.plist"),
+]);
+if (compareMacOSVersions(declaredMinimum, minimumSystemVersion) !== 0)
+  throw new Error(
+    `App declares macOS ${declaredMinimum}, expected ${minimumSystemVersion}.`,
+  );
 for (const filename of nativeFiles(path.join(appPath, "Contents")))
   run("codesign", ["--force", "--sign", "-", filename], { stdio: "pipe" });
 run("codesign", ["--force", "--deep", "--sign", "-", appPath]);

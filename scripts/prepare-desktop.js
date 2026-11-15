@@ -18,6 +18,7 @@ import {
   root,
   run,
   sha256,
+  assertMacOSCompatibility,
 } from "./desktop-common.js";
 import { bundleTools } from "./bundle-desktop-tools.js";
 
@@ -98,7 +99,7 @@ run(
   { cwd: app },
 );
 rmSync(path.join(runtime, "tools"), { recursive: true, force: true });
-bundleTools(path.join(runtime, "tools"));
+await bundleTools(path.join(runtime, "tools"));
 const tessdata = path.join(runtime, "tools/share/tessdata");
 mkdirSync(tessdata, { recursive: true });
 for (const [name, digest] of Object.entries({
@@ -142,6 +143,7 @@ if (
 for (const name of readdirSync(icons))
   if (!wantedIcons.includes(name))
     rmSync(path.join(icons, name), { recursive: true, force: true });
+assertMacOSCompatibility(runtime, capture("sw_vers", ["-productVersion"]));
 console.log(
   `Desktop runtime ready: Node ${nodeVersion}, production modules, local assets, PDF tools and English/German OCR.`,
 );

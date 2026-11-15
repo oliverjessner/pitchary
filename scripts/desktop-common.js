@@ -81,23 +81,57 @@ export function nativeFiles(directory) {
   }
   return files;
 }
-export function minimumMacOS(directory) {
-  let minimum = "13.5";
-  const greater = (a, b) => {
-    const left = a.split(".").map(Number),
-      right = b.split(".").map(Number);
-    for (let i = 0; i < 3; i++) {
-      if ((left[i] ?? 0) !== (right[i] ?? 0))
-        return (left[i] ?? 0) > (right[i] ?? 0);
+export function compareMacOSVersions(a, b) {
+  const left = a.split(".").map(Number),
+    right = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const difference = (left[i] ?? 0) - (right[i] ?? 0);
+    if (difference) return Math.sign(difference);
+  }
+  return 0;
+}
+export function macOSMinimum(filename, { inspect = capture } = {}) {
+  let minimum = "0";
+  const output = inspect("otool", ["-l", filename]);
+  for (const command of output.split(/Load command \d+/)) {
+    let version;
+    if (/\bcmd LC_BUILD_VERSION\b/.test(command)) {
+      if (!/\bplatform (?:1|macos)\b/i.test(command)) continue;
+      version = command.match(/\bminos (\d+(?:\.\d+){0,2})\b/)?.[1];
+    } else if (/\bcmd LC_VERSION_MIN_MACOSX\b/.test(command)) {
+      version = command.match(/\bversion (\d+(?:\.\d+){0,2})\b/)?.[1];
     }
-    return false;
-  };
-  for (const filename of nativeFiles(directory)) {
-    const output = capture("otool", ["-l", filename]);
-    for (const match of output.matchAll(/\bminos (\d+(?:\.\d+){0,2})/g))
-      if (greater(match[1], minimum)) minimum = match[1];
+    if (version && compareMacOSVersions(version, minimum) > 0)
+      minimum = version;
   }
   return minimum;
+}
+export function minimumMacOS(
+  directory,
+  { inspect = capture, maximumVersion } = {},
+) {
+  let minimum = "13.5";
+  const incompatible = [];
+  for (const filename of nativeFiles(directory)) {
+    const version = macOSMinimum(filename, { inspect });
+    if (compareMacOSVersions(version, minimum) > 0) minimum = version;
+    if (maximumVersion && compareMacOSVersions(version, maximumVersion) > 0)
+      incompatible.push(
+        `${path.relative(directory, filename)} requires ${version}`,
+      );
+  }
+  if (incompatible.length)
+    throw new Error(
+      `Bundled native files exceed macOS ${maximumVersion}:\n${incompatible.join("\n")}\nRebuild these dependencies for a compatible macOS version before packaging.`,
+    );
+  return minimum;
+}
+export function assertMacOSCompatibility(
+  directory,
+  maximumVersion,
+  options = {},
+) {
+  return minimumMacOS(directory, { ...options, maximumVersion });
 }
 export function sourceHash() {
   const hash = createHash("sha256");
