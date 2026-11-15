@@ -1,9 +1,14 @@
-import { extractFavicon } from "fetchary";
+import { createExtractor } from "fetchary";
+import { purgeUrl } from "linkary";
 import sharp from "sharp";
 import { extractIco, isIco, parseIco } from "@oliverj/tinyico";
 import { createWebFetch } from "./web-fetch.js";
 import { logo, maxLogoBytes } from "./customer-branding.js";
 import { AppError } from "./validation.js";
+
+const maxIconResponseBytes = 16 * 1024 * 1024;
+const fetchary = createExtractor();
+fetchary.configure({ maxResponseBytes: maxIconResponseBytes });
 
 const personalDomains = new Set([
   "gmail.com",
@@ -28,7 +33,7 @@ const personalDomains = new Set([
 ]);
 
 function siteFor({ website, general_email }) {
-  if (website) return new URL(website);
+  if (website) return new URL(purgeUrl(website).cleanUrl);
   const domain = general_email?.split("@").at(-1)?.toLowerCase();
   if (!domain || personalDomains.has(domain)) return null;
   return new URL("https://" + domain + "/");
@@ -81,7 +86,11 @@ async function pngLogo(input) {
 
 export function createCustomerLogoDiscovery(
   crm,
-  { fetchImpl, extractIcon = extractFavicon, discover: suppliedDiscover } = {},
+  {
+    fetchImpl,
+    extractIcon = fetchary.extractFavicon,
+    discover: suppliedDiscover,
+  } = {},
 ) {
   const controller = new AbortController();
   async function discover(input) {
@@ -91,7 +100,11 @@ export function createCustomerLogoDiscovery(
       controller.signal,
       AbortSignal.timeout(10000),
     ]);
-    const fetchResource = createWebFetch({ fetchImpl, signal });
+    const fetchResource = createWebFetch({
+      fetchImpl,
+      signal,
+      maxBytes: maxIconResponseBytes,
+    });
     const images = new Map();
     let pageRequested = false;
     const result = await extractIcon(site.href, {

@@ -1,3 +1,8 @@
+# 0.7.2
+
+- Purge customer websites and contact LinkedIn links with Linkary before saving and customer icon lookups.
+- Allow 16 MiB responses in Fetchary and the customer icon HTTP transport.
+
 # 0.7.1
 
 - Automatically fetch customer icons with Fetchary during MCP creation.

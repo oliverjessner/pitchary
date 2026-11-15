@@ -25,7 +25,7 @@ async function setup(t, options = {}) {
   return { app, requests };
 }
 
-test("customer creation uses Fetchary's standalone icon extractor and persists the shared email and local PNG", async (t) => {
+test("customer creation uses Fetchary's icon extractor and persists the shared email and local PNG", async (t) => {
   let extractions = 0;
   const { app, requests } = await setup(t, {
     extractIcon: async (url, options) => {
@@ -72,6 +72,134 @@ test("customer creation uses Fetchary's standalone icon extractor and persists t
       .id,
     row.id,
   );
+});
+
+test("icon refetch purges a legacy website before passing it to Fetchary or HTTP", async (t) => {
+  const { app, requests } = await setup(t, {
+    extractIcon: async (url, options) => {
+      assert.equal(url, "https://auto-logo.example/");
+      return extractFavicon(url, options);
+    },
+  });
+  const row = app.crm.createEntity("customers", {
+    name: "Legacy tracked website",
+    website: "https://auto-logo.example/",
+  });
+  app.database
+    .prepare("UPDATE customers SET website=? WHERE id=?")
+    .run(
+      "https://auto-logo.example/?utm_source=newsletter&campaign=123#contact",
+      row.id,
+    );
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/customers/${row.id}/logo/refetch`,
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().refreshed, true);
+  assert.equal(requests[0].url, "https://auto-logo.example/");
+  assert.equal(
+    requests.some(({ url }) => new URL(url).search || new URL(url).hash),
+    false,
+  );
+});
+
+test("icon discovery accepts a mocked br.de homepage larger than 2 MiB", async (t) => {
+  const html =
+    '<html><head><link rel="icon" href="/logo.png"></head><body><!--' +
+    "a".repeat(3 * 1024 * 1024) +
+    "--></body></html>";
+  const { app } = await setup(t, {
+    fetchImpl: async (url) => {
+      if (url === "https://www.br.de/")
+        return new Response(html, {
+          headers: {
+            "content-type": "text/html",
+            "content-length": String(Buffer.byteLength(html)),
+          },
+        });
+      if (url === "https://www.br.de/logo.png")
+        return new Response(
+          Buffer.from(demoCustomerLogo.data_base64, "base64"),
+          { headers: { "content-type": "image/png" } },
+        );
+      return new Response("Not found", { status: 404 });
+    },
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/customers",
+    payload: { name: "BR", website: "https://www.br.de/" },
+  });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().has_logo, true);
+  const image = app.crm.customerLogo(response.json().id);
+  assert.equal(image.mime, "image/png");
+  assert.equal((await sharp(image.data).metadata()).width, 64);
+});
+
+test(
+  "live br.de icon discovery saves a PNG using the configured Fetchary client",
+  { skip: process.env.PITCHARY_LIVE_ICON_TEST !== "1" },
+  async (t) => {
+    const { app } = await setup(t, { fetchImpl: undefined });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/customers",
+      payload: { name: "BR live icon check", website: "https://www.br.de/" },
+    });
+    assert.equal(response.statusCode, 201);
+    assert.equal(
+      response.json().has_logo,
+      true,
+      "The real br.de homepage must yield a usable customer icon.",
+    );
+    const image = app.crm.customerLogo(response.json().id);
+    assert.equal(image.mime, "image/png");
+    const metadata = await sharp(image.data).metadata();
+    assert.equal(metadata.format, "png");
+    assert.ok(metadata.width > 0);
+    assert.ok(metadata.height > 0);
+  },
+);
+
+test("icon discovery keeps the 16 MiB response limit for declared and streamed bodies", async (t) => {
+  for (const advertised of [true, false]) {
+    const fetched = [];
+    const { app } = await setup(t, {
+      fetchImpl: async (url) => {
+        fetched.push(url);
+        if (advertised)
+          return new Response('<link rel="icon" href="/logo.png">', {
+            headers: {
+              "content-type": "text/html",
+              "content-length": String(16 * 1024 * 1024 + 1),
+            },
+          });
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new Uint8Array(16 * 1024 * 1024));
+              controller.enqueue(new Uint8Array(1));
+              controller.close();
+            },
+          }),
+          { headers: { "content-type": "text/html" } },
+        );
+      },
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/customers",
+      payload: {
+        name: "Response too large",
+        website: "https://oversized.example/",
+      },
+    });
+    assert.equal(response.statusCode, 201);
+    assert.equal(response.json().has_logo, false);
+    assert.deepEqual(fetched, ["https://oversized.example/"]);
+  }
 });
 
 test("customer email edits use the same finance profile and invalid emails roll back creation and updates", async (t) => {

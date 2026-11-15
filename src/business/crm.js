@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { purgeUrl } from "linkary";
 import { transaction } from "../database/database.js";
 import { createRepository } from "../database/repository.js";
 import {
@@ -110,7 +111,10 @@ export function createCRM(
                   : 500,
         });
     if (table === "customers") {
-      if ("website" in out) out.website = website(out.website);
+      if ("website" in out) {
+        const url = website(out.website);
+        out.website = url ? purgeUrl(url).cleanUrl : "";
+      }
       if (
         out.general_email &&
         !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.general_email)
@@ -125,7 +129,7 @@ export function createCRM(
       if (out.linkedin) {
         let url;
         try {
-          url = new URL(out.linkedin);
+          url = new URL(purgeUrl(out.linkedin).cleanUrl);
         } catch {
           invalid("Ungültiger LinkedIn-Link.", "linkedin");
         }
@@ -134,6 +138,7 @@ export function createCRM(
           !/(^|\.)linkedin\.com$/.test(url.hostname)
         )
           invalid("Bitte einen HTTPS-Link zu LinkedIn verwenden.", "linkedin");
+        out.linkedin = url.href;
       }
       if (creating) {
         requireRecord("customers", data.customer_id, true);

@@ -1,6 +1,6 @@
 {
     "name": "pitchary",
-    "version": "0.7.1",
+    "version": "0.7.2",
     "description": "Local single-user CRM for customers, services and sales",
     "license": "MIT",
     "homepage": "https://github.com/oliverjessner/pitchary#readme",
@@ -45,7 +45,8 @@
         "@fastify/static": "10.1.11",
         "@oliverj/tinyico": "0.1.0",
         "fastify": "5.12.8",
-        "fetchary": "2.1.1",
+        "fetchary": "2.2.0",
+        "linkary": "0.2.0",
         "oj-designsystem": "^0.3.0",
         "sharp": "0.35.5"
     },
