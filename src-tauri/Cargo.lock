@@ -2496,7 +2496,7 @@ dependencies = [
 
 [[package]]
 name = "pitchary"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "muda",
  "objc2",
