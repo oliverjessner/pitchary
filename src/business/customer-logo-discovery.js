@@ -39,11 +39,53 @@ function siteFor({ website, general_email }) {
   return new URL("https://" + domain + "/");
 }
 
+function normalizeIcoPadding(bytes, count) {
+  const directoryEnd = 6 + count * 16;
+  if (directoryEnd > bytes.length) return bytes;
+  let normalized;
+  for (let index = 0; index < count; index++) {
+    const entry = 6 + index * 16;
+    const size = bytes.readUInt32LE(entry + 8);
+    const offset = bytes.readUInt32LE(entry + 12);
+    if (size < 40 || offset < directoryEnd || offset + size > bytes.length)
+      continue;
+    const dib = bytes.subarray(offset, offset + size);
+    if (
+      dib.readUInt32LE(0) !== 40 ||
+      dib.readUInt16LE(12) !== 1 ||
+      dib.readUInt16LE(14) !== 32 ||
+      dib.readUInt32LE(16) !== 0 ||
+      dib.readUInt32LE(32) !== 0
+    )
+      continue;
+    const width = dib.readInt32LE(4);
+    const doubledHeight = dib.readInt32LE(8);
+    if (
+      width < 1 ||
+      width > 256 ||
+      doubledHeight < 2 ||
+      doubledHeight > 512 ||
+      doubledHeight % 2
+    )
+      continue;
+    const height = doubledHeight / 2;
+    const expectedSize = 40 + (width * 4 + Math.ceil(width / 32) * 4) * height;
+    if (size <= expectedSize) continue;
+    if (!dib.subarray(expectedSize).every((byte) => byte === 0)) continue;
+    // Some ICO generators include extra zero padding in 32-bit DIB sizes.
+    // Keep the pixels and offsets intact, then let Tinyico validate the result.
+    normalized ??= Buffer.from(bytes);
+    normalized.writeUInt32LE(expectedSize, entry + 8);
+  }
+  return normalized ?? bytes;
+}
+
 async function pngLogo(input) {
   let bytes = input;
   if (isIco(bytes)) {
     const count = bytes.readUInt16LE(4);
     if (count > 32) throw new Error("Invalid ICO.");
+    bytes = normalizeIcoPadding(bytes, count);
     const image = [...parseIco(bytes).images].sort(
       (a, b) => b.width * b.height - a.width * a.height,
     )[0];

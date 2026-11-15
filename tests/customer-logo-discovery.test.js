@@ -8,6 +8,7 @@ import { buildApp } from "../src/server/app.js";
 import { createWebFetch } from "../src/business/web-fetch.js";
 import { demoCustomerLogo } from "../scripts/demo-assets.js";
 import { customerLogoWeb } from "./fixtures/customer-logo-web.js";
+import { paddedDibIco } from "./fixtures/legacy-ico.js";
 
 async function setup(t, options = {}) {
   const requests = [];
@@ -682,6 +683,155 @@ test("SVG and PNG/DIB ICO favicons are rasterized using the largest entry and a 
     assert.equal(image.mime, "image/png");
     assert.equal((await sharp(image.data).metadata()).width, width);
   }
+});
+
+test("DIB favicon trailing padding still saves the largest frame as a PNG on creation and refetch", async (t) => {
+  const ico = paddedDibIco();
+  assert.equal(ico.length, 15406);
+  let iconRequests = 0;
+  const { app } = await setup(t, {
+    fetchImpl: async (url) => {
+      const { pathname } = new URL(url);
+      if (pathname === "/")
+        return new Response("<html><head></head></html>", {
+          headers: { "content-type": "text/html" },
+        });
+      if (pathname === "/favicon.ico") {
+        iconRequests++;
+        return new Response(ico, {
+          headers: { "content-type": "image/x-icon" },
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    },
+  });
+  const created = await app.inject({
+    method: "POST",
+    url: "/api/customers",
+    payload: {
+      name: "Legacy favicon",
+      website: "https://legacy-ico.example/",
+    },
+  });
+  assert.equal(created.statusCode, 201);
+  assert.equal(created.json().has_logo, true);
+  const id = created.json().id;
+  async function assertStoredPixels() {
+    const image = app.crm.customerLogo(id);
+    assert.equal(image.mime, "image/png");
+    const metadata = await sharp(image.data).metadata();
+    assert.equal(metadata.format, "png");
+    assert.equal(metadata.width, 48);
+    assert.equal(metadata.height, 48);
+    const pixels = await sharp(image.data).ensureAlpha().raw().toBuffer();
+    assert.deepEqual(
+      pixels,
+      Buffer.alloc(48 * 48 * 4, Buffer.from([17, 102, 204, 255])),
+    );
+  }
+  await assertStoredPixels();
+  const previousBytes = Buffer.from(demoCustomerLogo.data_base64, "base64");
+  app.crm.updateEntity("customers", id, { logo: demoCustomerLogo });
+  const beforeRefetch = iconRequests;
+  const refreshed = await app.inject({
+    method: "POST",
+    url: `/api/customers/${id}/logo/refetch`,
+  });
+  assert.equal(refreshed.statusCode, 200);
+  assert.equal(refreshed.json().refreshed, true);
+  assert.ok(iconRequests > beforeRefetch);
+  assert.notDeepEqual(app.crm.customerLogo(id).data, previousBytes);
+  await assertStoredPixels();
+});
+
+test("DIB favicon recovery rejects malformed or truncated images and retains an existing logo on refetch", async (t) => {
+  const malformed = paddedDibIco({ sizes: [32] });
+  const imageOffset = malformed.readUInt32LE(18);
+  // BI_RGB padding must not make an unsupported compression mode acceptable.
+  malformed.writeUInt32LE(1, imageOffset + 16);
+  const truncated = paddedDibIco({ sizes: [32] });
+  const nonzeroTail = paddedDibIco({ sizes: [32] });
+  nonzeroTail[nonzeroTail.length - 1] = 1;
+  const malformedImages = [malformed, truncated.subarray(0, 100), nonzeroTail];
+  for (const [index, ico] of malformedImages.entries()) {
+    const { app } = await setup(t, {
+      fetchImpl: async (url) => {
+        const { pathname } = new URL(url);
+        if (pathname === "/")
+          return new Response("<html><head></head></html>", {
+            headers: { "content-type": "text/html" },
+          });
+        if (pathname === "/favicon.ico")
+          return new Response(ico, {
+            headers: { "content-type": "image/x-icon" },
+          });
+        return new Response("Not found", { status: 404 });
+      },
+    });
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/customers",
+      payload: {
+        name: `Malformed DIB ${index}`,
+        website: "https://malformed-dib.example/",
+      },
+    });
+    assert.equal(created.statusCode, 201);
+    assert.equal(created.json().has_logo, false);
+    const id = created.json().id;
+    app.crm.updateEntity("customers", id, { logo: demoCustomerLogo });
+    const before = app.crm.entity("customers", id);
+    const previous = app.crm.customerLogo(id);
+    const refreshed = await app.inject({
+      method: "POST",
+      url: `/api/customers/${id}/logo/refetch`,
+    });
+    assert.equal(refreshed.statusCode, 200);
+    assert.equal(refreshed.json().refreshed, false);
+    assert.equal(refreshed.json().record.updated_at, before.updated_at);
+    assert.equal(app.crm.customerLogo(id).mime, previous.mime);
+    assert.deepEqual(app.crm.customerLogo(id).data, previous.data);
+  }
+});
+
+test("DIB favicon nonzero trailing data falls back to another usable icon", async (t) => {
+  const ico = paddedDibIco({ sizes: [128] });
+  ico[ico.length - 1] = 1;
+  const { app } = await setup(t, {
+    fetchImpl: async (url) => {
+      const { pathname } = new URL(url);
+      if (pathname === "/")
+        return new Response(
+          '<link rel="apple-touch-icon" href="/broken.ico"><link rel="icon" href="/safe.png">',
+          { headers: { "content-type": "text/html" } },
+        );
+      if (pathname === "/broken.ico")
+        return new Response(ico, {
+          headers: { "content-type": "image/x-icon" },
+        });
+      if (pathname === "/safe.png")
+        return new Response(
+          Buffer.from(demoCustomerLogo.data_base64, "base64"),
+          { headers: { "content-type": "image/png" } },
+        );
+      return new Response("Not found", { status: 404 });
+    },
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/customers",
+    payload: {
+      name: "Nonzero ICO padding",
+      website: "https://nonzero-ico.example/",
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().has_logo, true);
+  const image = app.crm.customerLogo(response.json().id);
+  assert.equal(image.mime, "image/png");
+  const metadata = await sharp(image.data).metadata();
+  assert.equal(metadata.width, 64);
+  assert.equal(metadata.height, 64);
 });
 
 test("a malformed ICO does not prevent using another valid icon", async (t) => {
