@@ -133,7 +133,9 @@ export async function ensureCompatibleLz4(
       capture("lipo", ["-archs", library]) !== "arm64" ||
       compareMacOSVersions(macOSMinimum(library), minimumSystemVersion) > 0
     )
-      throw new Error("Rebuilt LZ4 does not match the macOS deployment target.");
+      throw new Error(
+        "Rebuilt LZ4 does not match the macOS deployment target.",
+      );
     writeFileSync(
       stampFile,
       JSON.stringify(
