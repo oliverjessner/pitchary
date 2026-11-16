@@ -190,6 +190,29 @@ async function render(focus = true) {
     }
   }
 }
+window.addEventListener("keydown", (event) => {
+  if (
+    event.defaultPrevented ||
+    event.isComposing ||
+    !(event.metaKey || event.ctrlKey) ||
+    event.altKey ||
+    event.shiftKey ||
+    event.key.toLowerCase() !== "f"
+  )
+    return;
+  const root = [...document.querySelectorAll("dialog[open]")].at(-1) ?? main;
+  const search = [...root.querySelectorAll('input[type="search"]')].find(
+    (input) =>
+      !input.matches(":disabled") &&
+      !input.closest("[inert]") &&
+      input.getClientRects().length > 0 &&
+      getComputedStyle(input).visibility === "visible",
+  );
+  if (!search) return;
+  event.preventDefault();
+  search.focus();
+  search.select();
+});
 window.addEventListener("hashchange", () => render());
 window.addEventListener("resize", () => revealPipelineNavigation(generation));
 await render();

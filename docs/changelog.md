@@ -1,3 +1,7 @@
+# 0.7.5
+
+- Focus the current search field with Cmd+F or Ctrl+F and select its text.
+
 # 0.7.4
 
 - Purge customer websites and contact LinkedIn links with Linkary before saving and customer icon lookups.
