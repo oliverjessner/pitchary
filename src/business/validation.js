@@ -80,7 +80,7 @@ export function calendarDate(value, field) {
     invalid("Ungültiger Kalendertag.", field);
   return value;
 }
-export function dateTime(value, now, earliest, field = "occurred_at") {
+export function dateTime(value, earliest, field = "occurred_at") {
   if (
     typeof value !== "string" ||
     !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?(?:Z|[+-]\d\d:\d\d)$/.test(
@@ -96,11 +96,8 @@ export function dateTime(value, now, earliest, field = "occurred_at") {
   )
     invalid("Ungültiger Kalendertag.", field);
   const normalized = new Date(value).toISOString();
-  if (normalized > now || (earliest && normalized < earliest))
-    invalid(
-      "Zeitpunkt muss nach dem bisherigen Verlauf und spätestens jetzt liegen.",
-      field,
-    );
+  if (earliest && normalized < earliest)
+    invalid("Zeitpunkt darf nicht vor dem bisherigen Verlauf liegen.", field);
   return normalized;
 }
 export function filterInput(filters = {}, channelChoices = channels) {

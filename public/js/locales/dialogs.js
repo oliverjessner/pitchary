@@ -45,8 +45,8 @@ export default {
   "Zuerst Kunde auswählen": "Select a customer first",
   "Kein Ansprechpartner": "No contact",
   Zeitpunkt: "Time",
-  "Beginn dieser Statusphase. Keine Zeitpunkte vor der aktuellen Phase oder in der Zukunft.":
-    "Start of this status phase. The time must not precede the current phase or be in the future.",
+  "Beginn dieser Statusphase. Der Zeitpunkt darf nicht vor der aktuellen Phase liegen und kann in der Zukunft liegen.":
+    "Start of this status phase. The time must not precede the current phase and can be in the future.",
   "Vereinbarter Preis ({currency})": "Agreed price ({currency})",
   Absagegrund: "Rejection reason",
   "Grund für die Wiederaufnahme": "Reason for resuming",
@@ -61,6 +61,8 @@ export default {
   "Der ursprüngliche Pitch-Preis bleibt erhalten. Jede Änderung wird in der Timeline protokolliert.":
     "The original pitch price is preserved. Every change is recorded in the timeline.",
   "Aktivität hinzufügen": "Add activity",
+  "Aktivitäten können auch für einen zukünftigen Zeitpunkt erfasst werden.":
+    "Activities can also be recorded for a future date and time.",
   Aktivität: "Activity",
   Kanal: "Channel",
   "Kein Kanal": "No channel",

@@ -237,6 +237,112 @@ test("follow-ups leave status history and status_since unchanged", (t) => {
   assert.equal(result.status_since, a.status_since);
   assert.equal(result.activities.length, 1);
 });
+test("future status dates retain chronological history and current audit timestamps", (t) => {
+  const { crm, create } = fixture(t),
+    row = create(),
+    pitchAt = "2026-09-02T09:00:00.000Z",
+    acceptedAt = "2026-09-03T09:00:00.000Z",
+    doneAt = "2026-09-04T09:00:00.000Z";
+  const pitched = crm.changeStatus(row.id, {
+    status: "pitched",
+    occurred_at: "2026-09-02T11:00:00+02:00",
+  });
+  assert.equal(pitched.status, "pitched");
+  assert.equal(pitched.status_since, pitchAt);
+  assert.equal(pitched.first_pitch_at, pitchAt);
+  assert.equal(pitched.updated_at, row.created_at);
+  assert.equal(pitched.history[1].occurred_at, pitchAt);
+  assert.equal(pitched.history[1].recorded_at, row.created_at);
+  assert.equal(pitched.phases[1].duration_ms, 0);
+
+  assert.throws(
+    () =>
+      crm.changeStatus(row.id, {
+        status: "accepted",
+        occurred_at: "2026-09-02T08:59:59.999Z",
+      }),
+    /Zeitpunkt/,
+  );
+  assert.deepEqual(crm.relationship(row.id), pitched);
+
+  crm.changeStatus(row.id, {
+    status: "accepted",
+    occurred_at: acceptedAt,
+  });
+  const done = crm.changeStatus(row.id, {
+    status: "done",
+    occurred_at: doneAt,
+  });
+  assert.equal(done.status, "done");
+  assert.equal(done.status_since, doneAt);
+  assert.equal(done.first_acceptance_at, acceptedAt);
+  assert.deepEqual(
+    done.history.map((entry) => [entry.to_status, entry.occurred_at]),
+    [
+      ["open", row.created_at],
+      ["pitched", pitchAt],
+      ["accepted", acceptedAt],
+      ["done", doneAt],
+    ],
+  );
+  assert.ok(
+    done.history.every((entry) => entry.recorded_at === row.created_at),
+  );
+});
+test("future pitches, follow-ups, calls, meetings and notes preserve status history", (t) => {
+  const { crm, create, employee } = fixture(t),
+    row = create();
+  crm.changeStatus(row.id, {
+    status: "pitched",
+    occurred_at: "2026-09-02T09:00:00.000Z",
+  });
+  const before = crm.relationship(row.id);
+  const types = ["pitch", "follow_up", "call", "meeting", "note"];
+  const activityAt = "2026-09-03T09:30:00.000Z";
+  for (const type of types) {
+    const activity = crm.addActivity(row.id, {
+      employee_id: employee.id,
+      type,
+      channel: "email",
+      note: "Scheduled " + type,
+      occurred_at: "2026-09-03T11:30:00+02:00",
+    });
+    assert.equal(activity.type, type);
+    assert.equal(activity.occurred_at, activityAt);
+    assert.equal(activity.created_at, row.created_at);
+  }
+  const after = crm.relationship(row.id);
+  assert.deepEqual(after.history, before.history);
+  assert.equal(after.status, before.status);
+  assert.equal(after.status_since, before.status_since);
+  assert.equal(after.activities.length, types.length);
+  assert.equal(
+    crm.activities({ from: "2026-09-03", to: "2026-09-03" }).length,
+    types.length,
+  );
+});
+test("invalid and pre-creation activity dates remain rejected without saving entries", (t) => {
+  const { crm, create } = fixture(t),
+    row = create(),
+    before = crm.relationship(row.id);
+  for (const occurred_at of [
+    "2026-09-01T08:59:59.999Z",
+    "not a date",
+    "2027-02-30T09:00:00.000Z",
+    "2027-01-01T09:00:00",
+  ]) {
+    assert.throws(
+      () =>
+        crm.addActivity(row.id, {
+          type: "note",
+          note: "Invalid date",
+          occurred_at,
+        }),
+      (error) => error.status === 422 && Boolean(error.fields?.occurred_at),
+    );
+    assert.deepEqual(crm.relationship(row.id), before);
+  }
+});
 test("history and activities cannot be edited or deleted", (t) => {
   const { db, crm, create } = fixture(t),
     a = create();
@@ -278,8 +384,8 @@ test("integer money, immutable pricing metadata and chronology are enforced", (t
     () =>
       crm.addActivity(a.id, {
         type: "note",
-        note: "Future",
-        occurred_at: "2027-01-01T09:00:00.000Z",
+        note: "Before creation",
+        occurred_at: "2026-08-01T09:00:00.000Z",
       }),
     /Zeitpunkt/,
   );

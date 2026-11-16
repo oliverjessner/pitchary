@@ -495,11 +495,14 @@ export function createActions(refresh, navigate) {
       field(t("Zeitpunkt"), "occurred_at", {
         type: "datetime-local",
         step: "any",
-        value: localTime(new Date()),
+        value: localTime(
+          new Date(Math.max(Date.now(), Date.parse(row.status_since))),
+        ),
+        min: localTime(new Date(row.status_since)),
         required: true,
         wide: true,
         helper: t(
-          "Beginn dieser Statusphase. Keine Zeitpunkte vor der aktuellen Phase oder in der Zukunft.",
+          "Beginn dieser Statusphase. Der Zeitpunkt darf nicht vor der aktuellen Phase liegen und kann in der Zukunft liegen.",
         ),
       }),
     ];
@@ -636,8 +639,14 @@ export function createActions(refresh, navigate) {
         field(t("Zeitpunkt"), "occurred_at", {
           type: "datetime-local",
           step: "any",
-          value: localTime(new Date()),
+          value: localTime(
+            new Date(Math.max(Date.now(), Date.parse(row.created_at))),
+          ),
+          min: localTime(new Date(row.created_at)),
           required: true,
+          helper: t(
+            "Aktivitäten können auch für einen zukünftigen Zeitpunkt erfasst werden.",
+          ),
         }),
         field(t("Notiz"), "note", {
           type: "textarea",

@@ -1,6 +1,7 @@
 # 0.7.5
 
 - Focus the current search field with Cmd+F or Ctrl+F and select its text.
+- Allow future timestamps for pitches, status changes and contact activities while preserving chronological status history.
 
 # 0.7.4
 

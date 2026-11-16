@@ -590,7 +590,7 @@ export function createCRM(
             `Statuswechsel ${row.status} → ${to} ist nicht erlaubt.`,
           );
         const at = now(),
-          occurred = dateTime(data.occurred_at ?? at, at, row.status_since),
+          occurred = dateTime(data.occurred_at ?? at, row.status_since),
           out = {
             status: to,
             status_since: occurred,
@@ -708,7 +708,7 @@ export function createCRM(
           ? choice(data.channel, channels, "channel")
           : null,
         note: text(data.note ?? "", "note", { required: true, max: 10000 }),
-        occurred_at: dateTime(data.occurred_at ?? at, at, row.created_at),
+        occurred_at: dateTime(data.occurred_at ?? at, row.created_at),
         created_at: at,
         price_field: null,
         previous_price_minor: null,

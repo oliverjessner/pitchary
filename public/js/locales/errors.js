@@ -8,8 +8,8 @@ export default {
   "{field}: UUID erwartet.": "{field}: A UUID is required.",
   "Ungültiger Zeitpunkt.": "Invalid date and time.",
   "Ungültiger Kalendertag.": "Invalid calendar date.",
-  "Zeitpunkt muss nach dem bisherigen Verlauf und spätestens jetzt liegen.":
-    "The date and time must follow the existing history and cannot be in the future.",
+  "Zeitpunkt darf nicht vor dem bisherigen Verlauf liegen.":
+    "The date and time must not precede the existing history.",
   "Ungültiges Filterdatum.": "Invalid filter date.",
   "Startdatum muss vor dem Enddatum liegen.":
     "The start date must be before the end date.",

@@ -103,11 +103,17 @@ test("local host, origin, cross-site requests and CSP protect the single-user AP
   );
   assert.equal((await app.inject("/api/customers")).json().length, 0);
 });
-test("relationship lifecycle is persisted across reopening the application", async (t) => {
+test("future-dated relationship lifecycle is persisted across reopening the application", async (t) => {
   const folder = mkdtempSync(path.join(os.tmpdir(), "pitchary-persist-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const filename = path.join(folder, "db.sqlite");
-  let app = await buildApp({ databasePath: filename });
+  const recordedAt = "2026-09-01T09:00:00.000Z";
+  const pitchAt = "2026-09-02T09:00:00.000Z";
+  const followUpAt = "2026-09-03T09:00:00.000Z";
+  let app = await buildApp({
+    databasePath: filename,
+    clock: () => recordedAt,
+  });
   const crm = app.crm,
     c = crm.createEntity("customers", { name: "Persistence" }),
     s = crm.createEntity("services", { name: "Service" });
@@ -119,13 +125,17 @@ test("relationship lifecycle is persisted across reopening the application", asy
   let response = await app.inject({
     method: "POST",
     url: `/api/customer-services/${r.id}/status`,
-    payload: { status: "pitched" },
+    payload: { status: "pitched", occurred_at: pitchAt },
   });
   assert.equal(response.statusCode, 200);
   response = await app.inject({
     method: "POST",
     url: `/api/customer-services/${r.id}/activities`,
-    payload: { type: "follow_up", note: "Remember" },
+    payload: {
+      type: "follow_up",
+      note: "Remember",
+      occurred_at: followUpAt,
+    },
   });
   assert.equal(response.statusCode, 201);
   response = await app.inject({
@@ -154,7 +164,12 @@ test("relationship lifecycle is persisted across reopening the application", asy
   assert.equal(saved.status, "pitched");
   assert.equal(saved.pitch_channel, "phone");
   assert.equal(saved.history.length, 2);
+  assert.equal(saved.status_since, pitchAt);
+  assert.equal(saved.history[1].occurred_at, pitchAt);
+  assert.equal(saved.history[1].recorded_at, recordedAt);
   assert.equal(saved.activities[0].note, "Remember");
+  assert.equal(saved.activities[0].occurred_at, followUpAt);
+  assert.equal(saved.activities[0].created_at, recordedAt);
   assert.equal((await app.inject("/api/analytics")).json().summary.pitched, 1);
   assert.equal(
     (await app.inject("/api/analytics?pitch_channel=phone")).json().summary

@@ -121,7 +121,7 @@ Status/Zusage:
 }
 ```
 
-`occurred_at` ist optional und darf nicht vor der aktuellen Phase oder nach jetzt liegen. `expected_status` erkennt veraltete Eingaben. Ohne expliziten Zusagepreis wird der aktuelle Angebotspreis verwendet. Bei Ablehnung: `reason: {"code":"budget","note":"Nächstes Quartal"}`. Bei Wiederaufnahme: `status: "pitched"` und eine Textbegründung in `reason`.
+`occurred_at` ist optional und darf auch in der Zukunft liegen, etwa für einen vorausgeplanten E-Mail-Pitch. Der Zeitpunkt darf nicht vor dem Beginn der aktuellen Statusphase liegen. Ohne Angabe wird der aktuelle Zeitpunkt verwendet; liegt die aktuelle Phase bereits in der Zukunft, muss ein mindestens gleich später Zeitpunkt angegeben werden. Der Status wird beim Speichern gesetzt, auch bei einem zukünftigen Zeitpunkt; `recorded_at` und `updated_at` bleiben die tatsächlichen Erfassungszeitpunkte. `expected_status` erkennt veraltete Eingaben. Ohne expliziten Zusagepreis wird der aktuelle Angebotspreis verwendet. Bei Ablehnung: `reason: {"code":"budget","note":"Nächstes Quartal"}`. Bei Wiederaufnahme: `status: "pitched"` und eine Textbegründung in `reason`.
 
 `status: "ghosted"` ist aus `pitched` erlaubt und kann eine optionale Textnotiz in `reason` erhalten. Aus `ghosted` sind `accepted`, `rejected` oder `pitched` erlaubt; die Wiederaufnahme nach `pitched` benötigt eine Textbegründung. Listen akzeptieren `status=ghosted`. Analytics liefert `ghosted` in der Zusammenfassung und allen Performance-Gruppen; diese Angebote zählen als unentschieden und beeinflussen die Abschlussquote erst bei Zusage oder Absage.
 
@@ -149,7 +149,7 @@ Aktivität:
 }
 ```
 
-`employee_id`, `channel` und `occurred_at` sind optional. Strukturierte Preisereignisse entstehen ausschließlich durch Preis-/Zusageaktionen.
+`employee_id`, `channel` und `occurred_at` sind optional. Aktivitäten aller erlaubten Typen können mit einem zukünftigen `occurred_at` vorausgeplant werden; der Zeitpunkt darf nicht vor der Anlage des Angebots liegen. Ohne Angabe gilt der aktuelle Zeitpunkt. `created_at` bleibt der tatsächliche Erfassungszeitpunkt. Strukturierte Preisereignisse entstehen ausschließlich durch Preis-/Zusageaktionen.
 
 ## Fehler
 
