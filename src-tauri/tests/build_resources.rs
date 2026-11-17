@@ -184,3 +184,88 @@ fn symlinks_in_runtime_java_or_descendants_never_modify_outside_files() {
         );
     }
 }
+
+#[test]
+fn legacy_bundle_root_metadata_is_removed_without_pruning_other_files() {
+    let temporary = TemporaryDirectory::new();
+    let profile = temporary
+        .path()
+        .join("custom-target/aarch64-apple-darwin/release");
+    let output = output_directory(&profile);
+    let java = profile.join("runtime/java");
+    let legacy = java.join("PITCHARY-JAVA.json");
+    let current = java.join("Contents/Resources/PITCHARY-JAVA.json");
+    let unrelated = java.join("unrelated.json");
+    write_fixture(&legacy, b"obsolete generated metadata", 0o444);
+    write_fixture(&current, b"current generated metadata", 0o444);
+    write_fixture(&unrelated, b"unrelated root file", 0o640);
+
+    build_support::prepare_java_resource_copy(&output).unwrap();
+    assert!(!legacy.exists());
+    assert_eq!(fs::read(&current).unwrap(), b"current generated metadata");
+    assert_eq!(fs::read(&unrelated).unwrap(), b"unrelated root file");
+    assert_eq!(mode(&unrelated), 0o640);
+
+    build_support::prepare_java_resource_copy(&output).unwrap();
+    assert!(!legacy.exists());
+    assert_eq!(fs::read(&current).unwrap(), b"current generated metadata");
+    assert_eq!(fs::read(&unrelated).unwrap(), b"unrelated root file");
+}
+
+#[test]
+fn legacy_metadata_symlinks_and_directories_are_rejected_without_removing_them() {
+    for kind in ["symlink", "directory"] {
+        let temporary = TemporaryDirectory::new();
+        let profile = temporary.path().join("target/debug");
+        let output = output_directory(&profile);
+        let java = profile.join("runtime/java");
+        fs::create_dir_all(&java).unwrap();
+        let legacy = java.join("PITCHARY-JAVA.json");
+        let outside = temporary.path().join("outside.json");
+        write_fixture(&outside, b"outside metadata must stay unchanged", 0o444);
+        if kind == "symlink" {
+            symlink(&outside, &legacy).unwrap();
+        } else {
+            fs::create_dir(&legacy).unwrap();
+            write_fixture(&legacy.join("preserved.txt"), b"directory contents", 0o444);
+        }
+
+        let error = build_support::prepare_java_resource_copy(&output).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains(&legacy.display().to_string()));
+        assert!(fs::symlink_metadata(&legacy).is_ok());
+        assert_eq!(
+            fs::read(&outside).unwrap(),
+            b"outside metadata must stay unchanged"
+        );
+        assert_eq!(mode(&outside), 0o444);
+        if kind == "directory" {
+            assert_eq!(
+                fs::read(legacy.join("preserved.txt")).unwrap(),
+                b"directory contents"
+            );
+            assert_eq!(mode(&legacy.join("preserved.txt")), 0o444);
+        }
+    }
+}
+
+#[test]
+fn descendant_symlink_prevents_legacy_marker_removal() {
+    let temporary = TemporaryDirectory::new();
+    let profile = temporary.path().join("target/release");
+    let output = output_directory(&profile);
+    let java = profile.join("runtime/java");
+    let legacy = java.join("PITCHARY-JAVA.json");
+    write_fixture(&legacy, b"legacy marker remains on unsafe tree", 0o644);
+    let outside = temporary.path().join("outside.txt");
+    write_fixture(&outside, b"outside content", 0o444);
+    symlink(&outside, java.join("linked-resource")).unwrap();
+
+    assert!(build_support::prepare_java_resource_copy(&output).is_err());
+    assert_eq!(
+        fs::read(&legacy).unwrap(),
+        b"legacy marker remains on unsafe tree"
+    );
+    assert_eq!(fs::read(&outside).unwrap(), b"outside content");
+    assert_eq!(mode(&outside), 0o444);
+}

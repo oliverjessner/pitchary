@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createDiskImage } from "./disk-image.js";
+import { signDesktopApp } from "./desktop-signing.js";
 import {
   appPath,
   assertPlatform,
@@ -14,7 +15,6 @@ import {
   sourceHash,
   target,
   version,
-  nativeFiles,
   assertMacOSCompatibility,
   compareMacOSVersions,
 } from "./desktop-common.js";
@@ -61,10 +61,7 @@ if (compareMacOSVersions(declaredMinimum, minimumSystemVersion) !== 0)
   throw new Error(
     `App declares macOS ${declaredMinimum}, expected ${minimumSystemVersion}.`,
   );
-for (const filename of nativeFiles(path.join(appPath, "Contents")))
-  run("codesign", ["--force", "--sign", "-", filename], { stdio: "pipe" });
-run("codesign", ["--force", "--deep", "--sign", "-", appPath]);
-run("codesign", ["--verify", "--deep", "--strict", appPath]);
+signDesktopApp(appPath);
 mkdirSync(releaseDirectory, { recursive: true });
 const dmg = path.join(releaseDirectory, dmgName);
 await createDiskImage(appPath, dmg);

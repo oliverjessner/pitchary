@@ -99,5 +99,43 @@ pub fn prepare_java_resource_copy(out_dir: &Path) -> io::Result<()> {
         }
     }
 
-    make_files_owner_writable(&directory)
+    let legacy_marker = directory.join("PITCHARY-JAVA.json");
+    let has_legacy_marker = match fs::symlink_metadata(&legacy_marker) {
+        Ok(metadata) => {
+            reject_symlink(&legacy_marker, &metadata)?;
+            if !metadata.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "Legacy generated Java metadata '{}' is not a regular file",
+                        legacy_marker.display()
+                    ),
+                ));
+            }
+            true
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+        Err(error) => {
+            return Err(path_error(
+                &legacy_marker,
+                "Unable to inspect legacy generated Java metadata",
+                error,
+            ))
+        }
+    };
+
+    make_files_owner_writable(&directory)?;
+    if has_legacy_marker {
+        // Tauri overwrites resources but does not prune removed source files.
+        // Only this formerly generated bundle-root marker is obsolete; the
+        // replacement under Contents/Resources and all other files stay put.
+        fs::remove_file(&legacy_marker).map_err(|error| {
+            path_error(
+                &legacy_marker,
+                "Unable to remove legacy generated Java metadata",
+                error,
+            )
+        })?;
+    }
+    Ok(())
 }

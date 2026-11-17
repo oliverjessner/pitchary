@@ -12,6 +12,15 @@ const javaArchive = {
 };
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
+export async function writeJavaProvenance(destination, metadata) {
+  const resources = path.join(destination, "Contents/Resources");
+  await mkdir(resources, { recursive: true });
+  await writeFile(
+    path.join(resources, "PITCHARY-JAVA.json"),
+    JSON.stringify(metadata, null, 2) + "\n",
+  );
+}
+
 export async function bundleInvoiceJava(
   runtime,
   cache = path.join(root, "artifacts/desktop-cache"),
@@ -57,9 +66,6 @@ export async function bundleInvoiceJava(
   );
   if (!version.includes("21.0.13"))
     throw new Error("Unexpected bundled Java version.");
-  await writeFile(
-    path.join(destination, "PITCHARY-JAVA.json"),
-    JSON.stringify({ ...javaArchive, check: version }, null, 2) + "\n",
-  );
+  await writeJavaProvenance(destination, { ...javaArchive, check: version });
   await rm(extracted, { recursive: true, force: true });
 }
