@@ -83,6 +83,7 @@ test("A4 PDF paginates long descriptions, repeats headers and preserves all rows
   const directory = await mkdtemp(path.join(tmpdir(), "pitchary-pdf-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const snapshot = invoiceSnapshot("AE", 35);
+  snapshot.items[0].unit = "C62";
   snapshot.items[5].description =
     "QA-Volltextmarker Lange Beschreibung mit vollständig zu erhaltendem Text. ".repeat(
       80,
@@ -92,8 +93,13 @@ test("A4 PDF paginates long descriptions, repeats headers and preserves all rows
   snapshot.totals.net_amount_minor++;
   snapshot.totals.total_amount_minor++;
   snapshot.totals.tax_breakdown[0].net_amount_minor++;
+  const originalSnapshot = structuredClone(snapshot);
   const file = path.join(directory, "invoice.pdf");
   const bytes = await renderInvoicePDF(snapshot, { draft: true });
+  const xml = createInvoiceXML(snapshot).toString();
+  assert.match(xml, /unitCode="C62"/);
+  assert.match(xml, /unitCode="HUR"/);
+  assert.deepEqual(snapshot, originalSnapshot);
   assert.ok(bytes.subarray(0, 8).toString().startsWith("%PDF-"));
   await writeFile(file, bytes);
   const info = execFileSync("pdfinfo", [file], { encoding: "utf8" });
@@ -134,6 +140,9 @@ test("A4 PDF paginates long descriptions, repeats headers and preserves all rows
   assert.match(text, /100,005/);
   assert.match(text, /Reverse Charge/);
   assert.match(text, /DE987654321/);
+  assert.match(text, /\bStück\b/);
+  assert.match(text, /\bStunde\b/);
+  assert.doesNotMatch(text, /\b(?:C62|HUR)\b/);
   assert.equal((text.match(/QA-Volltextmarker/g) || []).length, 80);
 });
 
@@ -142,6 +151,7 @@ test("PDF text follows the frozen document language instead of the UI locale", a
   t.after(() => rm(directory, { recursive: true, force: true }));
   const snapshot = invoiceSnapshot();
   snapshot.language = "en";
+  for (const item of snapshot.items) item.unit = "C62";
   snapshot.seller.street = "";
   snapshot.seller.postal_code = "";
   snapshot.seller.city = "";
@@ -160,6 +170,9 @@ test("PDF text follows the frozen document language instead of the UI locale", a
   assert.match(text, /Page 1 of 1/);
   assert.match(text, /^Contact$/m);
   assert.match(text, /^Bank details$/m);
+  assert.match(text, /\bItem\b/);
+  assert.doesNotMatch(text, /\b(?:C62|HUR)\b/);
+  assert.ok(snapshot.items.every((item) => item.unit === "C62"));
   const ownerOffset = text.lastIndexOf(snapshot.seller.additional_name);
   assert.ok(ownerOffset >= 0);
   const footer = text.slice(ownerOffset);
