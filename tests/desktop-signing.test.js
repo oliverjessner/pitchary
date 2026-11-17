@@ -86,7 +86,10 @@ test("signing inventory discovers extensionless Java and excludes every bundle e
   const plan = createDesktopSigningPlan(f.app, {
     readBundleExecutable: f.readBundleExecutable,
   });
-  assert.deepEqual(plan.leaves, [f.node, f.javaLibrary, f.pluginLibrary].sort());
+  assert.deepEqual(
+    plan.leaves,
+    [f.node, f.javaLibrary, f.pluginLibrary].sort(),
+  );
   assert.deepEqual(plan.nestedBundles, [f.plugin, f.java]);
   assert.deepEqual(plan.targets, [...plan.leaves, f.plugin, f.java, f.app]);
   for (const executable of [f.main, f.javaMain, f.pluginMain])
@@ -118,7 +121,11 @@ test("signing proceeds inside out without deep signing and verifies the finished
   );
   for (const call of verification) {
     assert.equal(call.command, "codesign");
-    assert.deepEqual(call.args.slice(0, -1), ["--verify", "--deep", "--strict"]);
+    assert.deepEqual(call.args.slice(0, -1), [
+      "--verify",
+      "--deep",
+      "--strict",
+    ]);
   }
   assert.deepEqual(calls.slice(0, plan.targets.length), signing);
   assert.deepEqual(calls.slice(plan.targets.length), verification);
@@ -146,8 +153,14 @@ test("nested signing failure propagates before signing or verifying the outer ap
       }),
     /Fixture nested signing failure/,
   );
-  assert.equal(calls.some((args) => args.at(-1) === f.app), false);
-  assert.equal(calls.some((args) => args.includes("--verify")), false);
+  assert.equal(
+    calls.some((args) => args.at(-1) === f.app),
+    false,
+  );
+  assert.equal(
+    calls.some((args) => args.includes("--verify")),
+    false,
+  );
 });
 
 test("strict nested verification failure propagates after all signing targets", (t) => {

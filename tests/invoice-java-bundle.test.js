@@ -13,9 +13,7 @@ import path from "node:path";
 import { writeJavaProvenance } from "../scripts/bundle-invoice-validator.js";
 
 test("Java provenance stays inside bundle Contents and preserves the runtime layout", async (t) => {
-  const directory = await mkdtemp(
-    path.join(tmpdir(), "pitchary-java-bundle-"),
-  );
+  const directory = await mkdtemp(path.join(tmpdir(), "pitchary-java-bundle-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const java = path.join(directory, "runtime/java");
   await mkdir(path.join(java, "Contents/Home/bin"), { recursive: true });

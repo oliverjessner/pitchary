@@ -35,7 +35,9 @@ export function createDesktopSigningPlan(
       const infoPlist = path.join(contents, "Info.plist");
       const info = metadata(infoPlist);
       if (info?.isSymbolicLink())
-        throw new Error(`Bundle Info.plist must not be a symlink: ${infoPlist}`);
+        throw new Error(
+          `Bundle Info.plist must not be a symlink: ${infoPlist}`,
+        );
       if (info?.isFile()) {
         const executable = readBundleExecutable(infoPlist);
         if (
