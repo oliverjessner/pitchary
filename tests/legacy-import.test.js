@@ -1,3 +1,4 @@
+import { removeInvoiceCreationSchema } from "./fixtures/invoice-schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -716,6 +717,7 @@ test("schema 10 import mappings remain idempotent after source identifiers are r
       db.prepare(`SELECT * FROM ${table} ORDER BY id`).all(),
     ]),
   );
+  removeInvoiceCreationSchema(db);
   db.exec(
     "ALTER TABLE finance_invoices RENAME COLUMN source_legacy_id TO source_previous_id; DELETE FROM finance_settings WHERE key='legacy_import_namespace'; DROP TABLE customer_tag_assignments; ALTER TABLE customer_services DROP COLUMN offer_date; DROP TABLE app_settings; PRAGMA user_version=10;",
   );

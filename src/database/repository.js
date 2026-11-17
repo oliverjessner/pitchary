@@ -1,3 +1,9 @@
+import {
+  customerBillingFields,
+  saveCustomerBilling,
+} from "../business/customer-billing.js";
+import { invalid } from "../business/validation.js";
+
 const tables = new Set([
   "customers",
   "employees",
@@ -10,7 +16,13 @@ const tables = new Set([
 const joins = `SELECT cs.*, c.name AS customer_name, c.archived_at AS customer_archived_at, c.logo_data IS NOT NULL AS customer_has_logo, c.updated_at AS customer_updated_at, s.name AS service_name, s.archived_at AS service_archived_at, e.name AS employee_name FROM customer_services cs JOIN customers c ON c.id=cs.customer_id JOIN services s ON s.id=cs.service_id LEFT JOIN employees e ON e.id=cs.primary_employee_id`;
 const projection = (name) =>
   name === "customers"
-    ? "id,name,note,website,logo_mime,created_at,updated_at,archived_at,customer_type,logo_data IS NOT NULL AS has_logo,COALESCE((SELECT general_email FROM finance_customer_profiles WHERE customer_id=customers.id),'') AS general_email"
+    ? "id,name,note,website,logo_mime,created_at,updated_at,archived_at,customer_type,logo_data IS NOT NULL AS has_logo," +
+      customerBillingFields
+        .map(
+          (field) =>
+            `COALESCE((SELECT ${field} FROM finance_customer_profiles WHERE customer_id=customers.id),'') AS ${field}`,
+        )
+        .join(",")
     : name === "services"
       ? "services.*,(SELECT count(*) FROM customer_service_status_history h JOIN customer_services cs ON cs.id=h.customer_service_id WHERE cs.service_id=services.id AND h.to_status='pitched')+(SELECT count(*) FROM activities a JOIN customer_services cs ON cs.id=a.customer_service_id WHERE cs.service_id=services.id AND a.type='pitch') AS pitched_count"
       : name === "service_tags"
@@ -79,6 +91,9 @@ export function createRepository(db) {
         "INSERT INTO finance_customer_profiles(customer_id,general_email,created_at,updated_at) VALUES(?,?,?,?) ON CONFLICT(customer_id) DO UPDATE SET general_email=excluded.general_email,updated_at=excluded.updated_at",
       ).run(id, email, at, at);
     },
+    saveCustomerBilling(id, data, at, options) {
+      saveCustomerBilling(db, id, data, at, options);
+    },
     list(name, { archived = false, search = "", customer_id } = {}) {
       const clauses = ["archived_at IS " + (archived ? "NOT NULL" : "NULL")];
       const params = [];
@@ -105,6 +120,8 @@ export function createRepository(db) {
           ...(name === "customers"
             ? [
                 "website",
+                "COALESCE((SELECT customer_number FROM finance_customer_profiles WHERE customer_id=customers.id),'')",
+                "COALESCE((SELECT billing_address FROM finance_customer_profiles WHERE customer_id=customers.id),'')",
                 "COALESCE((SELECT general_email FROM finance_customer_profiles WHERE customer_id=customers.id),'')",
               ]
             : []),
@@ -133,9 +150,21 @@ export function createRepository(db) {
     },
     insert(name, record) {
       const keys = Object.keys(record);
-      db.prepare(
-        `INSERT INTO ${table(name)} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`,
-      ).run(...Object.values(record));
+      try {
+        db.prepare(
+          `INSERT INTO ${table(name)} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`,
+        ).run(...Object.values(record));
+      } catch (error) {
+        if (
+          name === "customers" &&
+          error.message?.includes("Customer number sequence is exhausted")
+        )
+          invalid(
+            "Der Kundennummernkreis ist ausgeschöpft.",
+            "customer_number",
+          );
+        throw error;
+      }
       return record;
     },
     update(name, id, record) {

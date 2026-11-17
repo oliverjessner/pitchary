@@ -1,3 +1,4 @@
+import { removeInvoiceCreationSchema } from "./fixtures/invoice-schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -88,6 +89,7 @@ test("migration 014 defaults existing installations to German and keeps business
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const filename = path.join(folder, "crm.sqlite");
   let db = openDatabase(filename);
+  removeInvoiceCreationSchema(db);
   db.exec(
     "INSERT INTO customers(id,name,note,created_at,updated_at) VALUES('00000000-0000-4000-8000-000000000001','Kunden','Notiz','2024-01-01','2024-01-01'); DROP TABLE app_settings; PRAGMA user_version=13;",
   );

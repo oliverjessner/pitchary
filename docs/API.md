@@ -1,6 +1,10 @@
 # REST API
 
-Die integrierte Rechnungsverwaltung verwendet `/api/finance`; alle Endpunkte und Datenregeln sind in [finance.md](finance.md) dokumentiert.
+Die integrierte Rechnungsverwaltung verwendet `/api/finance`.
+
+Kunden enthalten ihre Rechnungsdaten aus `finance_customer_profiles`: `customer_number`, `billing_address`, `additional_name`, `street`, `postal_code`, `city`, `country_code`, `vat_id`, `tax_id`, `invoice_email`, `endpoint_id`, `endpoint_scheme` und `buyer_reference`. Anlegen und Bearbeiten eines Kunden können diese Felder atomar mitspeichern. Ohne eigene Kundennummer vergibt die Anlage fortlaufend `K-00001`, `K-00002` usw.; vorhandene nichtleere Nummern bleiben erhalten. Kundennummern sind beim Kunden editierbar und ohne Beachtung der Groß-/Kleinschreibung eindeutig. Rechnungsentwürfe übernehmen Empfängerdaten ausschließlich aus diesen Stammdaten. `recipient`, `buyer_reference` und ein einzelnes `service_date` werden im Rechnungserstellungs-Payload nicht mehr akzeptiert. Neue Rechnungen verwenden `service_period_start` und `service_period_end`; derselbe Tag in beiden Feldern bildet eine eintägige Leistung ab.
+
+Die eigene Rechnungserstellung mit Entwürfen, Nummernkreis, Sammelrechnungen, PDF und lokal validierter XRechnung ist in [INVOICE_CREATION.md](INVOICE_CREATION.md) beschrieben. Sie verwendet `/api/finance/creation` und legt ausgestellte Rechnungen im bestehenden Finanzsystem ab.
 
 Basis: `http://127.0.0.1:3031/api`. JSON-Body mit `Content-Type: application/json`. GET liefert ein Objekt oder ein Array; POST-Erstellung liefert **201**, Änderungen/Archivierung **200**. DELETE auf den Ressourcen-Endpunkten archiviert. Der explizite Endpunkt `/customer-services/:id/permanent` löscht ein Angebot endgültig. Es gibt keine regulären Änderungs-/Löschendpunkte für einzelne Historien- oder Aktivitätseinträge.
 

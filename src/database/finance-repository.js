@@ -105,7 +105,7 @@ export function createFinanceRepository(db) {
       1,
     ),
     profile: db.prepare(
-      "SELECT billing_address,general_email,enrichment_status,enriched_at,enrichment_invoice_id,created_at AS profile_created_at,updated_at AS profile_updated_at FROM finance_customer_profiles WHERE customer_id=?",
+      "SELECT billing_address,general_email,enrichment_status,enriched_at,enrichment_invoice_id,additional_name,street,postal_code,city,country_code,vat_id,tax_id,customer_number,invoice_email,endpoint_id,endpoint_scheme,buyer_reference,created_at AS profile_created_at,updated_at AS profile_updated_at FROM finance_customer_profiles WHERE customer_id=?",
     ),
     legacyInvoice: db.prepare(
       "SELECT id FROM finance_invoices WHERE source_legacy_id=?",

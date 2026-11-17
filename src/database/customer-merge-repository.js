@@ -23,6 +23,9 @@ export function createCustomerMergeRepository(db) {
     moveInvoices: db.prepare(
       "UPDATE finance_invoices SET customer_id=? WHERE customer_id=?",
     ),
+    moveDocuments: db.prepare(
+      "UPDATE invoice_documents SET customer_id=?,content_json=CASE WHEN state='draft' THEN json_set(content_json,'$.customer_id',?) ELSE content_json END,version=version+CASE WHEN state='draft' THEN 1 ELSE 0 END WHERE customer_id=?",
+    ),
     moveInvoiceOverrides: db.prepare(
       "UPDATE finance_invoice_overrides SET override_value=? WHERE field_name='customer_id' AND json_extract(override_value,'$')=?",
     ),

@@ -282,7 +282,7 @@ test("MCP refuses invalid input and people without an existing active customer w
     );
   assert.equal(contents(db, "customers").length, 2);
   assert.equal(contents(db, "employees").length, 0);
-  assert.equal(contents(db, "finance_customer_profiles").length, 0);
+  assert.equal(contents(db, "finance_customer_profiles").length, 2);
 });
 
 test("MCP discovers a customer icon before the atomic INSERT without changing existing customers", async (t) => {
@@ -298,7 +298,10 @@ test("MCP discovers a customer icon before the atomic INSERT without changing ex
         assert.equal(input.website, "https://brand.example/");
         assert.equal(input.general_email, "hello@brand.example");
         assert.deepEqual(contents(db, "customers"), original);
-        assert.equal(contents(db, "finance_customer_profiles").length, 0);
+        assert.equal(
+          contents(db, "finance_customer_profiles").length,
+          original.length,
+        );
         await Promise.resolve();
         return demoCustomerLogo;
       },
@@ -335,7 +338,10 @@ test("MCP discovers a customer icon before the atomic INSERT without changing ex
     original,
   );
   assert.equal(contents(db, "customers").length, original.length + 1);
-  assert.equal(contents(db, "finance_customer_profiles").length, 1);
+  assert.equal(
+    contents(db, "finance_customer_profiles").length,
+    original.length + 1,
+  );
   assert.equal(contents(db, "customer_tag_assignments").length, 1);
   assert.throws(
     () => db.exec("UPDATE customers SET logo_data=NULL"),
@@ -440,7 +446,10 @@ test("MCP saves each customer once when logo discovery finds nothing, times out,
     assert.equal(result.structuredContent.record.has_logo, false);
     assert.equal(result.structuredContent.record.logo_url, null);
     assert.equal(contents(db, "customers").length, original.length + index + 1);
-    assert.equal(contents(db, "finance_customer_profiles").length, index + 1);
+    assert.equal(
+      contents(db, "finance_customer_profiles").length,
+      original.length + index + 1,
+    );
     assert.equal(contents(db, "customer_tag_assignments").length, index + 1);
   }
   assert.equal(lookups, outcomes.length);
@@ -539,7 +548,10 @@ test("MCP shutdown during icon discovery cannot insert a customer after closing"
     assert.equal((await creating).isError, true);
     assert.equal(closes, 1);
     assert.deepEqual(contents(db, "customers"), original);
-    assert.equal(contents(db, "finance_customer_profiles").length, 0);
+    assert.equal(
+      contents(db, "finance_customer_profiles").length,
+      original.length,
+    );
   }
 });
 
@@ -562,6 +574,48 @@ test("MCP SQL authorization rejects UPDATE, DELETE, DDL, arbitrary inserts, PRAG
   assert.deepEqual(contents(db, "customers"), original);
 });
 
+test("MCP allocates customer numbers while profile initialization never grants later edit capabilities", async (t) => {
+  const { db } = fixture(t);
+  restrictMCPDatabase(db);
+  const tools = offlineTools(db);
+  const first = await tools.call("pitchary_create_customer", {
+    name: "Numbered MCP customer",
+    general_email: "first@example.test",
+  });
+  assert.equal(first.isError, false);
+  assert.equal(first.structuredContent.record.customer_number, "K-00003");
+  const second = await tools.call("pitchary_create_customer", {
+    name: "Next MCP customer",
+    general_email: "second@example.test",
+  });
+  assert.equal(second.isError, false);
+  assert.equal(second.structuredContent.record.customer_number, "K-00004");
+  const id = first.structuredContent.record.id;
+  for (const sql of [
+    `UPDATE finance_customer_profiles SET general_email='changed@example.test' WHERE customer_id='${id}'`,
+    `UPDATE finance_customer_profiles SET customer_number='OTHER' WHERE customer_id='${id}'`,
+    "UPDATE customer_number_sequence SET next_value=1",
+    "DELETE FROM customer_number_sequence",
+    "SELECT * FROM customer_number_sequence",
+    "SELECT customer_id FROM customer_services",
+    "SELECT content_json FROM invoice_documents",
+  ])
+    assert.throws(() => db.exec(sql), /authoriz|prohibited/i);
+  assert.equal(
+    db
+      .prepare(
+        "SELECT general_email FROM finance_customer_profiles WHERE customer_id=?",
+      )
+      .get(id).general_email,
+    "first@example.test",
+  );
+  const third = await tools.call("pitchary_create_customer", {
+    name: "Still insert only",
+  });
+  assert.equal(third.isError, false);
+  assert.equal(third.structuredContent.record.customer_number, "K-00005");
+});
+
 test("MCP creation rolls back when a database trigger attempts to change existing records", async (t) => {
   const { db, customer } = fixture(t);
   const original = contents(db, "customers");
@@ -577,7 +631,10 @@ test("MCP creation rolls back when a database trigger attempts to change existin
   assert.equal(result.structuredContent.error.code, "database_error");
   assert.doesNotMatch(JSON.stringify(result), /UPDATE|block_mcp/);
   assert.deepEqual(contents(db, "customers"), original);
-  assert.equal(contents(db, "finance_customer_profiles").length, 0);
+  assert.equal(
+    contents(db, "finance_customer_profiles").length,
+    original.length,
+  );
 });
 
 test("MCP treats SQL syntax and instructions in fields as plain text and paginates deterministic lists", async (t) => {
@@ -957,7 +1014,9 @@ test("real MCP child process persists all three entity types, has clean JSON std
   );
   assert.equal(
     verification
-      .prepare("SELECT general_email FROM finance_customer_profiles")
+      .prepare(
+        "SELECT general_email FROM finance_customer_profiles WHERE general_email<>''",
+      )
       .get().general_email,
     "transport@gmail.com",
   );

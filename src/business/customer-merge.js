@@ -7,6 +7,20 @@ const normalized = (value) =>
     .trim()
     .replace(/\s+/gu, " ")
     .toLocaleLowerCase("de-AT");
+const invoiceProfileFields = [
+  "additional_name",
+  "street",
+  "postal_code",
+  "city",
+  "country_code",
+  "vat_id",
+  "tax_id",
+  "customer_number",
+  "invoice_email",
+  "endpoint_id",
+  "endpoint_scheme",
+  "buyer_reference",
+];
 function conflict(field, message) {
   throw new AppError(409, "customer_merge_conflict", message, {
     [field]: message,
@@ -115,6 +129,11 @@ export function createCustomerMerge(db) {
           ? source.enriched_at
           : target.enriched_at,
     };
+    for (const field of invoiceProfileFields)
+      result[field] =
+        field === "customer_number"
+          ? target[field] || source[field]
+          : combineText(source[field], target[field], field, field);
     if (
       source.enrichment_invoice_id &&
       target.enrichment_invoice_id &&
@@ -205,6 +224,16 @@ export function createCustomerMerge(db) {
           "customer_service_id",
           "Eine Rechnungszuordnung widerspricht dem Kunden des verknüpften Angebots. Bitte vor der Zusammenführung klären.",
         );
+    const mismatched = db
+      .prepare(
+        "SELECT 1 FROM invoice_document_lines l JOIN invoice_documents d ON d.id=l.document_id JOIN customer_services cs ON cs.id=l.customer_service_id WHERE (d.customer_id IN (?,?) OR cs.customer_id IN (?,?)) AND d.customer_id IS NOT cs.customer_id LIMIT 1",
+      )
+      .get(sourceId, targetId, sourceId, targetId);
+    if (mismatched)
+      conflict(
+        "customer_service_id",
+        "Eine Rechnungszuordnung widerspricht dem Kunden des verknüpften Angebots. Bitte vor der Zusammenführung klären.",
+      );
   }
   const merger = {
     resolve(id) {
@@ -305,6 +334,11 @@ export function createCustomerMerge(db) {
           profiles: sourceProfile ? 1 : 0,
           aliases: redirected,
         };
+        repo.moveDocuments.run(target, target, source);
+        if (sourceProfile && !targetProfile)
+          db.prepare(
+            "UPDATE finance_customer_profiles SET customer_id=? WHERE customer_id=?",
+          ).run(target, source);
         if (profile)
           repo.saveProfile.run(
             target,
@@ -315,6 +349,13 @@ export function createCustomerMerge(db) {
             profile.enrichment_invoice_id,
             profile.created_at,
             profile.updated_at,
+          );
+        if (profile)
+          db.prepare(
+            `UPDATE finance_customer_profiles SET ${invoiceProfileFields.map((field) => field + "=?").join(",")} WHERE customer_id=?`,
+          ).run(
+            ...invoiceProfileFields.map((field) => profile[field] ?? ""),
+            target,
           );
         const at = new Date().toISOString();
         repo.saveCustomer.run(
@@ -348,6 +389,17 @@ export function createCustomerMerge(db) {
           at,
         );
         if (repo.remainingReferences.get(source, source, source, source).n)
+          conflict(
+            "references",
+            "Es bestehen weiterhin Verknüpfungen zum Quellkunden. Die Zusammenführung wurde abgebrochen.",
+          );
+        if (
+          db
+            .prepare(
+              "SELECT 1 FROM invoice_documents WHERE customer_id=? LIMIT 1",
+            )
+            .get(source)
+        )
           conflict(
             "references",
             "Es bestehen weiterhin Verknüpfungen zum Quellkunden. Die Zusammenführung wurde abgebrochen.",

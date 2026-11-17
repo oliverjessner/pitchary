@@ -3,6 +3,7 @@ import { logo } from "../business/customer-branding.js";
 import { createCustomerLogoDiscovery } from "../business/customer-logo-discovery.js";
 import { createRepository } from "../database/repository.js";
 import { AppError, allowedKeys, invalid } from "../business/validation.js";
+import { createMCPProfileInitialization } from "./database.js";
 
 const string = (maxLength, description) => ({
   type: "string",
@@ -166,8 +167,15 @@ function page(items, { limit = 50, offset = 0 }) {
 // Create paths must use INSERT only, including optional profiles and tag links.
 // The normal UI repository also handles replacements/upserts when users edit.
 function insertOnlyRepository(db) {
+  const repository = createRepository(db);
+  const profiles = createMCPProfileInitialization(db);
   return {
-    ...createRepository(db),
+    ...repository,
+    insert(table, record) {
+      const result = profiles.insert(() => repository.insert(table, record));
+      if (table === "customers") profiles.created(record.id);
+      return result;
+    },
     replaceCustomerTags(customerId, ids) {
       const statement = db.prepare(
         "INSERT INTO customer_tag_assignments(customer_id,tag_id) VALUES(?,?)",
@@ -181,9 +189,10 @@ function insertOnlyRepository(db) {
       for (const tagId of ids) statement.run(serviceId, tagId);
     },
     saveCustomerEmail(customerId, email, at) {
-      db.prepare(
-        "INSERT INTO finance_customer_profiles(customer_id,general_email,created_at,updated_at) VALUES(?,?,?,?)",
-      ).run(customerId, email, at, at);
+      profiles.initialize(customerId, email, at);
+    },
+    saveCustomerBilling(customerId, data, at) {
+      profiles.initialize(customerId, data.general_email, at);
     },
   };
 }

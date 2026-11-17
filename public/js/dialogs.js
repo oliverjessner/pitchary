@@ -233,6 +233,37 @@ export function createActions(refresh, navigate) {
               maxlength: 2048,
               placeholder: "https://example.com",
             }),
+            field(t("Kundennummer"), "customer_number", {
+              value: row?.customer_number ?? "",
+              maxlength: 100,
+              helper: t(
+                "Wird automatisch vergeben und kann im Kundeneintrag geändert werden.",
+              ),
+            }),
+            field(t("Zusätzliche Namenszeile"), "additional_name", {
+              value: row?.additional_name ?? "",
+              maxlength: 500,
+            }),
+            field(t("Rechnungsadresse"), "billing_address", {
+              type: "textarea",
+              value: row?.billing_address ?? "",
+              maxlength: 10000,
+              wide: true,
+              helper: t(
+                "Die bisherige Adresse bleibt erhalten. Ergänze die strukturierten Felder für neue Rechnungen.",
+              ),
+            }),
+            ...[
+              ["street", t("Straße und Hausnummer")],
+              ["postal_code", t("Postleitzahl")],
+              ["city", t("Ort")],
+              ["country_code", t("Ländercode")],
+            ].map(([name, label]) =>
+              field(label, name, {
+                value: row?.[name] ?? "",
+                maxlength: name === "country_code" ? 2 : 500,
+              }),
+            ),
             branding.node,
           ]
         : []),

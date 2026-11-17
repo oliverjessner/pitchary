@@ -17,6 +17,10 @@ jobs:
         with:
           node-version: 26
           cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng
       - run: npm run format:check

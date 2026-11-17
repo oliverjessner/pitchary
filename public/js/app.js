@@ -4,6 +4,7 @@ import { el, heading, button } from "./dom.js";
 import { createActions } from "./dialogs.js";
 import * as views from "./views.js";
 import * as financeViews from "./finance.js";
+import { invoiceEditor } from "./invoice-editor.js";
 for (const node of document.querySelectorAll("[data-i18n]"))
   node.textContent = t(node.dataset.i18n);
 for (const node of document.querySelectorAll("[data-i18n-aria-label]"))
@@ -128,6 +129,8 @@ async function render(focus = true) {
     else if (section === "activities")
       content = await views.activities(guarded);
     else if (section === "analytics") content = await views.analytics();
+    else if (section === "invoice-editor")
+      content = await invoiceEditor(id, params);
     else if (section === "invoices")
       content = id
         ? await financeViews.invoiceDetail(id, guarded)

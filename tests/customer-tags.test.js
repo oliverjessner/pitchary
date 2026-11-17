@@ -1,3 +1,4 @@
+import { removeInvoiceCreationSchema } from "./fixtures/invoice-schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -260,13 +261,14 @@ test("schema 12 preserves existing service tags and customer assignments persist
     name: "Bestehende Leistung",
     tag_ids: [tag.id],
   });
+  removeInvoiceCreationSchema(db);
   db.exec(
     "DROP TABLE customer_tag_assignments; ALTER TABLE customer_services DROP COLUMN offer_date; DROP TABLE app_settings; PRAGMA user_version=11",
   );
   db.close();
   db = openDatabase(filename);
   crm = createCRM(db);
-  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 16);
   assert.deepEqual(ids(crm.entity("services", service.id).tags), [tag.id]);
   crm.updateEntity("customers", customer.id, { tag_ids: [tag.id] });
   db.close();

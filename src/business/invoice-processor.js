@@ -87,9 +87,22 @@ export function createInvoiceProcessor(
         "Die Datei muss die Endung .pdf haben.",
       );
     const hash = createHash("sha256").update(data).digest("hex");
+    const generated = db
+      .prepare(
+        "SELECT i.id FROM finance_invoices i JOIN invoice_documents d ON d.invoice_id=i.id AND d.state='issued' WHERE i.file_hash=? LIMIT 1",
+      )
+      .get(hash);
+    if (generated && !id)
+      return { invoice: finance.get(generated.id), skipped: true };
     const byPath = file_path ? repo.findByPath(file_path, category) : null;
     const match = id ? { id } : (byPath ?? repo.findByHash(hash, category));
     const existing = match ? finance.get(match.id) : null;
+    if (existing?.is_generated)
+      throw new AppError(
+        409,
+        "issued_invoice_immutable",
+        "Ausgestellte Rechnungen können nur im Zahlungsstatus geändert werden.",
+      );
     const sourceCategory = existing?.original.category ?? category;
     const extractionCategory = existing?.category ?? category;
     if (
@@ -332,6 +345,7 @@ export function createInvoiceProcessor(
       }
       for (const invoice of repo.folderInvoices(category)) {
         ensureOpen();
+        if (finance.get(invoice.id).is_generated) continue;
         const relative = path.relative(folder, invoice.file_path);
         if (
           !relative.startsWith("..") &&

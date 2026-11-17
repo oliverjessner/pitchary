@@ -1,3 +1,4 @@
+import { removeInvoiceCreationSchema } from "./fixtures/invoice-schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -209,6 +210,7 @@ test("migration 013 backfills all existing offer dates without changing archived
   crm.changeStatus(archived.id, { status: "pitched" });
   crm.addActivity(archived.id, { type: "note", note: "Keep me" });
   crm.archive("customer_services", archived.id);
+  removeInvoiceCreationSchema(db);
   db.exec(
     "ALTER TABLE customer_services DROP COLUMN offer_date; DROP TABLE app_settings; PRAGMA user_version=12;",
   );
@@ -228,7 +230,7 @@ test("migration 013 backfills all existing offer dates without changing archived
   db.close();
   db = openDatabase(filename);
   t.after(() => db.close());
-  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 16);
   for (const [table, rows] of before) {
     const actual = db
       .prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`)

@@ -19,8 +19,13 @@ import {
   money,
   datetime,
 } from "./dom.js";
-import { customerLogo } from "./customer-branding.js";
+import { customerLogo, billingAddress } from "./customer-branding.js";
 import { restoreParams, saveFilters } from "./filter-state.js";
+import {
+  invoiceCreationSettings,
+  invoiceDrafts,
+  invoiceProfileEditor,
+} from "./invoice-editor.js";
 
 const categories = () => ({ revenue: t("Einnahmen"), payable: t("Ausgaben") });
 const states = () => ({ open: t("Offen"), paid: t("Bezahlt") });
@@ -1019,6 +1024,7 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
     customer_service_id: params.get("customer_service_id") || "",
   };
   const data = await api(financePath + "/invoices", { query });
+  const drafts = category === "revenue" ? await invoiceDrafts(params) : null;
   let timer,
     requestNumber = 0,
     disposed = false;
@@ -1120,8 +1126,19 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
         t("Rechnungen"),
         t("PDFs, Zahlungsstatus und erkannte Rechnungsdaten."),
         [
+          category === "revenue"
+            ? el(
+                "a",
+                {
+                  class: "oj-button oj-button-primary",
+                  href: "#/invoice-editor",
+                },
+                icon("plus"),
+                t("Neue Rechnung"),
+              )
+            : null,
           button(t("PDF importieren"), () => actions.financeImport(category), {
-            primary: true,
+            primary: category !== "revenue",
             iconName: "file-arrow-up",
           }),
           button(t("Ordner einlesen"), () => actions.financeScan(), {
@@ -1152,6 +1169,7 @@ export async function invoiceList(actions, params = new URLSearchParams()) {
           )
         : null,
       segment,
+      drafts,
       filters,
       count,
       content,
@@ -1360,6 +1378,150 @@ export async function invoiceDetail(id, actions) {
     api(financePath + "/invoices/" + id),
     api(financePath + "/invoices/" + id + "/logs"),
   ]);
+  if (row.is_generated) {
+    const document = await api("/finance/creation/drafts/" + row.document_id);
+    return disposable(
+      [
+        heading(invoiceLabel(row), t("Ausgestellte Rechnung"), [
+          fileLink(row),
+          el(
+            "a",
+            {
+              class: "oj-button oj-button-secondary",
+              href: `/api/finance/invoices/${id}/file?download=1`,
+              download: "",
+            },
+            t("PDF herunterladen"),
+          ),
+          row.has_xml
+            ? el(
+                "a",
+                {
+                  class: "oj-button oj-button-secondary",
+                  href: `/api/finance/invoices/${id}/xml`,
+                  download: "",
+                },
+                t("E-Rechnung herunterladen (XML)"),
+              )
+            : null,
+        ]),
+        link(t("← Alle Rechnungen"), "#/invoices"),
+        el(
+          "p",
+          { class: "oj-alert oj-alert-info" },
+          t(
+            "Rechnungsinhalt und Dokumente sind unveränderlich. Zahlungsstatus und Zahlungsdatum bleiben bearbeitbar.",
+          ),
+        ),
+        panel(
+          t("Rechnungsdaten"),
+          el(
+            "div",
+            { class: "finance-detail-status" },
+            el("span", { class: "oj-label" }, t("Zahlungsstatus")),
+            statusControl(row, actions),
+          ),
+          row.status === "paid"
+            ? button(t("Zahlungsdatum ändern"), () =>
+                showForm(
+                  t("Zahlungsdatum ändern"),
+                  [
+                    field(t("Bezahlt am"), "paid_at", {
+                      type: "date",
+                      value: row.paid_at || "",
+                      required: true,
+                    }),
+                  ],
+                  (body) =>
+                    api(financePath + "/invoices/" + id, {
+                      method: "PATCH",
+                      body,
+                    }),
+                  { onSaved: () => actions.financeRefresh() },
+                ),
+              )
+            : null,
+          facts([
+            [t("Betreff"), document.subject],
+            [t("Rechnungsdatum"), dateLabel(row.invoice_date)],
+            [t("Fälligkeitsdatum"), dateLabel(row.due_date)],
+            [
+              t("Empfängername"),
+              document.recipient?.name || row.counterparty_name,
+            ],
+            [
+              t("Rechnungsadresse"),
+              el(
+                "span",
+                { class: "note-text" },
+                billingAddress(document.recipient || {}) || "–",
+              ),
+            ],
+            [
+              t("Dokumentsprache"),
+              document.language === "en" ? t("Englisch") : t("Deutsch"),
+            ],
+            [t("Netto"), money(row.net_amount_minor, row.currency)],
+            [t("Steuer"), money(row.tax_amount_minor, row.currency)],
+            [t("Gesamtbetrag"), money(row.total_amount_minor, row.currency)],
+          ]),
+        ),
+        panel(
+          t("Rechnungspositionen"),
+          el(
+            "div",
+            { class: "invoice-issued-lines" },
+            table(
+              t("Rechnungspositionen"),
+              [
+                t("Position"),
+                t("Bezeichnung"),
+                t("Menge"),
+                t("Einheit"),
+                t("Netto-Einzelpreis"),
+                t("Netto"),
+              ],
+              (document.items || []).map((item, index) => [
+                String(index + 1),
+                el(
+                  "div",
+                  {},
+                  item.name,
+                  item.description
+                    ? el("p", { class: "oj-small note-text" }, item.description)
+                    : null,
+                ),
+                item.quantity,
+                item.unit,
+                item.unit_price,
+                money(item.net_amount_minor, row.currency),
+              ]),
+            ),
+          ),
+        ),
+        panel(
+          t("Verknüpfte Angebote"),
+          el(
+            "div",
+            { class: "oj-cluster" },
+            (row.related_relationships || []).map((offer) =>
+              link(
+                offer.service_name || t("Angebot"),
+                "#/relationships/" + offer.id,
+              ),
+            ),
+          ),
+        ),
+        row.has_xml
+          ? panel(
+              t("Erstellte Dokumente"),
+              el("p", { class: "oj-helper" }, t("XRechnung lokal geprüft")),
+            )
+          : null,
+      ],
+      actions,
+    );
+  }
   const fields = [
     ["invoice_number", t("Rechnungsnummer"), row.invoice_number || "–"],
     ["category", t("Art"), categories()[row.category]],
@@ -1869,10 +2031,25 @@ export function customerFinanceSections(row, actions) {
           iconName: "pen",
         },
       ),
+      button(t("Rechnungsprofil ergänzen"), async () => {
+        const editor = await invoiceProfileEditor(row.id, () =>
+          actions.financeRefresh(),
+        );
+        const container = el(
+          "section",
+          { class: "oj-panel oj-stack invoice-profile-panel" },
+          el("h3", { class: "oj-heading-3" }, t("Rechnungsprofil ergänzen")),
+          editor,
+        );
+        document.querySelector(".invoice-profile-panel")?.remove();
+        document.querySelector("#main").append(container);
+        editor.querySelector("input")?.focus();
+        container.scrollIntoView({ block: "start" });
+      }),
       facts([
         [
           t("Rechnungsadresse"),
-          el("span", { class: "note-text" }, row.billing_address || "–"),
+          el("span", { class: "note-text" }, billingAddress(row) || "–"),
         ],
         [t("Haupt-E-Mail"), row.general_email || "–"],
         [t("Erste Rechnung"), dateLabel(row.first_invoice_date)],
@@ -1901,10 +2078,7 @@ export function customerFinanceSections(row, actions) {
 
 export async function financeSettings(actions, params = new URLSearchParams()) {
   const row = await api(financePath + "/settings");
-  const addressValue = String(row.company_address || "").replace(
-    /\r?\n/g,
-    ", ",
-  );
+  const creationSettings = await invoiceCreationSettings();
   const models = row.models || [{ id: "gpt-4o-mini", label: "GPT-4o Mini" }];
   const error = el("p", {
     class: "oj-alert oj-alert-danger",
@@ -1927,6 +2101,56 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
       "Der Schlüssel bleibt auf deinem Rechner und wird nicht an den Browser zurückgegeben.",
     ),
   });
+  const keyStatus = el("div", { class: "finance-key-status" });
+  const keyRemove = () => {
+    const control = button(
+      t("Schlüssel entfernen"),
+      () => actions.financeKeyRemove(),
+      { danger: true, iconName: "trash" },
+    );
+    control.dataset.financeKeyRemove = "";
+    return control;
+  };
+  function updateKeyStatus() {
+    keyStatus.replaceChildren(
+      ...[
+        el(
+          "p",
+          { class: "oj-small" },
+          t("OpenAI: "),
+          el(
+            "span",
+            {
+              class:
+                "oj-badge oj-badge-" +
+                (row.openai_api_key_error
+                  ? "warning"
+                  : row.openai_api_key_present
+                    ? "success"
+                    : "neutral"),
+            },
+            row.openai_api_key_error
+              ? t("Erneut einrichten")
+              : row.openai_api_key_present
+                ? t("Gespeichert · •••• {last4}", {
+                    last4: row.openai_api_key_last4 || "",
+                  })
+                : t("Nicht konfiguriert"),
+          ),
+        ),
+        row.openai_api_key_error
+          ? el(
+              "p",
+              { class: "oj-alert oj-alert-warning", role: "status" },
+              t(
+                "Der gespeicherte Schlüssel ist auf dieser Datenbank nicht lesbar. Bitte erneut eingeben.",
+              ),
+            )
+          : null,
+      ].filter(Boolean),
+    );
+  }
+  updateKeyStatus();
   const form = el(
     "form",
     {
@@ -1939,12 +2163,48 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
         save.setAttribute("aria-busy", "true");
         try {
           const body = Object.fromEntries(new FormData(form));
-          if (body.company_address === addressValue)
-            body.company_address = row.company_address || "";
           if (!body.openai_api_key) delete body.openai_api_key;
-          await api(financePath + "/settings", { method: "PATCH", body });
+          const result = await api(financePath + "/settings", {
+            method: "PATCH",
+            body,
+          });
+          Object.assign(row, result);
+          keyField.querySelector("input").value = "";
+          keyField.querySelector("input").placeholder =
+            row.openai_api_key_present
+              ? t("Gespeicherten Schlüssel ersetzen")
+              : "sk-…";
+          updateKeyStatus();
+          const keyActions = form.querySelector(".finance-key-actions");
+          if (
+            row.openai_api_key_present &&
+            !keyActions.querySelector("[data-finance-key-remove]")
+          )
+            keyActions.append(keyRemove());
+          keyActions.querySelector("button").disabled =
+            !row.openai_api_key_present;
+          const watcherValues = new Map([
+            [
+              t("Status"),
+              result.watcher?.running ? t("Aktiv") : t("Keine Ordner aktiv"),
+            ],
+            [
+              t("Letzter Scan"),
+              result.watcher?.last_scan
+                ? datetime(result.watcher.last_scan)
+                : t("Noch kein Scan"),
+            ],
+            [
+              t("Erkennungsmodell"),
+              models.find(({ id }) => id === row.model)?.label || row.model,
+            ],
+          ]);
+          for (const label of watcherStatus.querySelectorAll("dt"))
+            if (watcherValues.has(label.textContent))
+              label.nextElementSibling.textContent = watcherValues.get(
+                label.textContent,
+              );
           notice(t("Finanz-Einstellungen gespeichert."));
-          await actions.financeRefresh();
         } catch (err) {
           error.textContent = err.message;
           error.hidden = false;
@@ -1983,69 +2243,8 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
       ),
     ),
     panel(
-      t("Eigene Firma"),
-      el(
-        "p",
-        { class: "oj-small oj-muted" },
-        t(
-          "Diese Angaben werden vor der automatischen Erkennung aus dem Rechnungstext entfernt, damit die Kundenangaben erkannt werden.",
-        ),
-      ),
-      el(
-        "div",
-        { class: "finance-form-grid" },
-        field(t("Firmenname"), "company_name", {
-          value: row.company_name || "",
-          maxlength: 200,
-        }),
-        field(t("Firmen-E-Mail"), "company_email", {
-          type: "email",
-          value: row.company_email || "",
-          maxlength: 200,
-        }),
-        field(t("Firmenadresse"), "company_address", {
-          type: "text",
-          value: addressValue,
-          maxlength: 2000,
-          wide: true,
-        }),
-      ),
-    ),
-    panel(
       t("Automatische Erkennung"),
-      el(
-        "p",
-        { class: "oj-small" },
-        t("OpenAI: "),
-        row.openai_api_key_error
-          ? el(
-              "span",
-              { class: "oj-badge oj-badge-warning" },
-              t("Erneut einrichten"),
-            )
-          : row.openai_api_key_present
-            ? el(
-                "span",
-                { class: "oj-badge oj-badge-success" },
-                t("Gespeichert · •••• {last4}", {
-                  last4: row.openai_api_key_last4 || "",
-                }),
-              )
-            : el(
-                "span",
-                { class: "oj-badge oj-badge-neutral" },
-                t("Nicht konfiguriert"),
-              ),
-      ),
-      row.openai_api_key_error
-        ? el(
-            "p",
-            { class: "oj-alert oj-alert-warning", role: "status" },
-            t(
-              "Der gespeicherte Schlüssel ist auf dieser Datenbank nicht lesbar. Bitte erneut eingeben.",
-            ),
-          )
-        : null,
+      keyStatus,
       keyField,
       field(t("Erkennungsmodell"), "model", {
         value: row.model || "gpt-4o-mini",
@@ -2063,7 +2262,7 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
       ),
       el(
         "div",
-        { class: "finance-actions" },
+        { class: "finance-actions finance-key-actions" },
         button(
           t("Schlüssel prüfen"),
           async (event) => {
@@ -2085,12 +2284,7 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
               !keyField.querySelector("input").value,
           },
         ),
-        row.openai_api_key_present
-          ? button(t("Schlüssel entfernen"), () => actions.financeKeyRemove(), {
-              danger: true,
-              iconName: "trash",
-            })
-          : null,
+        row.openai_api_key_present ? keyRemove() : null,
       ),
     ),
     error,
@@ -2131,12 +2325,21 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
       iconName: "folder-open",
     }),
   );
-  const [folderFields, companyFields, recognitionFields] =
+  const [folderFields, recognitionFields] =
     form.querySelectorAll(":scope > .oj-panel");
   const sections = [
     { id: "general", label: t("Allgemein"), content: [languagePreferences()] },
-    { id: "company", label: t("Firma"), content: [companyFields] },
+    {
+      id: "company",
+      label: t("Firma"),
+      content: [creationSettings.companyNode],
+    },
     { id: "recognition", label: t("Erkennung"), content: [recognitionFields] },
+    {
+      id: "creation",
+      label: t("Rechnungserstellung"),
+      content: [creationSettings.node],
+    },
     {
       id: "watcher",
       label: t("Ordnerüberwachung"),
@@ -2184,15 +2387,16 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
       },
       section.content,
     );
-    if (section.id === "general") tabs.append(content);
+    if (["general", "company", "creation"].includes(section.id))
+      tabs.append(content);
     else form.insertBefore(content, error);
   }
-  form.hidden = active === "general";
+  form.hidden = ["general", "company", "creation"].includes(active);
   tabs.append(form);
   tabs.addEventListener("oj:change", (event) => {
     const id = event.detail?.tab?.dataset.settingsTab;
     if (!sections.some((section) => section.id === id)) return;
-    form.hidden = id === "general";
+    form.hidden = ["general", "company", "creation"].includes(id);
     const next = new URLSearchParams(params);
     if (id === "general") next.delete("tab");
     else next.set("tab", id);
@@ -2213,7 +2417,7 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
     (event) => revealSettingsField(event.target),
     true,
   );
-  return [
+  const result = [
     heading(
       t("Einstellungen"),
       t("Sprache, Rechnungsordner, Firmenangaben und automatische Erkennung."),
@@ -2226,4 +2430,6 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
       row.app_version || "–",
     ),
   ];
+  result.dispose = creationSettings.dispose;
+  return result;
 }

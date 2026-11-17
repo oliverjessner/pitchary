@@ -1,3 +1,4 @@
+import { removeInvoiceCreationSchema } from "./fixtures/invoice-schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -30,7 +31,7 @@ function schema10(t) {
   finance.log(invoice.id, "import", "success", "Preserve log");
   const tables = db
     .prepare(
-      "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('finance_settings','app_settings') ORDER BY name",
+      "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('finance_settings','app_settings','customer_number_sequence') ORDER BY name",
     )
     .all()
     .map(({ name }) => name);
@@ -40,6 +41,7 @@ function schema10(t) {
       db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),
     ]),
   );
+  removeInvoiceCreationSchema(db);
   db.exec(
     "ALTER TABLE finance_invoices RENAME COLUMN source_legacy_id TO source_previous_id; DROP TABLE customer_tag_assignments; ALTER TABLE customer_services DROP COLUMN offer_date; DROP TABLE app_settings; PRAGMA user_version=10;",
   );
@@ -52,16 +54,30 @@ test("migration 011 preserves complete invoice data, PDFs, corrections, logs, CR
   for (let attempt = 0; attempt < 2; attempt++) {
     const db = openDatabase(filename);
     try {
-      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
+      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 16);
       assert.equal(
         db.prepare("SELECT language FROM app_settings").get().language,
         "de",
       );
-      for (const [table, rows] of before)
-        assert.deepEqual(
-          db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all(),
-          rows,
-        );
+      for (const [table, rows] of before) {
+        const actual = db
+          .prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`)
+          .all();
+        const historical = (entries) =>
+          table === "finance_customer_profiles"
+            ? entries.map(({ customer_number, ...row }) => row)
+            : entries;
+        assert.deepEqual(historical(actual), historical(rows));
+        if (table === "finance_customer_profiles") {
+          assert.equal(
+            new Set(actual.map((row) => row.customer_number)).size,
+            actual.length,
+          );
+          assert.ok(
+            actual.every((row) => /^K-\d{5,}$/.test(row.customer_number)),
+          );
+        }
+      }
       const finance = createFinance(db);
       assert.equal(finance.importNamespace(), "previous");
       assert.equal(finance.findLegacyInvoice("source-001").id, invoice.id);

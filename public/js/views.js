@@ -10,6 +10,7 @@ import {
   customerIdentity,
   customerLogo,
   customerProfile,
+  billingAddress,
 } from "./customer-branding.js";
 import { tagBadge, tagList, tagFilter } from "./service-tags.js";
 import { readFilters, saveFilters, selectedTags } from "./filter-state.js";
@@ -591,6 +592,17 @@ export async function customerDetail(id, actions) {
   ]);
   const profile = customerProfile(row);
   const controls = entityState(row, "customers", actions);
+  if (!row.archived_at)
+    controls.unshift(
+      el(
+        "a",
+        {
+          class: "oj-button oj-button-primary",
+          href: "#/invoice-editor?customer_id=" + id,
+        },
+        t("Rechnung erstellen"),
+      ),
+    );
   if (profile.refetchButton) controls.splice(1, 0, profile.refetchButton);
   const employees = [...row.employees, ...row.archived_employees];
   const contactsTable = table(
@@ -648,6 +660,16 @@ export async function customerDetail(id, actions) {
       controls,
     ),
     profile.node,
+    panel(
+      t("Kundendaten"),
+      facts([
+        [t("Kundennummer"), row.customer_number || "–"],
+        [
+          t("Rechnungsadresse"),
+          el("span", { class: "note-text" }, billingAddress(row) || "–"),
+        ],
+      ]),
+    ),
     row.note
       ? panel(t("Notiz"), el("p", { class: "note-text" }, row.note))
       : null,
@@ -1492,7 +1514,10 @@ export async function pipeline(actions, params) {
   return content;
 }
 export async function relationshipDetail(id, actions) {
-  const r = await api("/customer-services/" + id);
+  const [r, invoices] = await Promise.all([
+    api("/customer-services/" + id),
+    api("/finance/invoices", { query: { customer_service_id: id } }),
+  ]);
   const phasesTable = table(
     t("Statusphasen"),
     [t("Status"), t("Kunde"), t("Beginn"), t("Dauer")],
@@ -1553,6 +1578,20 @@ export async function relationshipDetail(id, actions) {
           icon("file-invoice"),
           t("Rechnungen"),
         ),
+        !r.archived_at
+          ? el(
+              "a",
+              {
+                class: "oj-button oj-button-primary",
+                href:
+                  "#/invoice-editor?customer_id=" +
+                  r.customer_id +
+                  "&customer_service_id=" +
+                  id,
+              },
+              t("Rechnung erstellen"),
+            )
+          : null,
       ],
     ),
     el(
@@ -1621,6 +1660,30 @@ export async function relationshipDetail(id, actions) {
             : null,
         ),
         panel(t("Statusphasen"), phasesTable),
+        panel(
+          t("Rechnungen"),
+          invoices.items.length
+            ? table(
+                t("Rechnungen"),
+                [t("Rechnung"), t("Datum"), t("Betrag"), t("Zahlungsstatus")],
+                invoices.items.map((invoice) => [
+                  link(
+                    invoice.invoice_number ||
+                      invoice.file_name ||
+                      t("Rechnung ohne Nummer"),
+                    "#/invoices/" + invoice.id,
+                  ),
+                  invoice.invoice_date ? formatDate(invoice.invoice_date) : "–",
+                  money(invoice.total_amount_minor, invoice.currency),
+                  invoice.status === "paid"
+                    ? t("Bezahlt")
+                    : invoice.is_overdue
+                      ? t("Überfällig")
+                      : t("Offen"),
+                ]),
+              )
+            : el("p", { class: "oj-helper" }, t("Noch keine Rechnungen")),
+        ),
       ),
       panel(
         t("Timeline"),

@@ -241,8 +241,8 @@ export default {
   "Ausgaben-Ordner": "Expenses folder",
   "/Users/…/Rechnungen/Ausgaben": "/Users/…/Invoices/Expenses",
   "Eigene Firma": "Your company",
-  "Diese Angaben werden vor der automatischen Erkennung aus dem Rechnungstext entfernt, damit die Kundenangaben erkannt werden.":
-    "These details are removed from invoice text before automatic recognition so the customer's details can be identified.",
+  "Firmenname, Firmen-E-Mail und die Firmenadresse werden vor der automatischen Erkennung aus dem Rechnungstext entfernt, damit die Kundenangaben erkannt werden.":
+    "Company name, company email and company address are removed from invoice text before automatic recognition so the customer's details can be identified.",
   Firmenname: "Company name",
   "Firmen-E-Mail": "Company email",
   Firmenadresse: "Company address",

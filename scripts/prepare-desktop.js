@@ -21,6 +21,7 @@ import {
   assertMacOSCompatibility,
 } from "./desktop-common.js";
 import { bundleTools } from "./bundle-desktop-tools.js";
+import { bundleInvoiceJava } from "./bundle-invoice-validator.js";
 
 assertPlatform();
 syncVersions();
@@ -100,6 +101,7 @@ run(
 );
 rmSync(path.join(runtime, "tools"), { recursive: true, force: true });
 await bundleTools(path.join(runtime, "tools"));
+await bundleInvoiceJava(runtime, cache);
 const tessdata = path.join(runtime, "tools/share/tessdata");
 mkdirSync(tessdata, { recursive: true });
 for (const [name, digest] of Object.entries({

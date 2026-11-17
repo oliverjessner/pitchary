@@ -767,7 +767,7 @@ test("finance settings preserve company data and mask keys without a migration c
       name: "Ordnerüberwachung",
       exact: true,
     });
-    await expect(page.getByRole("tab")).toHaveCount(4);
+    await expect(page.getByRole("tab")).toHaveCount(5);
     await expect(generalTab).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tabpanel")).toHaveCount(1);
     await expect(
@@ -784,7 +784,8 @@ test("finance settings preserve company data and mask keys without a migration c
     await generalTab.press("ArrowRight");
     await expect(companyTab).toBeFocused();
     await expect(companyTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator(".finance-settings-form")).toBeVisible();
+    await expect(page.locator(".finance-company-settings")).toBeVisible();
+    await expect(page.locator(".finance-settings-form")).toBeHidden();
     await companyTab.press("ArrowRight");
     await expect(recognitionTab).toBeFocused();
     await expect(recognitionTab).toHaveAttribute("aria-selected", "true");
@@ -795,6 +796,12 @@ test("finance settings preserve company data and mask keys without a migration c
     await companyTab.click();
     const companyEmail = page.getByLabel("Firmen-E-Mail", { exact: true });
     await companyEmail.fill("not-an-email");
+    await page
+      .getByRole("button", { name: "Einstellungen speichern", exact: true })
+      .click();
+    await expect(companyTab).toHaveAttribute("aria-selected", "true");
+    await expect(companyEmail).toBeFocused();
+    await companyEmail.fill(initial.company_email || "");
     await companyTab.focus();
     await companyTab.press("End");
     await expect(watcherTab).toBeFocused();
@@ -803,13 +810,6 @@ test("finance settings preserve company data and mask keys without a migration c
     await expect(
       page.getByRole("heading", { name: "Ordnerüberwachung", exact: true }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Einstellungen speichern", exact: true })
-      .click();
-    await expect(companyTab).toHaveAttribute("aria-selected", "true");
-    await expect(companyEmail).toBeFocused();
-    await companyEmail.fill(initial.company_email || "");
-    await watcherTab.click();
     await page
       .getByRole("button", { name: "Ordner jetzt einlesen", exact: true })
       .click();
@@ -878,6 +878,11 @@ test("finance settings preserve company data and mask keys without a migration c
     await page
       .getByLabel("Firmenadresse", { exact: true })
       .fill("Testgasse 42, 1010 Wien");
+    await check(page);
+    await screenshot(page, testInfo, "settings-company", 320);
+    await page
+      .getByRole("button", { name: "Einstellungen speichern", exact: true })
+      .click();
     const key = "sk-local-fixture-1234";
     await recognitionTab.click();
     await expect(page.getByLabel("Firmenname", { exact: true })).toHaveValue(
@@ -976,6 +981,16 @@ test("general settings keep language and finance forms separate across tabs and 
           general.getByLabel("Sprache der Oberfläche", { exact: true }),
         ).toBeVisible();
         await expect(finance).toBeHidden();
+      } else if (active === "company") {
+        await expect(general).toBeHidden();
+        await expect(finance).toBeHidden();
+        await expect(page.locator(".finance-company-settings")).toBeVisible();
+        await expect(
+          page.locator(".finance-company-settings").getByRole("button", {
+            name: "Einstellungen speichern",
+            exact: true,
+          }),
+        ).toBeVisible();
       } else {
         await expect(general).toBeHidden();
         await expect(finance).toBeVisible();
@@ -1026,7 +1041,7 @@ test("general settings keep language and finance forms separate across tabs and 
   await expect(generalTab).toBeFocused();
   await expect(generalTab).toHaveAttribute("aria-selected", "true");
   await expect(finance).toBeHidden();
-  await expect(page.getByRole("tab")).toHaveCount(4);
+  await expect(page.getByRole("tab")).toHaveCount(5);
   for (const tab of await page.getByRole("tab").all())
     await expect(tab).toBeVisible();
   await check(page);

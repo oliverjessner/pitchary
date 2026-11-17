@@ -10,6 +10,10 @@ import {
 } from "./customer-branding.js";
 import { createServiceTags } from "./service-tags.js";
 import {
+  customerBillingFields,
+  customerBillingPatch,
+} from "./customer-billing.js";
+import {
   AppError,
   invalid,
   text,
@@ -87,7 +91,9 @@ export function createCRM(
         : [
             "name",
             "note",
-            ...(table === "customers" ? ["website", "general_email"] : []),
+            ...(table === "customers"
+              ? ["website", ...customerBillingFields]
+              : []),
             ...(table === "services" ? ["url"] : []),
           ];
     allowedKeys(data, [
@@ -102,7 +108,7 @@ export function createCRM(
         out[key] = text(data[key] ?? "", key, {
           required: key === "name",
           max:
-            key === "note"
+            key === "note" || key === "billing_address"
               ? 10000
               : key === "name"
                 ? 200
@@ -111,6 +117,7 @@ export function createCRM(
                   : 500,
         });
     if (table === "customers") {
+      Object.assign(out, customerBillingPatch(data, { creating }));
       if ("website" in out) {
         const url = website(out.website);
         out.website = url ? purgeUrl(url).cleanUrl : "";
@@ -155,6 +162,18 @@ export function createCRM(
           ? serviceTags.validateTagIds(data.tag_ids ?? [])
           : null,
     };
+  }
+  function separateBilling(table, prepared) {
+    const values = { ...prepared },
+      billing = {};
+    if (table === "customers")
+      for (const field of customerBillingFields) {
+        if (Object.hasOwn(values, field)) {
+          billing[field] = values[field];
+          delete values[field];
+        }
+      }
+    return { values, billing };
   }
   function event(id, from, to, reason, occurred, recorded) {
     repo.insert("customer_service_status_history", {
@@ -297,7 +316,7 @@ export function createCRM(
     createEntity(table, data) {
       const save = () => {
         const { values: prepared, tagIds } = prepareEntityCreation(table, data);
-        const { general_email, ...values } = prepared,
+        const { values, billing } = separateBilling(table, prepared),
           at = now();
         const id = idFactory();
         repo.insert(table, {
@@ -307,8 +326,8 @@ export function createCRM(
           updated_at: at,
           archived_at: null,
         });
-        if (table === "customers" && general_email)
-          repo.saveCustomerEmail(id, general_email, at);
+        if (table === "customers")
+          repo.saveCustomerBilling(id, billing, at, { creating: true });
         if (tagIds) replaceTags(table, id, tagIds);
         const result = repo.get(table, id);
         if (table === "services")
@@ -330,14 +349,16 @@ export function createCRM(
           data.tag_ids !== undefined
             ? serviceTags.validateTagIds(data.tag_ids)
             : null;
-        const { general_email, ...values } = entityData(table, data);
+        const { values, billing } = separateBilling(
+          table,
+          entityData(table, data),
+        );
         const at = now();
         repo.update(table, id, {
           ...values,
           updated_at: at,
         });
-        if (table === "customers" && general_email !== undefined)
-          repo.saveCustomerEmail(id, general_email, at);
+        if (table === "customers") repo.saveCustomerBilling(id, billing, at);
         const result = repo.get(table, id);
         if (tagIds) replaceTags(table, id, tagIds);
         if (table === "services")

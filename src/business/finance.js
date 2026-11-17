@@ -129,6 +129,34 @@ export function createFinance(
   db,
   { clock = () => new Date().toISOString(), idFactory = randomUUID } = {},
 ) {
+  const issuedDocument = db.prepare(
+    "SELECT id,xml_data IS NOT NULL AS has_xml FROM invoice_documents WHERE invoice_id=? AND state='issued'",
+  );
+  const documentRelationships = db.prepare(
+    "SELECT DISTINCT cs.id,s.name AS service_name FROM invoice_document_lines l JOIN invoice_documents d ON d.id=l.document_id JOIN customer_services cs ON cs.id=l.customer_service_id JOIN services s ON s.id=cs.service_id WHERE d.invoice_id=? ORDER BY l.position",
+  );
+  const immutable = () => {
+    throw new AppError(
+      409,
+      "issued_invoice_immutable",
+      "Ausgestellte Rechnungen können nur im Zahlungsstatus geändert werden.",
+    );
+  };
+  const ownNumber = db.prepare(
+    "SELECT i.id FROM finance_invoices i JOIN invoice_documents d ON d.invoice_id=i.id AND d.state='issued' WHERE i.category='revenue' AND i.invoice_number=? AND i.id<>? LIMIT 1",
+  );
+  function checkIssuedNumber(row) {
+    if (
+      row.category === "revenue" &&
+      row.invoice_number &&
+      ownNumber.get(row.invoice_number, row.id)
+    )
+      throw new AppError(
+        409,
+        "invoice_number_conflict",
+        "Diese Rechnungsnummer ist bereits für eine ausgestellte Ausgangsrechnung vergeben.",
+      );
+  }
   const now = () => {
     const value = clock();
     return value instanceof Date
@@ -173,6 +201,17 @@ export function createFinance(
   function effective(row) {
     const overrides = corrections(row.id);
     const result = { ...row, ...overrides, original: { ...row }, overrides };
+    const document = issuedDocument.get(row.id);
+    result.is_generated = Boolean(document);
+    result.document_id = document?.id ?? null;
+    result.has_xml = Boolean(document?.has_xml);
+    result.related_relationships = documentRelationships.all(row.id);
+    result.customer_service_ids = [
+      ...new Set([
+        ...result.related_relationships.map(({ id }) => id),
+        ...(result.customer_service_id ? [result.customer_service_id] : []),
+      ]),
+    ];
     result.is_overdue = Boolean(
       result.status === "open" && result.due_date && result.due_date < today(),
     );
@@ -595,7 +634,8 @@ export function createFinance(
                   row.due_date < today()
                 : row.status === status)) &&
             (!customerId || row.customer_id === customerId) &&
-            (!relationshipId || row.customer_service_id === relationshipId) &&
+            (!relationshipId ||
+              row.customer_service_ids.includes(relationshipId)) &&
             (!year ||
               !row.invoice_date ||
               row.invoice_date.startsWith(year + "-")) &&
@@ -639,6 +679,7 @@ export function createFinance(
             ? repo.legacyInvoice.get(values.source_legacy_id)?.id
             : undefined);
         const existing = existingId ? repo.invoice.get(existingId) : null;
+        if (existing && issuedDocument.get(existing.id)) immutable();
         const at = now(),
           id = existingId ?? idFactory();
         const row = {
@@ -690,6 +731,7 @@ export function createFinance(
         )
           row.customer_id = null;
         resolveLinks(row);
+        checkIssuedNumber(row);
         const keys = financeInvoiceColumns.filter(
           (key) => key !== "pdf_data" || own(values, "pdf_data") || !existing,
         );
@@ -705,6 +747,14 @@ export function createFinance(
       return atomic(() => {
         const current = finance.get(id),
           candidate = { ...current, ...values };
+        if (
+          current.is_generated &&
+          (legacyImport ||
+            Object.keys(values).some(
+              (key) => !["status", "paid_at"].includes(key),
+            ))
+        )
+          immutable();
         if (
           own(values, "counterparty_name") &&
           !own(values, "customer_id") &&
@@ -729,6 +779,7 @@ export function createFinance(
         resolveLinks(candidate, {
           match: !own(values, "customer_id") || values.customer_id !== null,
         });
+        checkIssuedNumber(candidate);
         if (own(values, "tags") && candidate.category !== "payable")
           invalid("Tags stehen nur für Ausgaben zur Verfügung.", "tags");
         if (
@@ -785,7 +836,7 @@ export function createFinance(
     reset(id, field = null) {
       if (field !== null) choice(field, editable, "field");
       return atomic(() => {
-        finance.get(id);
+        if (finance.get(id).is_generated) immutable();
         if (field === null) repo.clearOverrides.run(id);
         else {
           repo.clearOverride.run(id, field);
@@ -800,6 +851,7 @@ export function createFinance(
     remove(id) {
       return atomic(() => {
         const invoice = finance.get(id);
+        if (invoice.is_generated) immutable();
         if (invoice.file_path) {
           let ignored = [];
           try {

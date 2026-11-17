@@ -2,6 +2,18 @@ import { el, icon, link, button } from "./dom.js";
 import { api } from "./api.js";
 import { t } from "./i18n.js";
 let editorNumber = 0;
+export function billingAddress(row = {}) {
+  return row.street
+    ? [
+        row.additional_name,
+        row.street,
+        [row.postal_code, row.city].filter(Boolean).join(" "),
+        row.country_code,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : row.billing_address || "";
+}
 export function customerLogo(row, { large = false } = {}) {
   const frame = el(
     "span",
@@ -131,7 +143,13 @@ export function customerProfile(row) {
     refetchButton: refetch,
   };
 }
-export function logoEditor(row) {
+export function logoEditor(
+  row,
+  {
+    label = t("Logo hochladen"),
+    previewAlt = t("Vorschau des Kundenlogos"),
+  } = {},
+) {
   const id = "customer-logo-" + ++editorNumber;
   let pending;
   let error = null;
@@ -256,7 +274,7 @@ export function logoEditor(row) {
           el("img", {
             class: "customer-logo customer-logo-large",
             src: url,
-            alt: t("Vorschau des Kundenlogos"),
+            alt: previewAlt,
             width: 64,
             height: 64,
           }),
@@ -276,7 +294,7 @@ export function logoEditor(row) {
   const node = el(
     "div",
     { class: "oj-field wide" },
-    el("label", { class: "oj-label", for: id }, t("Logo hochladen")),
+    el("label", { class: "oj-label", for: id }, label),
     !row?.id
       ? el(
           "p",

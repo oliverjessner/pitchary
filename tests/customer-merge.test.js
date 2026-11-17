@@ -211,9 +211,14 @@ test("customer merge rewires only ownership while preserving contacts, immutable
     "service_tags",
     "service_tag_assignments",
     "finance_processing_logs",
-    "finance_customer_profiles",
   ])
     assert.deepEqual(after[table], before[table]);
+  assert.deepEqual(
+    after.finance_customer_profiles,
+    before.finance_customer_profiles.filter(
+      (row) => row.customer_id !== f.source.id,
+    ),
+  );
   assert.equal(
     f.db.prepare("SELECT id FROM customers WHERE id=?").get(f.source.id),
     undefined,

@@ -1,4 +1,124 @@
 export default {
+  "Der Kundennummernkreis ist ausgeschöpft.":
+    "The customer number range is exhausted.",
+  "Empfängerangaben werden ausschließlich im Kundenprofil geändert.":
+    "Recipient details can only be changed in the customer profile.",
+  "Bitte den Leistungszeitraum mit Von- und Bis-Datum angeben.":
+    "Enter the service period using the from and to dates.",
+  "Bitte den vollständigen Leistungszeitraum mit Von- und Bis-Datum angeben.":
+    "Enter the complete service period using both the from and to dates.",
+  "Die Kundendaten wurden inzwischen geändert. Bitte die Vorschau erneut prüfen.":
+    "The customer details have changed. Please review the preview again.",
+  "Bitte eine Kundennummer angeben.": "Enter a customer number.",
+  "Diese Kundennummer ist bereits vergeben.":
+    "This customer number is already assigned.",
+  "E-Rechnung: Ungültiges XML-Dokument.": "E-invoice: Invalid XML document.",
+  "Die lokale E-Rechnungsprüfung ist nicht verfügbar. Java und KoSIT-Ressourcen prüfen.":
+    "Local e-invoice validation is unavailable. Check Java and the KoSIT resources.",
+  "E-Rechnung: Ungültige Länderkennung.": "E-invoice: Invalid country code.",
+  "E-Rechnung: Ungültiges Adress-Scheme.": "E-invoice: Invalid address scheme.",
+  "E-Rechnung: Eigene UID/USt-IdNr. oder Steuerkennung fehlt.":
+    "E-invoice: Your VAT ID or tax identifier is missing.",
+  "E-Rechnung: Steuergrund fehlt.": "E-invoice: A tax reason is missing.",
+  "Die Angaben für die Rechnungsfußzeile sind zu lang. Bitte Namen und Kontaktangaben kürzen.":
+    "The invoice footer details are too long. Shorten the names and contact details.",
+  "E-Rechnung: Rechnungsnummer fehlt.":
+    "E-invoice: The invoice number is missing.",
+  "E-Rechnung: Käuferreferenz (BT-10) fehlt.":
+    "E-invoice: The buyer reference (BT-10) is missing.",
+  "E-Rechnung: Name fehlt.": "E-invoice: A name is missing.",
+  "E-Rechnung: Straße fehlt.": "E-invoice: A street address is missing.",
+  "E-Rechnung: Postleitzahl fehlt.": "E-invoice: A postal code is missing.",
+  "E-Rechnung: Ort fehlt.": "E-invoice: A city is missing.",
+  "E-Rechnung: Länderkennung fehlt.": "E-invoice: A country code is missing.",
+  "E-Rechnung: elektronische Adresse fehlt.":
+    "E-invoice: An electronic address is missing.",
+  "E-Rechnung: Adress-Scheme fehlt.":
+    "E-invoice: An address scheme is missing.",
+  "E-Rechnung: Verkäuferkontakt fehlt.":
+    "E-invoice: A seller contact is missing.",
+  "E-Rechnung: Kontakt-E-Mail fehlt.": "E-invoice: A contact email is missing.",
+  "E-Rechnung: Kontakttelefon fehlt.":
+    "E-invoice: A contact phone number is missing.",
+  "E-Rechnung: IBAN fehlt.": "E-invoice: An IBAN is missing.",
+  "E-Rechnung: eigene UID/USt-IdNr. fehlt.":
+    "E-invoice: Your VAT ID is missing.",
+  "E-Rechnung: UID/USt-IdNr. des Kunden fehlt.":
+    "E-invoice: The customer VAT ID is missing.",
+  "Bitte die E-Rechnungsoption als Ja oder Nein angeben.":
+    "Please specify the electronic invoice option as yes or no.",
+  "Die Rechnungsdaten wurden inzwischen geändert. Bitte die Vorschau erneut prüfen.":
+    "The invoice details have changed. Please review the preview again.",
+  "Bitte eine ganze Zahl innerhalb der erlaubten Grenzen angeben.":
+    "Enter a whole number within the allowed range.",
+  "Rechnungsentwurf nicht gefunden.": "Invoice draft not found.",
+  "Der Rechnungsnummernkreis ist ausgeschöpft.":
+    "The invoice number range is exhausted.",
+  "Bitte den nächsten Rechnungszähler auf einen freien Bereich setzen.":
+    "Set the next invoice counter to an available range.",
+  "Das Logo darf maximal 4096 × 4096 Pixel groß sein.":
+    "The logo must not exceed 4096 × 4096 pixels.",
+  "Das Logo darf höchstens 1 MiB groß sein.": "The logo must not exceed 1 MiB.",
+  "Das Logo konnte nicht gelesen werden.": "The logo could not be read.",
+  "Bitte einen zweistelligen Ländercode angeben.":
+    "Enter a two-letter country code.",
+  "Bitte einen gültigen Ländercode angeben.": "Enter a valid country code.",
+  "Bitte Angebote als Liste angeben.": "Supply the offers as a list.",
+  "Alle Angebote müssen dieselbe Währung verwenden.":
+    "All offers must use the same currency.",
+  "Bitte einen Rechnungskunden auswählen.": "Select an invoice customer.",
+  "Der Leistungsbeginn muss vor dem Leistungsende liegen.":
+    "The service start must not be after the service end.",
+  "Das Fälligkeitsdatum darf nicht vor dem Rechnungsdatum liegen.":
+    "The due date must not be before the invoice date.",
+  "Ausgestellte Rechnungen können nicht verändert werden.":
+    "Issued invoices cannot be changed.",
+  "Der Entwurf wurde inzwischen geändert. Bitte neu laden.":
+    "The draft has changed. Please reload it.",
+  "Bitte die vollständigen Aussteller- und Empfängerangaben ergänzen.":
+    "Complete the seller and recipient details.",
+  "Bitte ein Rechnungsdatum angeben.": "Enter an invoice date.",
+  "Bitte ein Fälligkeitsdatum angeben.": "Enter a due date.",
+  "Bitte ein Leistungsdatum oder einen vollständigen Leistungszeitraum angeben.":
+    "Enter a service date or a complete service period.",
+  "Bitte entweder ein Leistungsdatum oder einen Leistungszeitraum angeben.":
+    "Enter either a service date or a service period.",
+  "Bitte die eigene UID oder Steuerkennung ergänzen.":
+    "Enter your VAT ID or tax identifier.",
+  "Reverse Charge benötigt die UID von Aussteller und Empfänger.":
+    "Reverse charge requires both the seller and recipient VAT IDs.",
+  "Bitte IBAN und Kontoinhaber ergänzen.": "Enter an IBAN and account holder.",
+  "Bitte eine gültige IBAN angeben.": "Enter a valid IBAN.",
+  "Bitte eine gültige BIC angeben.": "Enter a valid BIC.",
+  "Die E-Rechnung konnte nicht erfolgreich geprüft werden.":
+    "The e-invoice could not be validated successfully.",
+  "Das Rechnungs-PDF konnte nicht erstellt werden.":
+    "The invoice PDF could not be generated.",
+  "Die Rechnungsnummer wurde gleichzeitig vergeben. Bitte erneut versuchen.":
+    "The invoice number was assigned concurrently. Please try again.",
+  "Für diese Rechnung wurde keine E-Rechnung ausgestellt.":
+    "No e-invoice was issued for this invoice.",
+  "Bitte eine gültige positive Dezimalzahl angeben.":
+    "Enter a valid positive decimal number.",
+  "Die Menge muss größer als null sein.":
+    "The quantity must be greater than zero.",
+  "Rechnungsbetrag überschreitet die zulässige Grenze.":
+    "The invoice amount exceeds the allowed limit.",
+  "Bitte zwischen einer und 500 Rechnungspositionen angeben.":
+    "Enter between one and 500 invoice lines.",
+  "Ungültige Rechnungsposition.": "Invalid invoice line.",
+  "Steuerkategorie und Steuersatz passen nicht zusammen.":
+    "The tax category and rate are inconsistent.",
+  "Bitte einen Grund für die Steuerbefreiung angeben.":
+    "Enter a reason for tax exemption.",
+  "Positionen derselben Steuerkategorie und desselben Steuersatzes benötigen denselben Steuergrund.":
+    "Lines with the same tax category and rate require the same tax reason.",
+  "Ausgestellte Rechnungen können nur im Zahlungsstatus geändert werden.":
+    "Only the payment status of issued invoices can be changed.",
+  "Diese Rechnungsnummer ist bereits für eine ausgestellte Ausgangsrechnung vergeben.":
+    "This invoice number is already assigned to an issued sales invoice.",
+  "Für diese Rechnung ist keine E-Rechnung gespeichert.":
+    "No e-invoice is stored for this invoice.",
   "{field}: Text erwartet.": "{field}: Text is required.",
   "{field}: Bitte einen gültigen Wert eingeben.":
     "{field}: Please enter a valid value.",

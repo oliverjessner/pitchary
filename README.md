@@ -20,6 +20,7 @@ Add your customers and contacts, define your services and create an offer for ea
 - Define reusable services and track offered and agreed prices for each job.
 - Follow offers from the first pitch to acceptance, completion or rejection.
 - Keep a history of conversations, status changes and price negotiations.
+- Create outgoing invoices from offers or free line items, with PDF and optional XRechnung XML.
 - Import invoice PDFs, read scanned text with OCR and optionally recognize invoice details with AI.
 - Monitor invoice folders and track open, paid and overdue invoices.
 - Review income, expenses, customer revenue and sales win rates.
@@ -45,6 +46,8 @@ The app is currently not notarized. If macOS blocks the first launch, allow it u
 
 Keep company details, contact people and notes together, and group companies with colored tags. Search contacts by name, company, role or email, then open their contact details, offers and activity history.
 
+Each customer receives a sequential customer number that you can edit on the customer record, alongside the billing address. Invoice creation takes these details from the selected customer.
+
 ![Customer directory with lead and customer status, colored tags, notes and search filters](src-tauri/screenshots/customers.png)
 
 ## Services, offers and negotiations
@@ -52,6 +55,12 @@ Keep company details, contact people and notes together, and group companies wit
 Reuse your services across offers, set a price and billing period for each job, and follow its progress in the pipeline. Record pitches, follow-ups and negotiated prices so you can review how each agreement developed.
 
 ![Sales pipeline with offers grouped by stage, prices, contact people and time in each stage](src-tauri/screenshots/pipeline.png)
+
+## Create invoices
+
+Create an invoice from a customer, an offer or the invoice list. Combine several offers for the same customer, review net prices and quantities, and save a draft before issuing it. Add your company details, bank account, payment terms and logo in Invoice creation settings.
+
+The invoice number is assigned when you issue the invoice. Download its PDF and optionally a locally validated XRechnung XML; issued documents retain their original details when customer data or settings change. Track payment in the existing invoice view.
 
 ## Invoice imports and payment tracking
 

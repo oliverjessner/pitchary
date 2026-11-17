@@ -1,5 +1,7 @@
-# 0.7.5
+# 1.0.0
 
+- Keep invoice recipient data fixed to the selected customer, assign editable sequential customer numbers, and use service periods instead of a separate service day.
+- Create outgoing invoices from drafts and multiple offers, with local PDF and validated XRechnung XML exports.
 - Focus the current search field with Cmd+F or Ctrl+F and select its text.
 - Allow future timestamps for pitches, status changes and contact activities while preserving chronological status history.
 

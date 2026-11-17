@@ -47,7 +47,7 @@ export async function registerFinanceAPI(app, finance) {
       .type("application/pdf")
       .header(
         "Content-Disposition",
-        `inline; filename="${name || "Rechnung.pdf"}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+        `${request.query.download === "1" ? "attachment" : "inline"}; filename="${name || "Rechnung.pdf"}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
       )
       .send(file.data);
   });

@@ -15,6 +15,8 @@ import { registerCustomerAliases } from "../api/customer-aliases.js";
 import { createCustomerLogoDiscovery } from "../business/customer-logo-discovery.js";
 import { createAppSettings } from "../business/app-settings.js";
 import { translateMessage } from "../../public/js/translate.js";
+import { createInvoiceCreation } from "../business/invoice-creation.js";
+import { registerInvoiceCreationAPI } from "../api/invoice-creation-routes.js";
 export async function buildApp({
   databasePath,
   db,
@@ -48,6 +50,13 @@ export async function buildApp({
   });
   app.decorate("finance", finance);
   app.decorate("financeSettings", settings);
+  const invoiceCreation = createInvoiceCreation(database, {
+    finance,
+    settings,
+    clock,
+    ...financeOptions.creation,
+  });
+  app.decorate("invoiceCreation", invoiceCreation);
   app.decorate("invoiceProcessor", processor);
   app.addHook("onReady", async () => processor.start());
   app.addHook("onClose", async () => {
@@ -139,6 +148,7 @@ export async function buildApp({
   app.get("/api/settings", () => app.appSettings.get());
   app.patch("/api/settings", (request) => app.appSettings.save(request.body));
   await registerFinanceAPI(app, finance);
+  registerInvoiceCreationAPI(app, invoiceCreation);
   await registerFinanceProcessingAPI(app, finance, settings, processor);
   await app.register(fastifyStatic, {
     root: path.join(projectRoot, "public"),

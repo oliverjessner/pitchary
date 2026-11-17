@@ -365,6 +365,86 @@
   flex-wrap: wrap;
   overflow-x: visible;
 }
+.invoice-editor {
+  max-inline-size: 76rem;
+}
+.invoice-editor .finance-form-grid {
+  align-items: start;
+}
+.invoice-form-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.invoice-editor > .oj-panel,
+.invoice-creation-settings > .oj-panel,
+.finance-company-settings > .oj-panel {
+  min-inline-size: 0;
+}
+.invoice-line {
+  padding: var(--oj-space-4);
+  border: 1px solid var(--oj-border);
+  border-radius: var(--oj-radius-md);
+  min-inline-size: 0;
+}
+.invoice-line-heading {
+  gap: var(--oj-space-2);
+}
+.invoice-line-heading h3 {
+  margin: 0;
+  margin-inline-end: auto;
+}
+.invoice-line-heading strong {
+  margin-inline-end: var(--oj-space-3);
+}
+.invoice-line .oj-field {
+  min-inline-size: 0;
+}
+.invoice-offer-picker {
+  align-items: end;
+  margin-block-end: var(--oj-space-3);
+}
+.invoice-offer-picker > .oj-field {
+  flex: 1 1 20rem;
+  min-inline-size: 0;
+}
+.invoice-totals {
+  inline-size: 100%;
+  padding: var(--oj-space-4);
+  background: var(--oj-surface-raised);
+  border: 1px solid var(--oj-border);
+  border-radius: var(--oj-radius-md);
+}
+.invoice-totals .facts {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  margin: 0;
+}
+.invoice-editor-actions {
+  padding-block: var(--oj-space-4);
+  border-block-start: 1px solid var(--oj-border);
+}
+.invoice-issuer-logo .customer-logo,
+.invoice-issuer-logo .customer-logo-large,
+.invoice-issuer-logo .customer-logo img {
+  inline-size: auto;
+  block-size: auto;
+  max-inline-size: min(100%, 16rem);
+  max-block-size: 8rem;
+  object-fit: contain;
+  border-radius: 0;
+}
+.invoice-issuer-logo .customer-logo img {
+  position: static;
+}
+.invoice-editor .oj-helper,
+.invoice-creation-settings .oj-helper,
+.finance-company-settings .oj-helper {
+  overflow-wrap: anywhere;
+}
+.invoice-issued-lines table {
+  min-inline-size: 44rem;
+}
+.invoice-issued-lines td:nth-child(2) {
+  min-inline-size: 16rem;
+}
 @media (max-width: 1200px) {
   .finance-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -373,7 +453,8 @@
 @media (max-width: 900px) {
   .finance-two-columns,
   .finance-chart-overdue,
-  .finance-summary-grid {
+  .finance-summary-grid,
+  .invoice-form-grid-three {
     grid-template-columns: 1fr;
   }
 }

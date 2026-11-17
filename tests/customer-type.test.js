@@ -362,7 +362,7 @@ test("migration 009 backfills effective revenue assignments and preserves every 
   db.close();
   db = openDatabase(filename);
   try {
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 16);
     for (const table of tables) {
       const actual = db
         .prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`)
@@ -381,7 +381,31 @@ test("migration 009 backfills effective revenue assignments and preserves every 
           }
           return value;
         });
-      assert.deepEqual(actual, before.get(table));
+      if (table === "finance_customer_profiles") {
+        for (const previous of before.get(table)) {
+          const preserved = actual.find(
+            (row) => row.customer_id === previous.customer_id,
+          );
+          assert.ok(preserved);
+          assert.deepEqual(
+            Object.fromEntries(
+              Object.keys(previous).map((key) => [key, preserved[key]]),
+            ),
+            previous,
+          );
+        }
+        const customersCount = db
+          .prepare("SELECT count(*) AS n FROM customers")
+          .get().n;
+        assert.equal(actual.length, customersCount);
+        assert.equal(
+          new Set(actual.map((row) => row.customer_number)).size,
+          customersCount,
+        );
+        assert.ok(
+          actual.every((row) => /^K-\d{5,}$/.test(row.customer_number)),
+        );
+      } else assert.deepEqual(actual, before.get(table));
     }
     const type = (id) =>
       db.prepare("SELECT customer_type FROM customers WHERE id=?").get(id)
