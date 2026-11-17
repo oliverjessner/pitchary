@@ -6,6 +6,14 @@ Kunden enthalten ihre Rechnungsdaten aus `finance_customer_profiles`: `customer_
 
 Die eigene Rechnungserstellung mit Entwürfen, Nummernkreis, Sammelrechnungen, PDF und lokal validierter XRechnung ist in [INVOICE_CREATION.md](INVOICE_CREATION.md) beschrieben. Sie verwendet `/api/finance/creation` und legt ausgestellte Rechnungen im bestehenden Finanzsystem ab.
 
+## Rechnungsverarbeitung und KI
+
+OpenAI darf ausschließlich Ausgabenrechnungen (`category = payable`) automatisch erkennen. Bei PDF-Import, Ordnerüberwachung und erneutem Verarbeiten werden Einnahmenrechnungen (`revenue`) ausschließlich lokal als Text beziehungsweise per OCR gelesen; ihre fachlichen Angaben werden manuell gepflegt. Eine Umklassifizierung zur Einnahmenrechnung sperrt die KI-Verarbeitung auch beim erneuten Verarbeiten. Eigene Rechnungsentwürfe, Berechnung, Nummernvergabe, PDF und XRechnung-XML verwenden nur lokale CRM-/SQLite-Daten und benötigen keinen OpenAI-Schlüssel.
+
+Kundenangaben werden ausschließlich über die Kunden- und Rechnungsprofil-Endpunkte gepflegt. Der bisherige Endpunkt `POST /finance/customers/:id/enrich` liefert für vorhandene Kunden **422** mit `code = customer_enrichment_disabled` und der Meldung `Kundendaten werden ausschließlich im Kundenprofil gepflegt.`; dabei wird weder ein Schlüssel entschlüsselt noch ein KI-Aufruf ausgeführt oder das Profil verändert. Die ausdrückliche Schlüsselprüfung in den Einstellungen bleibt verfügbar und überträgt keine Rechnungsdaten.
+
+## Endpunkte
+
 Basis: `http://127.0.0.1:3031/api`. JSON-Body mit `Content-Type: application/json`. GET liefert ein Objekt oder ein Array; POST-Erstellung liefert **201**, Änderungen/Archivierung **200**. DELETE auf den Ressourcen-Endpunkten archiviert. Der explizite Endpunkt `/customer-services/:id/permanent` löscht ein Angebot endgültig. Es gibt keine regulären Änderungs-/Löschendpunkte für einzelne Historien- oder Aktivitätseinträge.
 
 | Ressource         | Endpunkte                                                                                                             |

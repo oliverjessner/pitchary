@@ -11,11 +11,11 @@ import { invoiceSnapshot } from "./fixtures/invoice-snapshot.js";
 import { demoCustomerLogo } from "../scripts/demo-assets.js";
 
 const clock = () => "2026-11-16T10:00:00.000Z";
-async function setup(t) {
+async function setup(t, financeOptions = {}) {
   const app = await buildApp({
     databasePath: ":memory:",
     clock,
-    financeOptions: { watchEnabled: false },
+    financeOptions: { watchEnabled: false, ...financeOptions },
   });
   t.after(() => app.close());
   const example = invoiceSnapshot();
@@ -79,6 +79,195 @@ async function setup(t) {
   };
   return { app, customer, offers, input };
 }
+
+test("outgoing invoice API lifecycle uses local calculation and SQLite without AI even with a configured key", async (t) => {
+  const calls = { invoice: 0, customer: 0, test: 0, extraction: 0 };
+  const forbiddenAI = (method) => async () => {
+    calls[method]++;
+    throw new Error(`Unexpected AI call: ${method}`);
+  };
+  const generated = { pdf: [], xml: [] };
+  const { app, customer, input } = await setup(t, {
+    settings: { tools: async () => ({}) },
+    extractText: async () => {
+      calls.extraction++;
+      throw new Error("Generated invoices must not be extracted again.");
+    },
+    extractor: {
+      invoice: forbiddenAI("invoice"),
+      customer: forbiddenAI("customer"),
+      test: forbiddenAI("test"),
+    },
+    // Export doubles isolate network independence; the tests below separately
+    // exercise real PDF generation and official XRechnung validation.
+    creation: {
+      renderPDF: async (snapshot) => {
+        const bytes = Buffer.from(
+          "%PDF-1.4\n" + JSON.stringify(snapshot) + "\n%%EOF",
+        );
+        generated.pdf.push({ snapshot, bytes });
+        return bytes;
+      },
+      createXML: async (snapshot) => {
+        generated.xml.push(snapshot);
+        return Buffer.from(
+          `<FixtureInvoice><Number>${snapshot.invoice_number}</Number><TotalMinor>${snapshot.totals.total_amount_minor}</TotalMinor></FixtureInvoice>`,
+        );
+      },
+      validateXML: async () => ({ valid: true, test_double: true }),
+    },
+  });
+  const configured = await app.inject({
+    method: "PATCH",
+    url: "/api/finance/settings",
+    payload: { openai_api_key: "sk-fictional-outgoing-no-network" },
+  });
+  assert.equal(configured.statusCode, 200, configured.body);
+  assert.equal(
+    await app.financeSettings.getKey(),
+    "sk-fictional-outgoing-no-network",
+  );
+  const items = [
+    {
+      name: "Fiktive Dezimalleistung",
+      quantity: "1.234567",
+      unit_price: "12.3456",
+      tax_category: "S",
+      tax_rate: "19",
+      net_amount_minor: 999999,
+    },
+    {
+      name: "Fiktiver Rundungsfall",
+      quantity: "1",
+      unit_price: "0.005",
+      tax_category: "S",
+      tax_rate: "19",
+    },
+  ];
+  const expected = {
+    net_amount_minor: 1525,
+    tax_amount_minor: 290,
+    total_amount_minor: 1815,
+  };
+  const calculated = await app.inject({
+    method: "POST",
+    url: "/api/finance/creation/calculate",
+    payload: { items, totals: { total_amount_minor: 1 } },
+  });
+  assert.equal(calculated.statusCode, 200, calculated.body);
+  for (const [field, amount] of Object.entries(expected))
+    assert.equal(calculated.json().totals[field], amount);
+  const created = await app.inject({
+    method: "POST",
+    url: "/api/finance/creation/drafts",
+    payload: { ...input, items, totals: { total_amount_minor: 1 } },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  let draft = created.json();
+  const edited = await app.inject({
+    method: "PATCH",
+    url: `/api/finance/creation/drafts/${draft.id}`,
+    payload: {
+      subject: "Fiktive lokal berechnete Rechnung",
+      expected_version: draft.version,
+    },
+  });
+  assert.equal(edited.statusCode, 200, edited.body);
+  draft = edited.json();
+  const storedDraft = JSON.parse(
+    app.database
+      .prepare("SELECT content_json FROM invoice_documents WHERE id=?")
+      .get(draft.id).content_json,
+  );
+  for (const [field, amount] of Object.entries(expected))
+    assert.equal(storedDraft.totals[field], amount);
+  assert.equal(
+    app.database.prepare("SELECT count(*) AS n FROM finance_invoices").get().n,
+    0,
+  );
+  const preview = await app.inject(
+    `/api/finance/creation/drafts/${draft.id}/preview`,
+  );
+  assert.equal(preview.statusCode, 200, preview.body);
+  assert.equal(
+    generated.pdf.at(-1).snapshot.totals.total_amount_minor,
+    expected.total_amount_minor,
+  );
+  const finalized = await app.inject({
+    method: "POST",
+    url: `/api/finance/creation/drafts/${draft.id}/finalize`,
+    payload: { expected_version: draft.version },
+  });
+  assert.equal(finalized.statusCode, 200, finalized.body);
+  const issued = finalized.json();
+  const stored = app.database
+    .prepare(
+      "SELECT category,net_amount_minor,tax_amount_minor,total_amount_minor FROM finance_invoices WHERE id=?",
+    )
+    .get(issued.id);
+  assert.equal(stored.category, "revenue");
+  for (const [field, amount] of Object.entries(expected)) {
+    assert.equal(stored[field], amount);
+    assert.equal(issued.totals[field], amount);
+    assert.equal(generated.xml.at(-1).totals[field], amount);
+    assert.equal(generated.pdf.at(-1).snapshot.totals[field], amount);
+  }
+  const pdf = await app.inject(
+    `/api/finance/invoices/${issued.id}/file?download=1`,
+  );
+  const xml = await app.inject(`/api/finance/invoices/${issued.id}/xml`);
+  assert.equal(pdf.statusCode, 200, pdf.body);
+  assert.equal(xml.statusCode, 200, xml.body);
+  assert.deepEqual(pdf.rawPayload, generated.pdf.at(-1).bytes);
+  assert.match(xml.body, /<TotalMinor>1815<\/TotalMinor>/);
+  const paid = await app.inject({
+    method: "PATCH",
+    url: `/api/finance/invoices/${issued.id}`,
+    payload: { status: "paid", paid_at: "2026-11-16" },
+  });
+  assert.equal(paid.statusCode, 200, paid.body);
+  for (const category of ["revenue", "payable"]) {
+    const repeatedImport = await app.inject({
+      method: "POST",
+      url: "/api/finance/import",
+      payload: {
+        category,
+        file_name: "fictional-copy.pdf",
+        data: pdf.rawPayload.toString("base64"),
+      },
+    });
+    assert.equal(repeatedImport.statusCode, 200, repeatedImport.body);
+    assert.equal(repeatedImport.json().invoice.id, issued.id);
+    assert.equal(repeatedImport.json().skipped, true);
+  }
+  const reprocess = await app.inject({
+    method: "POST",
+    url: `/api/finance/invoices/${issued.id}/reprocess`,
+  });
+  assert.equal(reprocess.statusCode, 409, reprocess.body);
+  const enrich = await app.inject({
+    method: "POST",
+    url: `/api/finance/customers/${customer.id}/enrich`,
+  });
+  assert.equal(enrich.statusCode, 422, enrich.body);
+  const overview = await app.inject("/api/finance/revenue-overview?year=2026");
+  assert.equal(overview.statusCode, 200, overview.body);
+  assert.equal(overview.json().overall_revenue.invoice_count, 1);
+  assert.equal(
+    overview.json().overall_revenue.total_amount_minor,
+    expected.total_amount_minor,
+  );
+  assert.equal(
+    app.database
+      .prepare(
+        "SELECT sum(total_amount_minor) AS total FROM finance_invoices WHERE category='revenue'",
+      )
+      .get().total,
+    expected.total_amount_minor,
+  );
+  assert.equal(app.finance.get(issued.id).status, "paid");
+  assert.deepEqual(calls, { invoice: 0, customer: 0, test: 0, extraction: 0 });
+});
 
 test(
   "decimal quantities and rounded cents agree in the ledger, snapshot, PDF and validated XML",

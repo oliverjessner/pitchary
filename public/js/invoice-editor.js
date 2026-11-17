@@ -255,7 +255,7 @@ export async function invoiceCreationSettings({ onSaved } = {}) {
         "p",
         { class: "oj-small oj-muted" },
         t(
-          "Firmenname, Firmen-E-Mail und die Firmenadresse werden vor der automatischen Erkennung aus dem Rechnungstext entfernt, damit die Kundenangaben erkannt werden.",
+          "Firmenname, Firmen-E-Mail und Firmenadresse werden vor der KI-Erkennung von Ausgabenrechnungen aus dem Rechnungstext entfernt.",
         ),
       ),
     ),
@@ -750,12 +750,6 @@ export async function invoiceEditor(id, params = new URLSearchParams()) {
               t("Bezeichnung"),
               "name",
               { required: true, maxlength: 500, wide: true },
-              item,
-            ),
-            control(
-              t("Beschreibung"),
-              "description",
-              { type: "textarea", wide: true, maxlength: 10000 },
               item,
             ),
             control(

@@ -85,6 +85,12 @@ test("PDF import, corrections, payment status, category tags and deletion work i
     name: "PDF importieren",
     exact: true,
   });
+  await expect(dialog).toContainText(
+    "Ausgabenrechnungen können mit einem hinterlegten OpenAI-Schlüssel automatisch erkannt werden.",
+  );
+  await expect(dialog).toContainText(
+    "Einnahmenrechnungen werden lokal gelesen und manuell ergänzt.",
+  );
   const name = "UI-Rechnung-" + testInfo.project.name;
   await dialog.getByLabel("PDF-Datei", { exact: true }).setInputFiles({
     name: name + ".pdf",
@@ -95,6 +101,9 @@ test("PDF import, corrections, payment status, category tags and deletion work i
     .getByRole("button", { name: "Importieren", exact: true })
     .click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText(name);
+  await expect(page.locator("#main")).toContainText(
+    "Einnahmenrechnungen werden ausschließlich lokal verarbeitet.",
+  );
   const id = page.url().split("/invoices/")[1];
   const initial = await (
     await request.get("/api/finance/invoices/" + id)
@@ -438,6 +447,18 @@ test("dashboard combines CRM and finance, keeps EUR metrics and shows open invoi
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Umsatz · USD", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Angaben aus Rechnung ergänzen",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Automatische Ergänzung", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Rechnungsprofil ergänzen", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Rechnungsdaten bearbeiten", exact: true })
@@ -789,6 +810,12 @@ test("finance settings preserve company data and mask keys without a migration c
     await companyTab.press("ArrowRight");
     await expect(recognitionTab).toBeFocused();
     await expect(recognitionTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#settings-panel-recognition")).toContainText(
+      "Wird ausschließlich für die automatische Erkennung von Ausgabenrechnungen verwendet.",
+    );
+    await expect(page.locator("#settings-panel-recognition")).toContainText(
+      "Nur bei Ausgabenrechnungen wird der ausgelesene Text zur automatischen Erkennung an OpenAI gesendet.",
+    );
     await recognitionTab.press("Home");
     await expect(generalTab).toBeFocused();
     await expect(generalTab).toHaveAttribute("aria-selected", "true");

@@ -64,68 +64,40 @@ async function setup(t, options = {}) {
   await app.financeSettings.save({ revenue_folder: source });
   return { app, source: realpathSync(source) };
 }
-test("enrichment respects concurrent manual profile edits, source deletion and customer reassignment", async (t) => {
-  for (const action of ["manual", "deleted", "reassigned"])
-    await t.test(action, async (t) => {
-      const entered = deferred(),
-        reply = deferred();
-      t.after(() =>
-        reply.resolve({
-          billing_address: "AI Road",
-          general_email: "ai@example.com",
-        }),
-      );
-      const { app } = await setup(t, {
-        extractor: {
-          ...ai,
-          customer: async () => {
-            entered.resolve();
-            return reply.promise;
-          },
-        },
-      });
-      const invoice = app.finance.record({
-        category: "revenue",
-        ...fields,
-        ocr_text: "Invoice for Example Studio",
-      });
-      const task = app.invoiceProcessor.enrich(invoice.customer_id);
-      await entered.promise;
-      if (action === "manual")
-        app.finance.updateCustomer(invoice.customer_id, {
-          billing_address: "Manual Road",
-          general_email: "manual@example.com",
-        });
-      else if (action === "deleted") app.finance.remove(invoice.id);
-      else {
-        const other = app.crm.createEntity("customers", {
-          name: "Another customer",
-        });
-        app.finance.update(invoice.id, { customer_id: other.id });
-      }
-      reply.resolve({
-        billing_address: "AI Road",
-        general_email: "ai@example.com",
-      });
-      if (action === "manual") {
-        const result = await task;
-        assert.equal(result.billing_address, "Manual Road");
-        assert.equal(result.general_email, "manual@example.com");
-      } else {
-        await assert.rejects(
-          task,
-          (error) => error.status === (action === "deleted" ? 404 : 422),
-        );
-        assert.equal(
-          app.finance.customer(invoice.customer_id).billing_address,
-          "",
-        );
-        assert.equal(
-          app.finance.customer(invoice.customer_id).enrichment_invoice_id,
-          null,
-        );
-      }
-    });
+test("customer enrichment is disabled before key access or AI and never changes existing profile data", async (t) => {
+  let aiCalls = 0,
+    keyReads = 0;
+  const { app } = await setup(t, {
+    extractor: {
+      ...ai,
+      customer: async () => {
+        aiCalls++;
+        throw new Error("No customer dispatch");
+      },
+    },
+  });
+  const invoice = app.finance.record({
+    category: "revenue",
+    ...fields,
+    ocr_text: "Private revenue text",
+  });
+  app.finance.updateCustomer(invoice.customer_id, {
+    billing_address: "Manual Road",
+    general_email: "manual@example.com",
+  });
+  const before = app.finance.customer(invoice.customer_id);
+  app.financeSettings.getKey = async () => {
+    keyReads++;
+    throw new Error("No key access");
+  };
+  await assert.rejects(
+    app.invoiceProcessor.enrich(invoice.customer_id),
+    (error) =>
+      error.status === 422 && error.code === "customer_enrichment_disabled",
+  );
+  assert.equal(aiCalls, 0);
+  assert.equal(keyReads, 0);
+  assert.deepEqual(app.finance.customer(invoice.customer_id), before);
 });
 test("reprocessing a moved category preserves watcher identity and a deleted source stays ignored", async (t) => {
   const { app, source } = await setup(t);
@@ -141,6 +113,60 @@ test("reprocessing a moved category preserves watcher identity and a deleted sou
   app.finance.remove(first.id);
   await app.invoiceProcessor.scan();
   assert.equal(app.finance.list().length, 0);
+});
+test("category corrections during local extraction or key loading prevent dispatch, and late corrections discard AI results", async (t) => {
+  for (const phase of ["text", "key", "ai"])
+    await t.test(phase, async (t) => {
+      const entered = deferred(),
+        release = deferred();
+      let aiCalls = 0,
+        keyReads = 0;
+      t.after(() => release.resolve());
+      const { app } = await setup(t, {
+        extractText: async () => {
+          if (phase === "text") {
+            entered.resolve();
+            await release.promise;
+          }
+          return textResult;
+        },
+        extractor: {
+          ...ai,
+          invoice: async () => {
+            aiCalls++;
+            if (phase === "ai") {
+              entered.resolve();
+              await release.promise;
+            }
+            return { fields, raw: JSON.stringify(fields) };
+          },
+        },
+      });
+      app.financeSettings.getKey = async () => {
+        keyReads++;
+        if (phase === "key") {
+          entered.resolve();
+          await release.promise;
+        }
+        return "sk-fixture-not-real";
+      };
+      const processing = app.invoiceProcessor.upload(
+        invoicePDF("CATEGORY-RACE-" + phase),
+        { category: "payable", file_name: "race.pdf" },
+      );
+      await entered.promise;
+      const pending = app.finance.list()[0];
+      app.finance.update(pending.id, { category: "revenue" });
+      release.resolve();
+      const { invoice } = await processing;
+      assert.equal(invoice.category, "revenue");
+      assert.equal(invoice.original.category, "payable");
+      assert.equal(invoice.total_amount_minor, 0);
+      assert.equal(invoice.extracted_json, "{}");
+      assert.equal(invoice.ingestion_status, "processed");
+      assert.equal(aiCalls, phase === "ai" ? 1 : 0);
+      assert.equal(keyReads, phase === "text" ? 0 : 1);
+    });
 });
 test("queued folder imports recheck deletion marks instead of resurrecting a deleted source", async (t) => {
   const entered = deferred(),
@@ -321,7 +347,7 @@ test("unchanged returning PDFs restore their prior processing state without OCR 
       assert.equal(scan.skipped, 1);
       assert.equal(scan.missing, 0);
       assert.equal(extractions, 1);
-      assert.equal(aiCalls, 1);
+      assert.equal(aiCalls, 0);
       assert.deepEqual(app.finance.get(invoice.id), before);
       assert.deepEqual(app.finance.file(invoice.id).data, bytes);
       assert.equal(

@@ -222,15 +222,6 @@ export const invoiceSchema = {
     "confidence_score",
   ],
 };
-const customerSchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    billing_address: nullableString,
-    general_email: nullableString,
-  },
-  required: ["billing_address", "general_email"],
-};
 export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
   async function request(key, schema, name, prompt, text, model) {
     const modelId = choice(model, recognitionModelIds, "model");
@@ -296,7 +287,14 @@ export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
       category,
       { model = defaultRecognitionModel } = {},
     ) {
-      const prompt = `Extract invoice number, ISO YYYY-MM-DD invoice/due dates, ISO3 currency, counterparty (the billed customer for revenue; supplier for payable), decimal monetary amounts as strings with at most two decimals, confidence_score 0..1 and concise extraction_notes. Missing values must be null. ${category === "payable" ? "Assign up to three tags from the schema list when clearly applicable." : "Return an empty tags array."}`;
+      if (category !== "payable")
+        throw new AppError(
+          422,
+          "ai_expenses_only",
+          "Die automatische KI-Erkennung ist nur für Ausgabenrechnungen verfügbar.",
+        );
+      const prompt =
+        "Extract invoice number, ISO YYYY-MM-DD invoice/due dates, ISO3 currency, supplier, decimal monetary amounts as strings with at most two decimals, confidence_score 0..1 and concise extraction_notes. Use the supplier as counterparty_name. Missing values must be null. Assign up to three tags from the schema list when clearly applicable.";
       const result = await request(
         key,
         invoiceSchema,
@@ -330,33 +328,15 @@ export function createOpenAIExtractor({ fetchImpl = fetch, signal } = {}) {
           due_date: data.due_date,
           counterparty_name: data.counterparty_name,
           total_amount_minor:
-            decimalMinor(data.total_amount, {
-              absolute: category === "payable",
-            }) ?? 0,
+            decimalMinor(data.total_amount, { absolute: true }) ?? 0,
           currency: data.currency || "EUR",
-          tax_amount_minor: decimalMinor(data.tax_amount, {
-            absolute: category === "payable",
-          }),
-          net_amount_minor: decimalMinor(data.net_amount, {
-            absolute: category === "payable",
-          }),
-          tags: category === "payable" ? [...new Set(data.tags)] : [],
+          tax_amount_minor: decimalMinor(data.tax_amount, { absolute: true }),
+          net_amount_minor: decimalMinor(data.net_amount, { absolute: true }),
+          tags: [...new Set(data.tags)],
           confidence_score: data.confidence_score,
           extraction_notes: data.extraction_notes,
         },
       };
-    },
-    async customer(key, text, { model = defaultRecognitionModel } = {}) {
-      return (
-        await request(
-          key,
-          customerSchema,
-          "customer",
-          "Extract the billed customer's billing_address and general_email explicitly present on this outgoing invoice; exclude sender information and use null when unclear.",
-          text,
-          model,
-        )
-      ).data;
     },
     async test(key, { model = defaultRecognitionModel } = {}) {
       const modelId = choice(model, recognitionModelIds, "model");

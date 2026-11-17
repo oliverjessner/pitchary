@@ -1,10 +1,14 @@
 export default {
+  "Ausgangsrechnung lokal gelesen. Rechnungsdaten bitte manuell ergänzen; es wird keine KI-Erkennung verwendet.":
+    "Revenue invoice read locally. Complete the invoice details manually; no AI recognition is used.",
+  "Die Rechnungskategorie wurde geändert. Das KI-Ergebnis wird nicht übernommen; Rechnungsdaten bitte manuell ergänzen.":
+    "The invoice category has changed. The AI result is discarded; complete the invoice details manually.",
   Allgemein: "General",
   Einnahmen: "Revenue",
   Ausgaben: "Expenses",
   Offen: "Open",
   Bezahlt: "Paid",
-  "Erkennung ausstehend": "Recognition pending",
+  "Rechnungsdaten ergänzen": "Complete invoice details",
   Verarbeitet: "Processed",
   "Verarbeitung fehlgeschlagen": "Processing failed",
   "Quelldatei fehlt": "Source file missing",
@@ -46,8 +50,8 @@ export default {
   "PDF importieren": "Import PDF",
   Art: "Type",
   "PDF-Datei": "PDF file",
-  "Die PDF wird lokal gespeichert. Mit einem hinterlegten OpenAI-Schlüssel werden die Rechnungsdaten automatisch erkannt.":
-    "The PDF is saved locally. Invoice details are recognised automatically when an OpenAI key is configured.",
+  "Die PDF wird lokal gespeichert. Ausgabenrechnungen können mit einem hinterlegten OpenAI-Schlüssel automatisch erkannt werden. Einnahmenrechnungen werden lokal gelesen und manuell ergänzt.":
+    "The PDF is saved locally. Expense invoices can be recognised automatically with a configured OpenAI key. Revenue invoices are read locally and completed manually.",
   "Bitte eine PDF-Datei auswählen.": "Please select a PDF file.",
   "Die PDF darf maximal 20 MiB groß sein.": "The PDF must not exceed 20 MiB.",
   Importieren: "Import",
@@ -170,6 +174,10 @@ export default {
     ". You can edit the values manually or restart processing.",
   ". Ohne OpenAI-Schlüssel bleiben die lokal erkannten Angaben zur manuellen Bearbeitung verfügbar.":
     ". Without an OpenAI key, locally recognised details remain available for manual editing.",
+  ". Bitte ergänze die Rechnungsdaten manuell. Die PDF bleibt lokal.":
+    ". Please complete the invoice details manually. The PDF stays local.",
+  "Einnahmenrechnungen werden ausschließlich lokal verarbeitet. Rechnungsdaten und Kundenangaben pflegst du manuell.":
+    "Revenue invoices are processed entirely locally. Invoice and customer details are maintained manually.",
   ". Die gespeicherten Rechnungsdaten bleiben verfügbar.":
     ". The saved invoice details remain available.",
   Rechnungsdaten: "Invoice details",
@@ -241,8 +249,8 @@ export default {
   "Ausgaben-Ordner": "Expenses folder",
   "/Users/…/Rechnungen/Ausgaben": "/Users/…/Invoices/Expenses",
   "Eigene Firma": "Your company",
-  "Firmenname, Firmen-E-Mail und die Firmenadresse werden vor der automatischen Erkennung aus dem Rechnungstext entfernt, damit die Kundenangaben erkannt werden.":
-    "Company name, company email and company address are removed from invoice text before automatic recognition so the customer's details can be identified.",
+  "Firmenname, Firmen-E-Mail und Firmenadresse werden vor der KI-Erkennung von Ausgabenrechnungen aus dem Rechnungstext entfernt.":
+    "Company name, company email and company address are removed from the text before AI recognition of expense invoices.",
   Firmenname: "Company name",
   "Firmen-E-Mail": "Company email",
   Firmenadresse: "Company address",
@@ -254,10 +262,10 @@ export default {
   "Der gespeicherte Schlüssel ist auf dieser Datenbank nicht lesbar. Bitte erneut eingeben.":
     "The saved key cannot be read for this database. Please enter it again.",
   Erkennungsmodell: "Recognition model",
-  "Wird für die Rechnungserkennung und das Ergänzen der Kundendaten verwendet.":
-    "Used for invoice recognition and customer detail enrichment.",
-  "Nur beim Import, erneuten Verarbeiten oder Ergänzen der Kundendaten wird der bereinigte Rechnungstext an OpenAI gesendet. Rechnungen lassen sich jederzeit manuell bearbeiten.":
-    "The cleaned invoice text is sent to OpenAI only when importing, reprocessing or enriching customer details. Invoices can always be edited manually.",
+  "Wird ausschließlich für die automatische Erkennung von Ausgabenrechnungen verwendet.":
+    "Used exclusively for automatic recognition of expense invoices.",
+  "Nur bei Ausgabenrechnungen wird der ausgelesene Text zur automatischen Erkennung an OpenAI gesendet. Einnahmenrechnungen bleiben lokal und werden manuell ergänzt.":
+    "Only text from expense invoices is sent to OpenAI for automatic recognition. Revenue invoices stay local and are completed manually.",
   "Schlüssel prüfen": "Check key",
   "Schlüssel entfernen": "Remove key",
   Ordnerüberwachung: "Folder monitoring",

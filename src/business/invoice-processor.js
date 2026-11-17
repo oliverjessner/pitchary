@@ -104,7 +104,6 @@ export function createInvoiceProcessor(
         "Ausgestellte Rechnungen können nur im Zahlungsstatus geändert werden.",
       );
     const sourceCategory = existing?.original.category ?? category;
-    const extractionCategory = existing?.category ?? category;
     if (
       existing &&
       !force &&
@@ -151,8 +150,27 @@ export function createInvoiceProcessor(
         document_language: result.document_language,
         extraction_notes: "",
       });
+      const finishRevenue = (categoryChanged = false) => {
+        invoice = finance.record({
+          id: invoice.id,
+          ingestion_status: "processed",
+          extraction_notes: categoryChanged
+            ? "Die Rechnungskategorie wurde geändert. Das KI-Ergebnis wird nicht übernommen; Rechnungsdaten bitte manuell ergänzen."
+            : "Ausgangsrechnung lokal gelesen. Rechnungsdaten bitte manuell ergänzen; es wird keine KI-Erkennung verwendet.",
+        });
+        finance.log(
+          invoice.id,
+          force ? "reprocess" : "process",
+          "success",
+          invoice.extraction_notes,
+        );
+        return { invoice, skipped: false };
+      };
+      if (finance.get(invoice.id).category !== "payable")
+        return finishRevenue();
       const key = await settings.getKey();
-      finance.get(invoice.id);
+      if (finance.get(invoice.id).category !== "payable")
+        return finishRevenue();
       if (!key) {
         invoice = finance.record({
           id: invoice.id,
@@ -167,10 +185,11 @@ export function createInvoiceProcessor(
         );
         return { invoice, skipped: false };
       }
-      const resultAI = await ai.invoice(key, sanitized, extractionCategory, {
+      const resultAI = await ai.invoice(key, sanitized, "payable", {
         model: settings.model(),
       });
-      finance.get(invoice.id);
+      if (finance.get(invoice.id).category !== "payable")
+        return finishRevenue(true);
       invoice = finance.record({
         id: invoice.id,
         ...resultAI.fields,
@@ -287,6 +306,7 @@ export function createInvoiceProcessor(
           if (
             existing?.file_modified_at === mtime &&
             existing.ingestion_status === "pending" &&
+            finance.get(existing.id).category === "payable" &&
             !(await settings.getKey())
           ) {
             result.skipped++;
@@ -477,62 +497,13 @@ export function createInvoiceProcessor(
       return ai.test(key, { model });
     },
     enrich(id) {
-      return enqueue(async () => {
-        const customer = finance.customer(id);
-        const latest = customer.latest_invoice_id;
-        if (!latest)
-          throw new AppError(
-            422,
-            "no_invoice",
-            "Dieser Kunde hat noch keine Einnahmen-Rechnung.",
-          );
-        const key = await settings.getKey();
-        if (!key)
-          throw new AppError(
-            422,
-            "missing_api_key",
-            "Bitte zuerst einen OpenAI-Schlüssel einrichten.",
-          );
-        const invoice = finance.get(latest);
-        if (!invoice.ocr_text)
-          throw new AppError(
-            422,
-            "no_invoice_text",
-            "Bitte die letzte Rechnung zuerst auslesen.",
-          );
-        try {
-          const data = await ai.customer(
-            key,
-            redactProfile(invoice.ocr_text, settings.values()),
-            { model: settings.model() },
-          );
-          const source = finance.get(latest);
-          if (source.customer_id !== id)
-            throw new AppError(
-              422,
-              "invoice_customer_changed",
-              "Die Quellrechnung gehört inzwischen zu einem anderen Kunden.",
-            );
-          const current = finance.customer(id);
-          return finance.updateCustomer(id, {
-            billing_address:
-              current.billing_address || data.billing_address || "",
-            general_email: current.general_email || data.general_email || "",
-            enrichment_status: "completed",
-            enriched_at: now(),
-            enrichment_invoice_id: latest,
-          });
-        } catch (error) {
-          if (closed) throw error;
-          const source = finance.get(latest);
-          if (source.customer_id !== id) throw error;
-          finance.updateCustomer(id, {
-            enrichment_status: "failed",
-            enriched_at: now(),
-            enrichment_invoice_id: latest,
-          });
-          throw error;
-        }
+      return enqueue(() => {
+        finance.customer(id);
+        throw new AppError(
+          422,
+          "customer_enrichment_disabled",
+          "Kundendaten werden ausschließlich im Kundenprofil gepflegt.",
+        );
       });
     },
     async close() {

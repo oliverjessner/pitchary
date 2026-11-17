@@ -30,7 +30,7 @@ import {
 const categories = () => ({ revenue: t("Einnahmen"), payable: t("Ausgaben") });
 const states = () => ({ open: t("Offen"), paid: t("Bezahlt") });
 const ingestion = () => ({
-  pending: t("Erkennung ausstehend"),
+  pending: t("Rechnungsdaten ergänzen"),
   processed: t("Verarbeitet"),
   failed: t("Verarbeitung fehlgeschlagen"),
   missing: t("Quelldatei fehlt"),
@@ -386,7 +386,7 @@ export function createFinanceActions(refresh, navigate) {
             required: true,
             wide: true,
             helper: t(
-              "Die PDF wird lokal gespeichert. Mit einem hinterlegten OpenAI-Schlüssel werden die Rechnungsdaten automatisch erkannt.",
+              "Die PDF wird lokal gespeichert. Ausgabenrechnungen können mit einem hinterlegten OpenAI-Schlüssel automatisch erkannt werden. Einnahmenrechnungen werden lokal gelesen und manuell ergänzt.",
             ),
           }),
         ],
@@ -538,14 +538,6 @@ export function createFinanceActions(refresh, navigate) {
       saved(
         api("/employees/" + row.id + "/restore", { method: "POST", body: {} }),
         t("Ansprechpartner wiederhergestellt."),
-      ),
-    financeEnrich: (id) =>
-      saved(
-        api(financePath + "/customers/" + id + "/enrich", {
-          method: "POST",
-          body: {},
-        }),
-        t("Kundenangaben geprüft."),
       ),
     financeScan: async () => {
       const result = await api(financePath + "/scan", {
@@ -1596,9 +1588,13 @@ export async function invoiceDetail(id, actions) {
                 ". Du kannst die Werte manuell bearbeiten oder die Verarbeitung erneut starten.",
               )
             : row.ingestion_status === "pending"
-              ? t(
-                  ". Ohne OpenAI-Schlüssel bleiben die lokal erkannten Angaben zur manuellen Bearbeitung verfügbar.",
-                )
+              ? row.category === "payable"
+                ? t(
+                    ". Ohne OpenAI-Schlüssel bleiben die lokal erkannten Angaben zur manuellen Bearbeitung verfügbar.",
+                  )
+                : t(
+                    ". Bitte ergänze die Rechnungsdaten manuell. Die PDF bleibt lokal.",
+                  )
               : t(". Die gespeicherten Rechnungsdaten bleiben verfügbar."),
         )
       : null,
@@ -1667,6 +1663,15 @@ export async function invoiceDetail(id, actions) {
     ),
     panel(
       t("Erkennung"),
+      row.category === "revenue"
+        ? el(
+            "p",
+            { class: "oj-helper" },
+            t(
+              "Einnahmenrechnungen werden ausschließlich lokal verarbeitet. Rechnungsdaten und Kundenangaben pflegst du manuell.",
+            ),
+          )
+        : null,
       facts([
         [
           t("Verarbeitung"),
@@ -1691,7 +1696,7 @@ export async function invoiceDetail(id, actions) {
         [t("Historisch versendet am"), dateLabel(row.send_date)],
       ]),
       row.extraction_notes
-        ? el("p", { class: "note-text oj-small" }, row.extraction_notes)
+        ? el("p", { class: "note-text oj-small" }, t(row.extraction_notes))
         : null,
       el(
         "div",
@@ -1742,7 +1747,7 @@ export async function invoiceDetail(id, actions) {
           datetime(log.created_at),
           log.process_type,
           log.status,
-          log.message || "–",
+          log.message ? t(log.message) : "–",
         ]),
       ),
     ),
@@ -1986,12 +1991,6 @@ export function withFinanceRefresh(nodes, actions) {
 }
 
 export function customerFinanceSections(row, actions) {
-  const enrichmentLabels = {
-    pending: t("Noch nicht geprüft"),
-    completed: t("Ergänzt"),
-    failed: t("Prüfung fehlgeschlagen"),
-    skipped: t("Keine Angaben gefunden"),
-  };
   return [
     el(
       "div",
@@ -2054,23 +2053,7 @@ export function customerFinanceSections(row, actions) {
         [t("Haupt-E-Mail"), row.general_email || "–"],
         [t("Erste Rechnung"), dateLabel(row.first_invoice_date)],
         [t("Letzte Rechnung"), dateLabel(row.last_invoice_date)],
-        [
-          t("Automatische Ergänzung"),
-          enrichmentLabels[row.enrichment_status] || t("Noch nicht geprüft"),
-        ],
       ]),
-      button(
-        t("Angaben aus Rechnung ergänzen"),
-        () => actions.financeEnrich(row.id),
-        { iconName: "wand-magic-sparkles", disabled: !row.latest_invoice_id },
-      ),
-      el(
-        "p",
-        { class: "oj-small oj-muted" },
-        t(
-          "Ergänzt fehlende Adresse und E-Mail aus der letzten Rechnung. Vorhandene Angaben bleiben erhalten.",
-        ),
-      ),
     ),
     panel(t("Rechnungen"), invoiceTable(row.invoices || [], actions)),
   ];
@@ -2250,14 +2233,14 @@ export async function financeSettings(actions, params = new URLSearchParams()) {
         value: row.model || "gpt-4o-mini",
         options: models.map(({ id, label }) => [id, label]),
         helper: t(
-          "Wird für die Rechnungserkennung und das Ergänzen der Kundendaten verwendet.",
+          "Wird ausschließlich für die automatische Erkennung von Ausgabenrechnungen verwendet.",
         ),
       }),
       el(
         "p",
         { class: "oj-small oj-muted" },
         t(
-          "Nur beim Import, erneuten Verarbeiten oder Ergänzen der Kundendaten wird der bereinigte Rechnungstext an OpenAI gesendet. Rechnungen lassen sich jederzeit manuell bearbeiten.",
+          "Nur bei Ausgabenrechnungen wird der ausgelesene Text zur automatischen Erkennung an OpenAI gesendet. Einnahmenrechnungen bleiben lokal und werden manuell ergänzt.",
         ),
       ),
       el(

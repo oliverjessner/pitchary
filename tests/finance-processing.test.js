@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   mkdtempSync,
+  mkdirSync,
   rmSync,
   writeFileSync,
   realpathSync,
@@ -76,7 +77,7 @@ async function fixture(t, { key = true, fail = false } = {}) {
     company_name: "Own Company",
     ...(key ? { openai_api_key: "sk-fixture-not-real" } : {}),
   });
-  const upload = (data = invoicePDF(), category = "revenue") =>
+  const upload = (data = invoicePDF(), category = "payable") =>
     app.inject({
       method: "POST",
       url: "/api/finance/import",
@@ -88,7 +89,7 @@ async function fixture(t, { key = true, fail = false } = {}) {
     });
   return { app, folder, upload, calls: () => calls };
 }
-test("PDF upload persists bytes, redacts own profile, deduplicates and preserves overrides during reprocessing", async (t) => {
+test("payable PDF upload persists bytes, redacts own profile, deduplicates and preserves overrides during reprocessing", async (t) => {
   const { app, upload, calls } = await fixture(t);
   const response = await upload();
   assert.equal(response.statusCode, 200, response.body);
@@ -121,8 +122,8 @@ test("PDF upload persists bytes, redacts own profile, deduplicates and preserves
   assert.deepEqual(file.rawPayload, invoicePDF());
   assert.ok(!("pdf_data" in invoice));
   assert.equal(
-    (await upload(invoicePDF(), "payable")).json().invoice.category,
-    "payable",
+    (await upload(invoicePDF(), "revenue")).json().invoice.category,
+    "revenue",
   );
 });
 test("unconfigured/failed extraction remains recoverable and invalid uploads never create an invoice", async (t) => {
@@ -175,7 +176,7 @@ test("folder scans handle nested PDFs, duplicate moves, deletion, retained snaps
   renameSync(original, moved);
   await app.invoiceProcessor.scan();
   assert.equal(app.finance.get(invoice.id).file_path, realpathSync(moved));
-  assert.equal(calls(), 1);
+  assert.equal(calls(), 0);
   unlinkSync(moved);
   assert.equal((await app.invoiceProcessor.scan()).missing, 1);
   assert.deepEqual(app.finance.file(invoice.id).data, invoicePDF());
@@ -188,6 +189,70 @@ test("folder scans handle nested PDFs, duplicate moves, deletion, retained snaps
   await app.invoiceProcessor.scan();
   assert.equal(app.finance.list().length, 1);
 });
+test("revenue import, reprocessing and pending watcher files stay local before any key access", async (t) => {
+  const { app, folder, upload, calls } = await fixture(t);
+  let keyReads = 0;
+  app.financeSettings.getKey = async () => {
+    keyReads++;
+    throw new Error("Revenue must not read the key");
+  };
+  const imported = (await upload(invoicePDF("LOCAL-REVENUE"), "revenue")).json()
+    .invoice;
+  assert.equal(imported.ingestion_status, "processed");
+  assert.equal(imported.total_amount_minor, 0);
+  assert.match(imported.extraction_notes, /lokal gelesen/);
+  assert.match(imported.extraction_notes, /manuell/);
+  assert.equal(imported.extracted_json, "{}");
+  app.finance.update(imported.id, {
+    invoice_number: "Manual revenue number",
+    total_amount_minor: 13000,
+  });
+  const reprocessed = await app.invoiceProcessor.reprocess(imported.id);
+  assert.equal(reprocessed.total_amount_minor, 13000);
+  assert.equal(reprocessed.invoice_number, "Manual revenue number");
+  assert.deepEqual(
+    app.finance.file(imported.id).data,
+    invoicePDF("LOCAL-REVENUE"),
+  );
+  const source = path.join(folder, "local-revenue");
+  mkdirSync(source);
+  const filename = path.join(realpathSync(source), "pending.pdf");
+  const data = invoicePDF("PENDING-LOCAL");
+  writeFileSync(filename, data);
+  await app.financeSettings.save({ revenue_folder: source });
+  const pending = app.finance.record({
+    category: "revenue",
+    file_name: "pending.pdf",
+    file_path: filename,
+    file_modified_at: statSync(filename).mtime.toISOString(),
+    pdf_data: data,
+    ingestion_status: "pending",
+  });
+  await app.invoiceProcessor.scan();
+  assert.equal(app.finance.get(pending.id).ingestion_status, "processed");
+  assert.equal(keyReads, 0);
+  assert.equal(calls(), 0);
+});
+
+test("the effective corrected category enables payable AI and disables revenue AI without changing source identity", async (t) => {
+  const { app, upload, calls } = await fixture(t);
+  const original = (
+    await upload(invoicePDF("CATEGORY-LOCAL"), "revenue")
+  ).json().invoice;
+  assert.equal(calls(), 0);
+  app.finance.update(original.id, { category: "payable" });
+  const payable = await app.invoiceProcessor.reprocess(original.id);
+  assert.equal(payable.category, "payable");
+  assert.equal(payable.original.category, "revenue");
+  assert.equal(payable.total_amount_minor, 12000);
+  assert.equal(calls(), 1);
+  app.finance.update(original.id, { category: "revenue" });
+  const local = await app.invoiceProcessor.reprocess(original.id);
+  assert.equal(local.category, "revenue");
+  assert.equal(local.original.category, "revenue");
+  assert.equal(calls(), 1);
+});
+
 test("API keys are encrypted, masked, removable and excluded from invoice settings responses", async (t) => {
   const folder = mkdtempSync(path.join(os.tmpdir(), "pitchary-finance-key-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
@@ -291,7 +356,7 @@ test("deleting an invoice during local or AI extraction never recreates it", asy
         url: "/api/finance/import",
         payload: {
           file_name: "invoice.pdf",
-          category: "revenue",
+          category: "payable",
           data: invoicePDF().toString("base64"),
         },
       });
@@ -365,7 +430,7 @@ test("structured AI requests use the schema, validate amounts, handle refusals a
     fetchImpl: async () => ({ ok: false, status: 401 }),
   });
   await assert.rejects(
-    rejected.invoice("sk-fixture", "text", "revenue"),
+    rejected.invoice("sk-fixture", "text", "payable"),
     /HTTP 401/,
   );
   const refused = createOpenAIExtractor({
@@ -377,7 +442,7 @@ test("structured AI requests use the schema, validate amounts, handle refusals a
     }),
   });
   await assert.rejects(
-    refused.invoice("sk-fixture", "text", "revenue"),
+    refused.invoice("sk-fixture", "text", "payable"),
     /vollständigen/,
   );
 });

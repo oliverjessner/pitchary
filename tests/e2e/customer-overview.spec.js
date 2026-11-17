@@ -389,7 +389,7 @@ test("customers without invoices and archived customer history remain accessible
       name: "Angaben aus Rechnung ergänzen",
       exact: true,
     }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await check(page);
   await page
     .locator("#main > header")

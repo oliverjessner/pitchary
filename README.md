@@ -21,7 +21,7 @@ Add your customers and contacts, define your services and create an offer for ea
 - Follow offers from the first pitch to acceptance, completion or rejection.
 - Keep a history of conversations, status changes and price negotiations.
 - Create outgoing invoices from offers or free line items, with PDF and optional XRechnung XML.
-- Import invoice PDFs, read scanned text with OCR and optionally recognize invoice details with AI.
+- Import invoice PDFs, read scanned text locally with OCR and optionally recognize expense invoice details with AI.
 - Monitor invoice folders and track open, paid and overdue invoices.
 - Review income, expenses, customer revenue and sales win rates.
 - [Connect an MCP client](docs/MCP.md) to find and add customers, contacts and services. Editing and deletion remain in the app.
@@ -60,11 +60,11 @@ Reuse your services across offers, set a price and billing period for each job, 
 
 Create an invoice from a customer, an offer or the invoice list. Combine several offers for the same customer, review net prices and quantities, and save a draft before issuing it. Add your company details, bank account, payment terms and logo in Invoice creation settings.
 
-The invoice number is assigned when you issue the invoice. Download its PDF and optionally a locally validated XRechnung XML; issued documents retain their original details when customer data or settings change. Track payment in the existing invoice view.
+The invoice number is assigned when you issue the invoice. Download its PDF and optionally a locally validated XRechnung XML; issued documents retain their original details when customer data or settings change. Calculation and PDF/XML generation run locally without an OpenAI key. Track payment in the existing invoice view.
 
 ## Invoice imports and payment tracking
 
-Import income and expense invoice PDFs, review their details and mark them as paid. Text extraction and OCR run locally; you can enter invoice details manually or enable automatic recognition with your own OpenAI API key, which sends extracted invoice text to OpenAI.
+Import income and expense invoice PDFs, review their details and mark them as paid. Text extraction and OCR run locally. Income invoices stay local and their details are entered manually. Optional automatic recognition with your own OpenAI API key sends extracted text from expense invoices only. Customer details are maintained manually in the customer profile.
 
 ![Income invoices with dates, customers, amounts, payment controls and links to the original PDFs](src-tauri/screenshots/invoices.png)
 

@@ -32,10 +32,6 @@ const invoiceData = {
   extraction_notes: "Model fixture",
   confidence_score: 0.9,
 };
-const customerData = {
-  billing_address: "Model fixture address",
-  general_email: "model@example.com",
-};
 function mockAI() {
   const requests = [];
   return {
@@ -45,16 +41,12 @@ function mockAI() {
       requests.push({ url, options, body });
       if (url.includes("/v1/models/"))
         return new Response("{}", { status: 200 });
-      const data =
-        body.response_format.json_schema.name === "customer"
-          ? customerData
-          : invoiceData;
       return new Response(
         JSON.stringify({
           choices: [
             {
               finish_reason: "stop",
-              message: { content: JSON.stringify(data) },
+              message: { content: JSON.stringify(invoiceData) },
             },
           ],
         }),
@@ -161,7 +153,7 @@ test("invalid model choices and failed settings changes roll back the entire sav
   );
 });
 
-test("every selectable model drives strict invoice/customer requests and a matching metadata key check", async () => {
+test("every selectable model drives strict payable invoice requests and a matching metadata key check", async () => {
   const mock = mockAI(),
     ai = createOpenAIExtractor({ fetchImpl: mock.fetchImpl });
   for (const model of modelIds) {
@@ -170,22 +162,18 @@ test("every selectable model drives strict invoice/customer requests and a match
         await ai.invoice(
           "sk-fixture-no-network",
           "Invoice fixture",
-          "revenue",
+          "payable",
           { model },
         )
       ).fields.total_amount_minor,
       12000,
     );
-    assert.deepEqual(
-      await ai.customer("sk-fixture-no-network", "Customer fixture", { model }),
-      customerData,
-    );
     assert.deepEqual(await ai.test("sk-fixture-no-network", { model }), {
       ok: true,
       model,
     });
-    const [invoice, customer, keyTest] = mock.requests.slice(-3);
-    for (const request of [invoice, customer]) {
+    const [invoice, keyTest] = mock.requests.slice(-2);
+    for (const request of [invoice]) {
       assert.equal(request.body.model, model);
       if (["gpt-6.1-sol", "gpt-6-astra"].includes(model)) {
         assert.equal(Object.hasOwn(request.body, "temperature"), false);
@@ -218,16 +206,21 @@ test("every selectable model drives strict invoice/customer requests and a match
     assert.equal(keyTest.options.body, undefined);
   }
   const count = mock.requests.length;
+  assert.equal(ai.customer, undefined);
+  await assert.rejects(
+    ai.invoice("sk-fixture", "Private revenue text", "revenue"),
+    (error) => error.code === "ai_expenses_only",
+  );
+  assert.equal(mock.requests.length, count);
   for (const call of [
-    () => ai.invoice("sk-fixture", "Text", "revenue", { model: "unknown" }),
-    () => ai.customer("sk-fixture", "Text", { model: "unknown" }),
+    () => ai.invoice("sk-fixture", "Text", "payable", { model: "unknown" }),
     () => ai.test("sk-fixture", { model: "unknown" }),
   ])
     await assert.rejects(call(), (error) => error.status === 422);
   assert.equal(mock.requests.length, count);
 });
 
-test("processor/API use persisted models for import, reprocessing and enrichment and test unsaved choices without persisting", async (t) => {
+test("processor/API use persisted models for payable import/reprocessing and explicit metadata tests, never customer enrichment", async (t) => {
   const mock = mockAI();
   const app = await buildApp({
     databasePath: ":memory:",
@@ -259,7 +252,7 @@ test("processor/API use persisted models for import, reprocessing and enrichment
     method: "POST",
     url: "/api/finance/import",
     payload: {
-      category: "revenue",
+      category: "payable",
       file_name: "model.pdf",
       data: invoicePDF("MODEL-1").toString("base64"),
     },
@@ -276,14 +269,17 @@ test("processor/API use persisted models for import, reprocessing and enrichment
   });
   assert.equal(reprocessed.statusCode, 200);
   assert.equal(mock.requests[1].body.model, "gpt-4.1");
+  const customer = app.crm.createEntity("customers", {
+    name: "Manual customer",
+  });
   const enriched = await app.inject({
     method: "POST",
-    url: `/api/finance/customers/${invoice.customer_id}/enrich`,
+    url: `/api/finance/customers/${customer.id}/enrich`,
     payload: {},
   });
-  assert.equal(enriched.statusCode, 200);
-  assert.equal(mock.requests[2].body.model, "gpt-4.1");
-  assert.equal(enriched.json().general_email, customerData.general_email);
+  assert.equal(enriched.statusCode, 422);
+  assert.equal(enriched.json().error.code, "customer_enrichment_disabled");
+  assert.equal(mock.requests.length, 2);
   const unsaved = await app.inject({
     method: "POST",
     url: "/api/finance/settings/test-key",
@@ -292,7 +288,7 @@ test("processor/API use persisted models for import, reprocessing and enrichment
   assert.equal(unsaved.statusCode, 200);
   assert.equal(unsaved.json().model, "gpt-4o-mini");
   assert.equal(
-    mock.requests[3].url,
+    mock.requests[2].url,
     "https://api.openai.com/v1/models/gpt-4o-mini",
   );
   assert.equal(app.financeSettings.model(), "gpt-4.1");
@@ -307,7 +303,7 @@ test("processor/API use persisted models for import, reprocessing and enrichment
     200,
   );
   assert.equal(
-    mock.requests[4].url,
+    mock.requests[3].url,
     "https://api.openai.com/v1/models/gpt-4.1",
   );
   const count = mock.requests.length;
@@ -333,7 +329,7 @@ test("model access failures are explicit and never silently fall back to another
     },
   });
   await assert.rejects(
-    ai.invoice("sk-fixture", "Text", "revenue", { model: "gpt-4.1" }),
+    ai.invoice("sk-fixture", "Text", "payable", { model: "gpt-4.1" }),
     (error) =>
       error.code === "openai_failed" &&
       !error.message.includes("private upstream"),

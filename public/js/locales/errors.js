@@ -1,4 +1,8 @@
 export default {
+  "Kundendaten werden ausschließlich im Kundenprofil gepflegt.":
+    "Customer details are maintained only in the customer profile.",
+  "Die automatische KI-Erkennung ist nur für Ausgabenrechnungen verfügbar.":
+    "Automatic AI recognition is available only for expense invoices.",
   "Der Kundennummernkreis ist ausgeschöpft.":
     "The customer number range is exhausted.",
   "Empfängerangaben werden ausschließlich im Kundenprofil geändert.":
