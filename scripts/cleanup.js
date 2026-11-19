@@ -103,6 +103,7 @@ function githubRelease(tag, directory) {
         {
           cwd: directory,
           encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
           timeout: 30_000,
           maxBuffer: 8 * 1024 ** 2,
         },
