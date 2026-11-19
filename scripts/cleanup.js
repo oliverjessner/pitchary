@@ -7,11 +7,11 @@ import {
   rmSync,
 } from "node:fs";
 import path from "node:path";
-import { root } from "./desktop-common.js";
+import { releaseRepo, root, sha256 } from "./desktop-common.js";
 import { acquirePublishLock } from "./publish-lock.js";
 
-// Keep this list explicit: artifacts also contains releases, backups and
-// migration evidence which must survive both cleanup and a publish retry.
+// Keep this list explicit: artifacts also contains private data and migration
+// evidence. Release directories require separate publication checks below.
 export const cleanupPaths = Object.freeze([
   "src-tauri/target",
   "src-tauri/runtime",
@@ -21,6 +21,8 @@ export const cleanupPaths = Object.freeze([
   "artifacts/desktop-cache",
   "artifacts/browser-report",
   "artifacts/test-results",
+  "artifacts/invoice-package-check",
+  "artifacts/invoice-validator",
   "tests/tmp",
   "coverage",
 ]);
@@ -87,11 +89,154 @@ function sizeOf(filename) {
   );
 }
 
-export function planCleanup(directory = root) {
+function githubRelease(tag, directory) {
+  try {
+    return JSON.parse(
+      execFileSync(
+        "gh",
+        [
+          "api",
+          "--hostname",
+          "github.com",
+          `repos/${releaseRepo}/releases/tags/${tag}`,
+        ],
+        {
+          cwd: directory,
+          encoding: "utf8",
+          timeout: 30_000,
+          maxBuffer: 8 * 1024 ** 2,
+        },
+      ),
+    );
+  } catch (error) {
+    if (String(error.stderr).includes("HTTP 404")) return null;
+    throw new Error(
+      "GitHub release verification unavailable; check gh authentication and network access.",
+    );
+  }
+}
+
+function versionParts(version) {
+  return /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)
+    ? version.split(".").map(BigInt)
+    : null;
+}
+
+function olderThan(version, current) {
+  const left = versionParts(version);
+  const right = versionParts(current);
+  if (!left || !right) return false;
+  for (let index = 0; index < 3; index++) {
+    if (left[index] !== right[index]) return left[index] < right[index];
+  }
+  return false;
+}
+
+function releaseManifest(directory, relative, version) {
+  const filename = `Pitchary_${version}_aarch64.dmg`;
+  const allowed = new Set([
+    filename,
+    "manifest.json",
+    "SHA256SUMS",
+    "release-notes.md",
+    ".DS_Store",
+  ]);
+  const release = safeTarget(directory, relative);
+  if (!release || !lstatSync(release).isDirectory())
+    throw new Error("Not a generated release directory.");
+  // Never remove unrecognized files that someone has saved next to a DMG.
+  for (const entry of readdirSync(release, { withFileTypes: true })) {
+    if (entry.name === "Casks" && entry.isDirectory()) {
+      const casks = readdirSync(path.join(release, "Casks"), {
+        withFileTypes: true,
+      });
+      if (casks.every((item) => item.isFile() && item.name === "pitchary.rb"))
+        continue;
+    }
+    if (!entry.isFile() || !allowed.has(entry.name))
+      throw new Error("Contains unrecognized files; manual review required.");
+  }
+  const manifest = JSON.parse(
+    readFileSync(path.join(release, "manifest.json"), "utf8"),
+  );
+  if (
+    manifest.version !== version ||
+    manifest.target !== "aarch64-apple-darwin" ||
+    manifest.file !== filename ||
+    !/^[a-f0-9]{64}$/.test(manifest.sha256)
+  )
+    throw new Error("Missing or inconsistent release metadata.");
+  if (sha256(readFileSync(path.join(release, filename))) !== manifest.sha256)
+    throw new Error("Local DMG checksum differs from its manifest.");
+  return manifest;
+}
+
+function planOldReleases(directory, getRelease) {
+  const releases = safeTarget(directory, "artifacts/releases");
+  const entries = [];
+  const preservedReleases = [];
+  if (!releases) return { entries, preservedReleases };
+  const { version: current } = JSON.parse(
+    readFileSync(path.join(directory, "package.json"), "utf8"),
+  );
+  let unavailable;
+  for (const tag of readdirSync(releases).sort()) {
+    const relative = `artifacts/releases/${tag}`;
+    const version = tag.startsWith("v") ? tag.slice(1) : "";
+    if (!olderThan(version, current)) {
+      preservedReleases.push({
+        path: relative,
+        reason: "Current, newer or unrecognized version.",
+      });
+      continue;
+    }
+    // Refuse symlink release roots before any deletion, just like cache roots.
+    safeTarget(directory, relative);
+    try {
+      const manifest = releaseManifest(directory, relative, version);
+      if (unavailable) throw unavailable;
+      let remote;
+      try {
+        remote = getRelease(tag, directory);
+      } catch (error) {
+        unavailable = error;
+        throw error;
+      }
+      const asset = remote?.assets?.find((item) => item.name === manifest.file);
+      if (
+        remote?.tag_name !== tag ||
+        remote.draft !== false ||
+        !remote.published_at ||
+        asset?.state !== "uploaded" ||
+        asset.digest !== `sha256:${manifest.sha256}`
+      )
+        throw new Error(
+          "No published GitHub DMG with a matching SHA-256 digest.",
+        );
+      entries.push({
+        path: relative,
+        bytes: sizeOf(path.join(directory, relative)),
+      });
+    } catch (error) {
+      preservedReleases.push({ path: relative, reason: error.message });
+    }
+  }
+  return { entries, preservedReleases };
+}
+
+export function planCleanup(
+  directory = root,
+  { getRelease = githubRelease } = {},
+) {
   const absolute = projectRoot(directory);
+  const releases = planOldReleases(absolute, getRelease);
+  const paths = [
+    ...cleanupPaths,
+    ...releases.entries.map((entry) => entry.path),
+  ];
   const tracked = execFileSync(
     "git",
-    ["--literal-pathspecs", "ls-files", "-z", "--", ...cleanupPaths],
+    ["--literal-pathspecs", "ls-files", "-z", "--", ...paths],
     { cwd: absolute, encoding: "utf8" },
   )
     .split("\0")
@@ -103,9 +248,11 @@ export function planCleanup(directory = root) {
     const filename = safeTarget(absolute, relative);
     return filename ? [{ path: relative, bytes: sizeOf(filename) }] : [];
   });
+  entries.push(...releases.entries);
   return {
     root: absolute,
     entries,
+    preservedReleases: releases.preservedReleases,
     bytes: entries.reduce((bytes, entry) => bytes + entry.bytes, 0),
   };
 }
@@ -113,8 +260,9 @@ export function planCleanup(directory = root) {
 export function cleanupBuildArtifacts({
   directory = root,
   dryRun = false,
+  getRelease = githubRelease,
 } = {}) {
-  const plan = planCleanup(directory);
+  const plan = planCleanup(directory, { getRelease });
   if (!dryRun)
     for (const entry of plan.entries) {
       const filename = safeTarget(plan.root, entry.path);
@@ -129,12 +277,19 @@ export function formatCleanupReport(result) {
   return [
     `${verb} ${result.entries.length} generated paths (${mebibytes} MiB of file contents).`,
     ...result.entries.map((entry) => `  ${entry.path}`),
-    "Release artifacts, databases, backups, screenshots and installed dependencies are preserved.",
+    ...(result.preservedReleases ?? []).map(
+      (entry) => `  Kept ${entry.path}: ${entry.reason}`,
+    ),
+    "Current and unverified releases, private databases, backups, manual screenshots and installed dependencies are preserved.",
   ].join("\n");
 }
 
-export function runCleanup({ directory = root, dryRun = false } = {}) {
-  if (dryRun) return cleanupBuildArtifacts({ directory, dryRun });
+export function runCleanup({
+  directory = root,
+  dryRun = false,
+  getRelease = githubRelease,
+} = {}) {
+  if (dryRun) return cleanupBuildArtifacts({ directory, dryRun, getRelease });
   const absolute = projectRoot(directory);
   // The lock itself must not be created through an artifacts symlink.
   safeTarget(absolute, "artifacts/.publish-lock");
@@ -142,7 +297,7 @@ export function runCleanup({ directory = root, dryRun = false } = {}) {
     path.join(absolute, "artifacts/.publish-lock"),
   );
   try {
-    return cleanupBuildArtifacts({ directory: absolute });
+    return cleanupBuildArtifacts({ directory: absolute, getRelease });
   } finally {
     unlock();
   }
@@ -152,7 +307,7 @@ export function main(args = process.argv.slice(2)) {
   const options = parseCleanupArgs(args);
   if (options.help) {
     console.log(
-      "Usage: npm run cleanup -- [--dry-run]\n\nRemove only generated desktop and test caches in this checkout.\n--dry-run previews paths and file sizes without changing files.\nSuccessful publishes run cleanup automatically; failed publishes and publish --dry-run keep build files.",
+      "Usage: npm run cleanup -- [--dry-run]\n\nRemove generated desktop/test files and older releases whose local DMG checksum matches the published GitHub asset digest. Keep the current version and unverified releases. Requires gh for release verification.\n--dry-run performs read-only GitHub checks and previews paths and file sizes without changing files.\nSuccessful publishes run cleanup automatically; failed publishes and publish --dry-run keep build files.",
     );
     return;
   }

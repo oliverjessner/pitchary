@@ -1,6 +1,7 @@
 # 1.0.1
 
 - info window update
+- Remove disposable invoice check directories and older local release copies whose DMG checksum matches the published GitHub asset; retain the current release and report unverified versions.
 
 # 1.0.0
 
