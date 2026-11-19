@@ -1,3 +1,7 @@
+# 1.0.1
+
+- info window update
+
 # 1.0.0
 
 - Keep invoice recipient data fixed to the selected customer, assign editable sequential customer numbers, and use service periods instead of a separate service day.
