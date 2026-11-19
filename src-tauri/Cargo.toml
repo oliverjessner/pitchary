@@ -24,6 +24,15 @@ glib = { path = "vendor/glib" }
 [target.'cfg(target_os = "macos")'.dependencies]
 muda = { version = "=0.20.0", default-features = false }
 objc2 = "=0.6.5"
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = [
+    "std", "NSAttributedString", "NSCell", "NSColor", "NSControl", "NSFont",
+    "NSGraphics", "NSImage", "NSImageView", "NSLayoutAnchor", "NSLayoutConstraint",
+    "NSPanel", "NSResponder", "NSStackView", "NSText", "NSTextField",
+    "NSUserInterfaceLayout", "NSView", "NSWindow", "objc2-core-foundation",
+] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = [
+    "std", "NSAttributedString", "NSData", "NSDictionary", "NSGeometry", "NSString", "NSURL",
+] }
 
 [[test]]
 name = "dock_menu"

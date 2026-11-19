@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(target_os = "macos")]
+mod about;
 mod app_window;
 #[cfg(target_os = "macos")]
 mod dock_menu;
@@ -111,6 +113,13 @@ fn main() {
         .plugin(app_window::opener_plugin())
         .on_menu_event(|app, event| {
             #[cfg(target_os = "macos")]
+            if let Err(error) = about::handle_event(app, event.id().as_ref()) {
+                app.dialog()
+                    .message(error.to_string())
+                    .title("About konnte nicht geöffnet werden")
+                    .show(|_| {});
+            }
+            #[cfg(target_os = "macos")]
             if let Err(error) = dock_menu::handle_event(app, event.id().as_ref()) {
                 app.dialog()
                     .message(error.to_string())
@@ -119,6 +128,8 @@ fn main() {
             }
         })
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            about::install(app.handle())?;
             let data = std::env::var_os("PITCHARY_DATA_DIR")
                 .map(std::path::PathBuf::from)
                 .unwrap_or(app.path().app_data_dir()?);
